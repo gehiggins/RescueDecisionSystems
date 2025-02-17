@@ -7,15 +7,21 @@
     <title>Rescue Decision Systems</title>
     <meta name="author" content="Rescue Decision Systems" />
     
-    <!-- Removed references to GoDaddy and external resources -->
+    <!-- Link to global styles.css -->
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <!-- Link to index-specific styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='index.css') }}">
     
     <!-- Favicon -->
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
 </head>
 <body>
     <header>
-        <h1>Rescue Decision Systems</h1>
+        <h1 class="header-title">
+            <span>Rescue</span>
+            <span>Decision</span>
+            <span>Systems</span>
+        </h1>
         <nav>
             <ul>
                 <li><a href="/">Home</a></li>
@@ -25,16 +31,29 @@
     </header>
     
     <main>
-        <section>
-            <h2>Unlocking the Potential in Search and Rescue Data</h2>
-            <p>Customized solutions to support Rescue Coordination Center (RCC) operations.</p>
-            <a href="/sarsat-analysis" class="cta-button">Get Started</a>
+        <section class="section-light">
+            <div class="section-content">
+                <div class="section-text">
+                    <h2 class="section-title">Unlocking the Potential in Search and Rescue Data</h2>
+                    <p class="section-description">Customized solutions to support Rescue Coordination Center (RCC) operations.</p>
+                    <a href="/sarsat-analysis" class="cta-button">Get Started</a>
+                </div>
+                <div class="section-image">
+                    <img src="{{ url_for('static', filename='images/RDS_lifering_index_top.webp') }}" alt="Lifering Image">
+                </div>
+            </div>
         </section>
         
-        <section>
-            <h2>Data-driven SAR Operations & Decision Making</h2>
-            <img src="{{ url_for('static', filename='search_rescue.jpg') }}" alt="Search and Rescue Operations">
-            <p>Applying data analysis and machine learning, we provide results that have immediate and tangible impacts on operations.</p>
+        <section class="section-dark">
+            <div class="section-content">
+                <div class="section-text">
+                    <h2 class="section-title">Data-driven SAR Operations & Decision Making</h2>
+                    <p class="section-description">Applying data analysis and machine learning, we provide results that have immediate and tangible impacts on operations.</p>
+                </div>
+                <div class="section-image">
+                    <img src="{{ url_for('static', filename='images/RDS_lifering_index_top.webp') }}" alt="Lifering Image">
+                </div>
+            </div>
         </section>
     </main>
     

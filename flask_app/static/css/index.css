@@ -1,0 +1,56 @@
+/* index.css: Styles specific to the index page */
+
+.header-title {
+    font-size: 48px;
+    font-weight: bold;
+    line-height: 1.2;
+    margin: 0;
+    padding-left: 20px;
+    text-transform: uppercase;
+    display: flex;
+    flex-direction: column;
+}
+
+.section-light, .section-dark {
+    width: 100%;
+    padding: 60px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.section-light {
+    background-color: #ffffff;
+    flex-direction: row;
+}
+
+.section-dark {
+    background-color: #e0e0e0;
+    flex-direction: row-reverse;
+}
+
+.section-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 80%;
+    margin: auto;
+    gap: 20px;
+}
+
+.section-text {
+    flex: 1;
+    text-align: left;
+    padding: 20px;
+}
+
+.section-title {
+    font-size: 32px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.section-description {
+    font-size: 18px;
+    color: #555;
+}
