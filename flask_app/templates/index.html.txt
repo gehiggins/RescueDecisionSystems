@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rescue Decision Systems</title>
+    <meta name="author" content="Rescue Decision Systems" />
+    
+    <!-- Removed references to GoDaddy and external resources -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+<body>
+    <header>
+        <h1>Rescue Decision Systems</h1>
+        <nav>
+            <ul>
+                <li><a href="/">Home</a></li>
+                <li><a href="/sarsat-analysis">SARSAT Analysis</a></li>
+            </ul>
+        </nav>
+    </header>
+    
+    <main>
+        <section>
+            <h2>Unlocking the Potential in Search and Rescue Data</h2>
+            <p>Customized solutions to support Rescue Coordination Center (RCC) operations.</p>
+            <a href="/sarsat-analysis" class="cta-button">Get Started</a>
+        </section>
+        
+        <section>
+            <h2>Data-driven SAR Operations & Decision Making</h2>
+            <img src="{{ url_for('static', filename='search_rescue.jpg') }}" alt="Search and Rescue Operations">
+            <p>Applying data analysis and machine learning, we provide results that have immediate and tangible impacts on operations.</p>
+        </section>
+    </main>
+    
+    <footer>
+        <p>&copy; 2025 Rescue Decision Systems. All rights reserved.</p>
+    </footer>
+</body>
+</html>
