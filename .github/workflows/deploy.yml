@@ -1,5 +1,17 @@
 name: Sync Frontend Files for GitHub Pages
 
+run: |
+  echo "Listing all files in the repository..."
+  ls -R  # This prints all files in GitHub Actions
+  echo "Copying index.html..."
+  cp flask_app/templates/index.html index.html
+  echo "Creating static folder and copying files..."
+  mkdir -p static
+  cp -r flask_app/static/* static/
+
+
+
+
 on:
   push:
     branches:
