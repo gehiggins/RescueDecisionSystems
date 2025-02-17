@@ -1,21 +1,46 @@
+/* Global styles.css: Applies to all pages */
+
 body {
-    font-family: Arial, sans-serif;
+    font-family: 'Lato', sans-serif;
     margin: 0;
     padding: 0;
     background-color: #f4f4f4;
     color: #333;
-    text-align: center;
 }
 
 header {
-    background: #004466;
+    background: url("{{ url_for('static', filename='images/RDS_lifering_index_top.webp') }}") no-repeat center center;
+    background-size: cover;
     color: white;
-    padding: 20px;
+    padding: 60px 20px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 200px;
+}
+
+.header-title {
+    font-size: 48px;
+    font-weight: bold;
+    line-height: 1.2;
+    margin: 0;
+    padding-left: 20px;
+    text-transform: uppercase;
+    display: flex;
+    flex-direction: column;
+}
+
+nav {
+    width: 100%;
+    text-align: center;
+    padding-bottom: 10px;
 }
 
 nav ul {
     list-style: none;
     padding: 0;
+    margin: 0;
 }
 
 nav ul li {
@@ -30,7 +55,62 @@ nav ul li a {
 }
 
 main {
+    padding: 0;
+}
+
+/* Full-width alternating section backgrounds */
+.section-light, .section-dark {
+    width: 100%;
+    padding: 60px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.section-light {
+    background-color: #ffffff;
+    flex-direction: row;
+}
+
+.section-dark {
+    background-color: #e0e0e0;
+    flex-direction: row-reverse;
+}
+
+.section-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    max-width: 80%;
+    margin: auto;
+    gap: 20px;
+}
+
+.section-text {
+    flex: 1;
+    text-align: left;
     padding: 20px;
+}
+
+.section-title {
+    font-size: 32px;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.section-description {
+    font-size: 18px;
+    color: #555;
+}
+
+.section-image {
+    flex: 1;
+    text-align: center;
+}
+
+.section-image img {
+    max-width: 100%;
+    height: auto;
 }
 
 .cta-button {
