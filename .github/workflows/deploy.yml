@@ -5,7 +5,6 @@ on:
     branches:
       - main
 
-
 jobs:
   update-static-files:
     runs-on: ubuntu-latest
@@ -13,9 +12,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Debug - List all files in repo
+        run: |
+          echo "Listing all files in the repository..."
+          ls -R  # This prints all files in GitHub Actions
+
       - name: Copy index.html and static files
         run: |
+          echo "Copying index.html..."
           cp flask_app/templates/index.html index.html
+          
+          echo "Creating static folder and copying files..."
           mkdir -p static
           cp -r flask_app/static/* static/
 
@@ -26,4 +33,3 @@ jobs:
           git add index.html static/
           git commit -m "Automated: Sync index.html & static files for GitHub Pages" || echo "No changes to commit"
           git push
-
