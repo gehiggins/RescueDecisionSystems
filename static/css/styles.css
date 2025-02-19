@@ -20,7 +20,7 @@ header {
     height: 200px;
 }
 
-/.header-title {
+.header-title {
     font-size: 48px;
     font-weight: bold;
     line-height: 1.2;
@@ -29,7 +29,7 @@ header {
     text-transform: uppercase;
     display: flex;
     flex-direction: column;
-}/
+}
 
 nav {
     width: 100%;
