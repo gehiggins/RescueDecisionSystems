@@ -179,3 +179,15 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+
+# RDS project specifics
+/data/
+/mnt/
+/logs/
+/tmp/
+/*.sqlite
+*.parquet
+*.feather
+.env.local
+.env.*.local
