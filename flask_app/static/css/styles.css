@@ -1,0 +1,149 @@
+/* Global Styles (styles.css) */
+body {
+  font-family: "Lato", sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #f4f4f4;
+  color: #333;
+}
+
+/* Header Styles */
+.header-container {
+  width: %; /* Ensures a defined box for text */
+  max-width: 400px; /* Constrains width to avoid overly large text */
+  padding: 20px;
+  background: none; /* Optional: removed the semi-transparent background for readability */
+  position: absolute;
+  left: 20px;
+  top: 20%;
+  transform: translateY(-50%);
+}
+
+.header-title {
+  display: block;
+  text-align: left;
+  white-space: normal; /* Allow text to wrap */
+  word-wrap: nowrap;
+  font-size: clamp(50px, 8vw, 150px);
+  font-weight: bold;
+  color: white;
+  text-transform: uppercase;
+  font-family: "Lato", sans-serif;
+  text-shadow:
+    -0.5px -0.5px 0 black,
+    0.5px -0.5px 0 black,
+    -0.5px 0.5px 0 black,
+    0.5px 0.5px 0 black;
+}
+
+/* Background Image for Header */
+header.section {
+  height: 600px; /* Increased height to allow more image visibility */  
+  background-image: url("/static/images/lifering.webp");
+  background-size: 100% auto; /* Forces full width, keeps height proportional */
+  background-position: top center; /* Ensures top is aligned correctly */
+  background-repeat: no-repeat;
+  padding: 80px 20px; /* Adjust height as needed */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  padding: 50px 20px;
+}
+
+/* Navigation Section */
+.nav-section {
+  background-color: #2c3e50;
+  padding: 15px 0;
+  text-align: center;
+}
+
+.nav-section nav ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+}
+
+.nav-section nav ul li a {
+  color: white;
+  text-decoration: none;
+  font-size: 18px;
+  font-weight: bold;
+  font-family: "Montserrat", sans-serif;
+}
+
+.nav-section nav ul li a:hover {
+  text-decoration: underline;
+}
+
+/* Section Styles */
+.section {
+  width: 100%;
+  padding: 60px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 40px;
+  box-sizing: border-box;
+  border-bottom: 1px solid #ddd;
+}
+
+.section-light {
+  background-color: #ffffff;
+}
+
+.section-dark {
+  background-color: #e0e0e0;
+}
+
+.section-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  width: 100%;
+  gap: 40px;
+}
+
+.section-text {
+  flex: 1;
+  text-align: left;
+  font-family: "Montserrat", sans-serif;
+}
+
+.section-image {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.section-image img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Alternating Section Layouts */
+.section:nth-child(even) .section-content {
+  flex-direction: row-reverse;
+}
+
+/* Footer Styles */
+footer {
+  text-align: center;
+  padding: 20px;
+  background-color: #2c3e50;
+  color: white;
+}
+
+footer a {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+

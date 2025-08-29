@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SARSAT Alert Analysis - Rescue Decision Systems</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sarsat_analysis.css') }}">
+</head>
+<body>
+    <header class="section">
+        <h1 class="header-title">SARSAT Alert Analysis</h1>
+    </header>
+
+    <section class="nav-section">
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('main.index') }}">Home</a></li>
+                <li><a href="{{ url_for('main.sarsat_analysis') }}">SARSAT Tool: SAR-DAT</a></li>
+		<li><a href="{{ url_for('main.our_process') }}">SARSAT Data Analysis Process</a></li>                
+		<li><a href="{{ url_for('main.future_projects') }}">Future Projects</a></li>
+               <li><a href="/#contact">Contact</a></li>
+            </ul>
+
+        </nav>
+    </section>
+
+    <main>
+	<section class="section section-light">
+          <div class="section-content">
+             <div class="section-text">
+                <h2 class="section-title">Submit a SARSAT Alert</h2>
+                <p class="section-description">Paste the raw SARSAT alert message below:</p>
+                <form id="sarsat-form" method="POST">   
+                  <textarea name="alert_text" rows="6" placeholder="Paste the SARSAT alert here..." required></textarea>
+                  <button type="submit" class="cta-button">Submit Alert</button>
+              </form>
+            </div>
+         </div>
+       </section>
+
+<section class="section section-dark">
+    <div class="section-content">
+        <div class="section-text">
+            <h2 class="section-title">GIS-Based Analysis</h2>
+            <p class="section-description">Once processed, the following outputs will be generated:</p>
+            <ul>
+                <li><strong>Alert Location:</strong> Mapped with interpolated weather and nearest RCCs.</li>
+                <li><strong>Weather Stations:</strong> NOAA/NWS data for the area.</li>
+                <li><strong>Satellite Ground Tracks:</strong> Current and upcoming satellite passes for follow-on detections.</li>
+            </ul>
+
+            <!-- ✅ Default GIS Image Before Processing -->
+            <div id="gis-placeholder">
+                <img src="{{ url_for('static', filename='images/sample_map.png') }}" alt="GIS Output" style="width: 100%; max-width: 600px;">
+            </div>
+
+            <!-- ✅ Embedded Live GIS Map (Hidden by Default) -->
+            <div id="gis-container" style="display: none;">
+                <iframe id="gis-map-frame" src="" width="100%" height="500px" frameborder="0"></iframe>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<section class="section section-light" id="weather-data-section" style="display: none;">
+    <div class="section-content">
+        <div class="section-text">
+            <h2 class="section-title">Weather Data from Nearby Stations</h2>
+            <table id="weather-data-table" border="1">
+                <tr>
+                    <th>Station Name</th>
+                    <th>Distance (miles)</th>
+                    <th>Temperature (°C)</th>
+                    <th>Wind Speed (m/s)</th>
+                    <th>Observation Time</th>
+                </tr>
+            </table>
+        </div>
+    </div>
+</section>
+
+        
+        <section class="section section-dark">
+            <div class="section-content">
+                <div class="section-text">
+                    <h2 class="section-title">Automated Output</h2>
+                    <p class="section-description">Our system provides two key outputs:</p>
+                    <ul>
+                        <li>GIS-Based Map – Displays alert location, interpolated weather, nearest RCCs, and satellite pass data.</li>
+                        <li>Distress Probability Report – Analyzes the likelihood that the alert is a real emergency, along with key justifications.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <footer class="section">
+        <p>&copy; 2025 Rescue Decision Systems. Updated: 19 Feb 2025. All rights reserved.</p>
+        <p><a href="mailto:rescuedecisionsystems@outlook.com" class="cta-button">Contact Us</a></p>
+    </footer>
+
+
+<script>
+    // ✅ Update GIS Map when a new alert is submitted
+document.getElementById("sarsat-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    
+    let alertText = document.querySelector("textarea[name='alert_text']").value;
+
+    fetch("/process_alert", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ message: alertText })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log("✅ Flask Response:", data);  // ✅ Debugging: See full Flask response
+
+        if (data.success) {
+            let latitude = data.parsed_data?.[0]?.latitude_decimal;
+            let longitude = data.parsed_data?.[0]?.longitude_decimal;
+            let siteId = data.parsed_data?.[0]?.site_id;
+
+            console.log("✅ Extracted Data for GIS Map:", latitude, longitude, siteId);
+
+            if (latitude !== undefined && longitude !== undefined && siteId !== undefined) {
+                let mapUrl = `/maps/gis_map_${siteId}.html`;
+                console.log("✅ Updating GIS Map iframe source:", mapUrl);
+                
+                // ✅ Update the iframe src instead of redirecting the page
+                document.getElementById("gis-map-frame").src = mapUrl;
+
+                // ✅ Hide the placeholder image and show the GIS map
+                document.getElementById("gis-placeholder").style.display = "none";
+                document.getElementById("gis-container").style.display = "block";
+            } else {
+                console.error("❌ ERROR: Missing required values! Latitude, Longitude, or Site ID is undefined.");
+                alert("Failed to load GIS map: Missing required values.");
+            }
+        } else {
+            console.error("❌ ERROR from Flask:", data.error);
+        }
+    })
+    .catch(error => console.error("❌ Fetch error:", error));
+});
+
+
+</script>
+
+
+</body>
+</html>

@@ -1,0 +1,27 @@
+/* Adjust the 'carib_alerts.png' image to be larger while maintaining aspect ratio */
+.section-image img[src*="carib_alerts.png"] {
+    /* width: 100% !important;  Force full width within its container */
+    height: 20vh !important; /* Increase height to half of the viewport height */
+    max-height: 30vh !important; /* Ensure it scales properly */
+    object-fit: cover !important; /* Fill space properly without stretching */
+    display: block;
+    margin: 0 auto; 
+    border: 1px solid black; /* thin back border around edge of image
+}
+
+/* Ensure subtitles for images appear directly below the image */
+.section-image {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.image-caption {
+    text-align: center;
+    font-size: 16px;
+    font-style: italic;
+    color: #555;
+    margin-top: 10px;
+    width: 100%; /* Ensure it spans full width below the image */
+}

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Our Process - Rescue Decision Systems</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/our_process.css') }}">  
+</head>
+<body>
+    <header class="section">
+        <h1 class="header-title">Process Example: SARSAT Decision Aid Tool (SAR-DAT)</h1>
+    </header>
+
+    <section class="nav-section">
+    <nav>
+            <ul>
+                <li><a href="{{ url_for('main.index') }}">Home</a></li>
+                <li><a href="{{ url_for('main.sarsat_analysis') }}">SARSAT Tool: SAR-DAT</a></li>
+		<li><a href="{{ url_for('main.our_process') }}">SARSAT Data Analysis Process</a></li>                
+		<li><a href="{{ url_for('main.future_projects') }}">Future Projects</a></li>
+               <li><a href="/#contact">Contact</a></li>
+            </ul>
+
+    </nav>
+</section>
+
+<main>
+    <section class="section section-light">
+        <div class="section-content">
+            <div class="section-text">
+                <h2 class="section-title">Identifying the Problem: Too Many False SARSAT Alerts</h2>
+                <p>Coast Guard Rescue Coordination Centers (RCCs) receive thousands of SARSAT distress alerts annually.</p>
+                <p>However, only 4-8% of these alerts are actual distress cases—the rest are false alerts due to accidental activations, outdated registrations, or environmental interference.</p>
+                <p>Each false alert requires operator review, data-entry ("casing") and often unnecessary asset deployment, creating resource strain and delayed response times for other actual emergencies (especially during hurricanes or other disasters).</p>
+            </div>
+            <div class="section-image">
+                <img src="{{ url_for('static', filename='images/props_distress.png') }}" alt="False Distress Alerts">
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-dark">
+        <div class="section-content">
+            <div class="section-text">
+                <h2 class="section-title">Data Collection & Curation: 10 Years of SARSAT Alerts</h2>
+                <p>We built a high-quality dataset using 12,700 SARSAT alerts collected over 10 years.</p>
+                <p>The dataset included key fields such as Beacon ID, First Detection Time, Latitude/Longitude, Beacon Type, Registration Expiry Date, and Case Outcome (Distress or Non-Distress).</p>
+                <p>Data Cleaning & Engineering:</p>
+                <ul>
+                    <li>Missing values were addressed through imputation and augmentation techniques.</li>
+                    <li>Additional features (i.e., data fields/attributes) were engineered to improve predictive power.</li>
+                    <li>A portion of the data was withheld for later testing, ensuring unbiased evaluation.</li>
+                </ul>
+            </div>
+            <div class="section-image">
+                <img src="{{ url_for('static', filename='images/data_curation_process.jpg') }}" alt="data curation">
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-light">
+        <div class="section-content">
+            <div class="section-text">
+                <h2 class="section-title">Exploratory Data Analysis (EDA): Uncovering Key Patterns</h2>
+                <p>Before building a model, we analyzed patterns in SARSAT alerts to identify predictive trends:</p>
+                <ul>
+                    <li>Geographic Trends: Certain locations, particularly close to shore, had a higher rate of false alerts.</li>
+                    <li>Beacon Type: Some beacon types (e.g., PLBs vs. EPIRBs) were more likely to be misused or falsely activated.</li>
+                    <li>Environmental Conditions: Factors such as wind speed, visibility, and wave height influenced whether an alert was a true distress case.</li>
+                    <li>Repeat Offenders: Some beacons had a history of multiple false alerts, indicating potential registration or user issues.</li>
+                </ul>
+            </div>
+            <div class="section-image">
+                <img src="{{ url_for('static', filename='images/sarsat_alerts_freq.png') }}" alt="SARSAT Alerts Frequency">
+		<p class="image-caption">SARSAT Alerts Frequency (spikes in false-alerts coincide with Hurricanes and natural disasters)</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-dark">
+        <div class="section-content">
+            <div class="section-text">
+                <h2 class="section-title">Machine Learning Model Development: Prioritizing Practicality</h2>
+                <p>After extensive testing, we selected Random Forest Classifier as the best-performing algorithm.</p>
+                <p>The model was designed to maximize recall, meaning it prioritizes correctly identifying actual distress cases while minimizing unnecessary false alarms.</p>
+                <p>Key steps:</p>
+                <ul>
+                    <li>Trained on historical SARSAT data to learn the characteristics of real distress vs. false alerts.</li>
+                    <li>Tested on a holdout dataset (data the model had never seen) to evaluate accuracy.</li>
+                    <li>Threshold tuning to ensure the model’s risk assessment aligns with RCC operational needs.</li>
+                </ul>
+            </div>
+            <div class="section-image">
+                <img src="{{ url_for('static', filename='images/3d_data_analysis.png') }}" alt="3D Data Analysis">
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-light">
+        <div class="section-content">
+            <div class="section-text">
+                <h2 class="section-title">SAR-DAT Model Output: Simple, Actionable Decision Aid</h2>
+                <p>The final output is designed to be easily interpretable for RCC watchstanders.</p>
+                <p>When a SARSAT alert is received, the system provides:</p>
+                <ul>
+                    <li><strong>Distress Probability Score:</strong> A numerical score indicating how likely the alert is a true distress case.</li>
+                    <li><strong>Top Contributing Factors:</strong> A breakdown of the most important reasons for the score (e.g., beacon type, location, environmental factors).</li>
+                </ul>
+                <p>This human-machine pairing approach ensures that operators remain in control while benefiting from AI-enhanced decision-making.</p>
+            </div>
+            <div class="section-image">
+                <img src="{{ url_for('static', filename='images/sarsat_results_ex.png') }}" alt="Distress Probability Score">
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-dark">
+        <div class="section-content">
+            <div class="section-text">
+                <h2 class="section-title">User Interface & Deployment: Designed for RCCs</h2>
+                <p>We built this as a lightweight, Python-based desktop tool—requiring no complex software installations.</p>
+                <p>It is fully compatible with standard RCC workstations, leveraging existing Microsoft tools.</p>
+                <p>Outputs include:</p>
+                <ul>
+                    <li><strong>GIS-Integrated Map:</strong> Displays alert location, nearby SAR assets, and satellite ground tracks.</li>
+                    <li><strong>Automated Risk Report:</strong> Generates a concise summary to help watchstanders decide whether to escalate an alert.</li>
+                </ul>
+            </div>
+            <div class="section-image">
+                <img src="{{ url_for('static', filename='images/alerts_map.webp') }}" alt="Future Expansion">
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-light">
+        <div class="section-content">
+            <div class="section-text">
+                <h2 class="section-title">Testing & Geographic Adaptation</h2>
+                <p>The current version of the model was fine-tuned based on data from the South East U.S. and Carribean maritime regions. It is designed to be updated with additinoal data to allow customizatoin and fine-tuning for RCC specific regions, thus accounting for regional differences (e.g. climatological factors).</p>
+                <p>RCC operators provided feedback to refine usability, ensuring the tool meets real-world operational needs.</p>
+            </div>
+            <div class="section-image">
+                <img src="{{ url_for('static', filename='images/carib_alerts.png') }}" alt="Carib Alerts">
+            </div>
+        </div>
+    </section>
+
+    <section class="section section-dark">
+        <div class="section-content">
+            <div class="section-text">
+                <h2 class="section-title">Implementation & Future Expansion</h2>
+                <p>The system is already fully functional and ready for deployment.</p>
+                <p>Next steps include:</p>
+                <ul>
+                    <li>Scaling to additional RCCs.</li>
+                    <li>Integrating with SAROPS and real-time weather feeds.</li>
+                    <li>Automating additional SAR decision-support functions (e.g., AI-assisted case briefings).</li>
+                </ul>
+            </div>
+            <div class="section-image">
+                <img src="{{ url_for('static', filename='images/data_science_cartoon_drawing_3_SARSAT.webp') }}" alt="Future Expansion">
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<footer class="section">
+    <p>&copy; 2025 Rescue Decision Systems. Updated: 19 Feb 2025. All rights reserved.</p>
+    <p><a href="mailto:rescuedecisionsystems@outlook.com" class="cta-button">Contact Us</a></p>
+</footer>

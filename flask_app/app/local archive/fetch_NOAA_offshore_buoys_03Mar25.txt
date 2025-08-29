@@ -1,0 +1,153 @@
+#fetch_NOAA_offshore_buoys
+
+from flask_app.setup_imports import *
+from geopy.distance import distance
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+
+NDBC_API_BASE = "https://www.ndbc.noaa.gov/"
+
+def fetch_offshore_buoys(lat, lon, max_buoys=10):
+    """
+    Fetches the nearest NOAA offshore buoys to a given position using NDBC XML & JSON APIs.
+
+    Parameters:
+    - lat (float): Latitude of the position.
+    - lon (float): Longitude of the position.
+    - max_buoys (int): Maximum number of buoys to fetch (default 10).
+
+    Returns:
+    - DataFrame with buoy metadata, weather data (if available), and timelate (hours since observation).
+    """
+    logging.info(f"🌊 Fetching nearest offshore buoys for maritime position ({lat}, {lon})")
+
+    try:
+        stations_df = _fetch_and_filter_stations(lat, lon, max_buoys)
+
+        if stations_df.empty:
+            logging.warning(f"⚠️ No buoys found near ({lat}, {lon})")
+            return pd.DataFrame()
+
+        # Fetch current observations for each buoy and merge with metadata
+        enriched_stations = []
+        for _, row in stations_df.iterrows():
+            buoy_data = _fetch_buoy_weather(row["station_id"])
+            if buoy_data:
+                buoy_data.update(row.to_dict())  # Merge metadata into weather data
+                enriched_stations.append(buoy_data)
+
+        if not enriched_stations:
+            logging.warning(f"⚠️ No valid observations retrieved for buoys near ({lat}, {lon})")
+            return pd.DataFrame()
+
+        return pd.DataFrame(enriched_stations)
+
+    except Exception as e:
+        logging.error(f"❌ Error during offshore buoy fetch: {e}")
+        return pd.DataFrame()
+
+
+def _fetch_and_filter_stations(lat, lon, max_buoys):
+    """
+    Fetches all active buoys and filters them by proximity to the target coordinates.
+
+    Returns:
+    - DataFrame with nearest buoy metadata.
+    """
+    try:
+        stations_url = f"{NDBC_API_BASE}activestations.xml"
+        response = requests.get(stations_url, timeout=15)
+        response.raise_for_status()
+
+        stations = []
+        root = ET.fromstring(response.content)
+
+        for station in root.findall(".//station"):
+            station_id = station.attrib.get("id")
+            buoy_lat = float(station.attrib.get("lat", "0"))
+            buoy_lon = float(station.attrib.get("lon", "0"))
+            dist_nm = distance((lat, lon), (buoy_lat, buoy_lon)).nautical
+
+            stations.append({
+                "station_id": station_id,
+                "latitude": buoy_lat,
+                "longitude": buoy_lon,
+                "distance_nm": dist_nm,
+                "name": station.attrib.get("name", "N/A"),
+                "owner": station.attrib.get("owner", "N/A"),
+                "pgm": station.attrib.get("pgm", "N/A")
+            })
+
+        stations_df = pd.DataFrame(stations)
+        stations_df = stations_df.sort_values(by="distance_nm").head(max_buoys)
+
+        logging.info(f"✅ Found {len(stations_df)} nearest offshore buoys.")
+        return stations_df
+
+    except Exception as e:
+        logging.error(f"❌ Error fetching offshore buoy list from NDBC (activestations.xml): {e}")
+        return pd.DataFrame()
+
+
+def _fetch_buoy_weather(station_id):
+    """
+    Fetches latest weather observation for a given buoy using NDBC real-time JSON API.
+
+    Returns:
+    - Dict with weather data, including `timelate` (hours since observation).
+    """
+    try:
+        obs_url = f"{NDBC_API_BASE}data/latest_obs/{station_id}.json"
+        response = requests.get(obs_url, timeout=10)
+
+        if response.status_code != 200:
+            logging.warning(f"⚠️ No valid data for buoy {station_id}")
+            return None
+
+        observation = response.json()
+
+        observation_time = observation.get("timestamp")
+        timelate = _calculate_timelate(observation_time)
+
+        return {
+            "station_id": station_id,
+            "observation_time": observation_time,
+            "timelate": timelate,
+            "temperature": _try_parse_float(observation.get("airtemp")),
+            "wind_speed": _try_parse_float(observation.get("windspeed")),
+            "wind_gust": _try_parse_float(observation.get("windgust")),
+            "wind_direction": observation.get("winddir"),
+            "visibility": _try_parse_float(observation.get("visibility")),
+            "wave_height": _try_parse_float(observation.get("waveheight")),
+            "pressure": _try_parse_float(observation.get("pressure")),
+            "water_temperature": _try_parse_float(observation.get("watertemp"))
+        }
+
+    except Exception as e:
+        logging.error(f"❌ Error fetching weather data for buoy {station_id}: {e}")
+        return None
+
+
+def _calculate_timelate(observation_time):
+    """
+    Calculates the time difference (in hours) between now and the observation timestamp.
+    Returns NaN if the timestamp is missing or invalid.
+    """
+    if not observation_time:
+        return np.nan
+
+    try:
+        obs_time = datetime.fromisoformat(observation_time.replace("Z", "+00:00"))
+        now_time = datetime.now(timezone.utc)
+        age_hours = (now_time - obs_time).total_seconds() / 3600
+        return round(age_hours, 2)
+    except Exception as e:
+        logging.warning(f"⚠️ Failed to calculate timelate for {observation_time}: {e}")
+        return np.nan
+
+
+def _try_parse_float(value):
+    try:
+        return float(value) if value is not None else None
+    except (ValueError, TypeError):
+        return None

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rescue Decision Systems</title>
+    <meta name="author" content="Rescue Decision Systems" />
+    
+    <!-- Link to global styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">    
+    
+    <!-- Favicon -->
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+<body>
+   <header class="section">
+    <div class="header-container">
+        <h1 class="header-title">Rescue<br>Decision<br>Systems</h1>
+     </div>
+   </header>
+
+    <section class="nav-section">
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('main.index') }}">Home</a></li>
+                <li><a href="{{ url_for('main.sarsat_analysis') }}">SARSAT Tool: SAR-DAT</a></li>
+		<li><a href="{{ url_for('main.our_process') }}">SARSAT Data Analysis Process</a></li>                
+		<li><a href="{{ url_for('main.future_projects') }}">Future Projects</a></li>
+               <li><a href="/#contact">Contact</a></li>
+            </ul>
+        </nav>
+    </section>
+
+    <main>
+        <!-- Section 1: What We Do -->
+        <section class="section section-light">
+            <div class="section-content">
+                <div class="section-text">
+                    <h2 class="section-title">Data Analysis and Automation for Real-World Search and Rescue (SAR)</h2>
+                    <p class="section-description">Rescue Decision Systems provides AI-driven insights and automation tools to support search and rescue operations. Our solutions are built for operators—fast, practical, and deployable on government workstations without requiring new approvals.</p>
+                    <p class="section-description">We know that large-scale, enterprise-wide systems often fail the operators they’re meant to help. That’s why we create lightweight, targeted solutions that enhance decision-making without requiring complicated approvals, new software installations, or specialized training. Our tools integrate seamlessly into existing workflows, using government-approved technologies like Microsoft Office, Copilot, and Python to deliver actionable insights in seconds.</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Section 2: Data Analysis & ML Process -->
+        <section class="section section-dark">
+            <div class="section-content">
+                <div class="section-text">
+                    <h2 class="section-title">Data-Driven Decision Making</h2>
+                    <p class="section-description">Our machine learning model evaluates SARSAT alerts in real time, analyzing past distress signals, weather conditions, and maritime traffic. It provides a probability score and key recommendations, helping RCCs focus on real emergencies.</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Section 3: Automation Process -->
+        <section class="section section-light">
+            <div class="section-content">
+                <div class="section-text">
+                    <h2 class="section-title">Automation for SAR and Command Center Operations</h2>
+                    <p class="section-description">Using Microsoft Office, Teams, Outlook, and Copilot, we automate email briefings, status notifications, and team communications. Our AI-assisted tools reduce workload and improve response efficiency.</p>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Section 4: Achievability Strategy -->
+        <section class="section section-dark">
+            <div class="section-content">
+                <div class="section-text">
+                    <h2 class="section-title">Designed for Achievability</h2>
+                    <p class="section-description">Unlike large-scale enterprise solutions that often fail at the operational level, our tools are designed for rapid deployment. Built within Microsoft Office, Copilot, and Python—already approved on government networks—they require minimal approval processes.</p>
+                    <ul>
+                        <li>✅ Don’t require government network ATO—leveraging existing Microsoft Office automation, Copilot, and Python scripting.</li>
+                        <li>✅ Avoid contracting roadblocks—solutions are often deployable by individual command centers/RCCs without requiring enterprise-wide approvals. We'll work within micro-purchase thresholds.</li>
+                        <li>✅ Are designed for operators—not just IT departments.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: Contact Us -->
+	<section id="contact">
+        <section class="section section-light">
+            <div class="section-content">
+                <div class="section-text">
+                    <h2 class="section-title">Contact Us</h2>
+                    <p class="section-description">Want to see how Rescue Decision Systems can support your command center or RCC? Get in touch.</p>
+                    <p class="section-description">📍 Port Angeles, WA | 📞 (541) 429-1899 | ✉️ <a href="mailto:rescuedecisionsystems@outlook.com">rescuedecisionsystems@outlook.com</a></p>
+                </div>
+            </div>
+        </section>
+    </main>
+    
+    <footer class="section">
+        <p>&copy; 2025 Rescue Decision Systems. All rights reserved.</p>
+    </footer>
+</body>
+</html>

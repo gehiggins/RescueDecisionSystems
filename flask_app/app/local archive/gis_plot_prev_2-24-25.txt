@@ -1,0 +1,169 @@
+#gis_plot.py
+
+import os
+import folium
+import requests
+import geopandas as gpd
+import pandas as pd
+from shapely.geometry import Point
+from geopy.distance import geodesic  # ✅ Used to calculate distances
+from app.weather import fetch_nearest_weather_stations
+
+
+# ✅ Load Global Coastline Dataset
+coastline = gpd.read_file("data/coastline/ne_10m_coastline.shp")  # Modify with correct dataset path
+
+# ✅ Function to Calculate Distance to Shoreline
+def calculate_distance_to_shore(latitude: float, longitude: float) -> dict:
+    """Calculate distance from alert location to the nearest coastline (in miles) and classify as land/offshore."""
+    
+    alert_location = Point(longitude, latitude)  # Longitude first in (x, y) format
+
+    # Compute distance to nearest coastline
+    coastline["distance"] = coastline.geometry.distance(alert_location)
+    
+    # Find the minimum distance (convert from meters to miles)
+    min_distance = coastline["distance"].min() * 0.000621371  # Convert meters to miles
+    
+    location_type = "land" if min_distance <= 20 else "offshore"
+    
+    print(f"✅ Distance to shore: {min_distance:.2f} miles ({location_type})")
+    
+    return {"distance_miles": round(min_distance, 2), "location_type": location_type}
+
+
+HEADERS = {
+    "User-Agent": "RescueDecisionSystems.com (RescueDecisionSystems@outlook.com)"
+}
+
+def fetch_noaa_stations():
+    """Fetch all NOAA land and buoy stations."""
+    try:
+        # ✅ Get all NOAA buoys
+        buoy_data = requests.get("https://www.ndbc.noaa.gov/data/latest_obs/latest_obs.txt", headers=HEADERS)
+        buoy_lines = buoy_data.text.strip().split("\n")[2:]  # Skip header
+
+        buoys = []
+        for line in buoy_lines:
+            parts = line.split()
+            if len(parts) >= 5:
+                buoys.append({
+                    "id": parts[0],
+                    "latitude": float(parts[1]),
+                    "longitude": float(parts[2]),
+                    "type": "buoy"
+                })
+        
+        # ✅ Get all NOAA land stations
+        land_data = requests.get("https://api.weather.gov/stations", headers=HEADERS).json()
+        land_stations = [
+            {
+                "id": station["id"],
+                "latitude": station["geometry"]["coordinates"][1],
+                "longitude": station["geometry"]["coordinates"][0],
+                "type": "land"
+            }
+            for station in land_data["features"]
+        ]
+
+        # ✅ Combine buoys & land stations
+        all_stations = pd.DataFrame(buoys + land_stations)
+        return all_stations
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ ERROR: Failed to fetch NOAA stations - {e}")
+        return pd.DataFrame()
+
+def find_nearest_station(lat, lon, stations):
+    """Find the closest NOAA station (buoy or land)."""
+    stations["distance_km"] = stations.apply(lambda row: geodesic((lat, lon), (row["latitude"], row["longitude"])).km, axis=1)
+    nearest = stations.sort_values(by="distance_km").iloc[0]
+    
+    # ✅ Determine if we should use a buoy or land station
+    if nearest["type"] == "buoy" or nearest["distance_km"] > 10:
+        return nearest  # Use buoy if offshore (>10 km)
+    else:
+        return nearest  # Use land station if closer
+
+def fetch_weather_data(station_id):
+    """Fetch weather data for a specific station."""
+    if station_id.isdigit():  # Buoy ID
+        url = f"https://www.ndbc.noaa.gov/data/realtime2/{station_id}.txt"
+    else:  # Land station
+        url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
+    
+    response = requests.get(url, headers=HEADERS)
+    if response.status_code != 200:
+        return {}
+
+    return response.json()
+
+def get_best_weather(lat, lon):
+    """Determine best station and fetch its weather data."""
+    stations = fetch_noaa_stations()
+    if stations.empty:
+        print("⚠️ No NOAA stations available.")
+        return {}
+
+    best_station = find_nearest_station(lat, lon, stations)
+    weather_data = fetch_weather_data(best_station["id"])
+
+    return {
+        "station_id": best_station["id"],
+        "station_type": best_station["type"],
+        "latitude": best_station["latitude"],
+        "longitude": best_station["longitude"],
+        "distance_km": best_station["distance_km"],
+        "weather_data": weather_data
+    }
+
+    if not station_data:
+        print("⚠️ No valid weather data found for nearby stations.")
+        return pd.DataFrame()
+
+    #return pd.DataFrame(station_data).sort_values(by="distance_km") i think this code no longer needed (GH, 2/24/2025)
+
+# ✅ Function to Generate GIS Map
+def generate_gis_map(latitude, longitude, site_id):
+    """Creates a GIS-based map showing alert location, nearest weather stations, and satellite ground tracks."""
+    
+    print(f"🔄 Generating GIS Map for {latitude}, {longitude}, Site ID: {site_id}")
+
+    # ✅ Compute Distance from Shore
+    distance_to_shore = calculate_distance_to_shore(latitude, longitude)
+
+    # ✅ Fetch Weather Stations & Store in Pandas
+    df_weather = fetch_nearest_weather_stations(latitude, longitude, distance_to_shore)
+
+    m = folium.Map(location=[latitude, longitude], zoom_start=6)
+
+    # ✅ Step 1: Plot Alert Location
+    folium.Marker(
+        location=[latitude, longitude],
+        popup=f"<b>🚨 Alert for Site ID {site_id}</b><br>📍 Location: {latitude}, {longitude}<br>🌊 Distance to Shore: {distance_to_shore['distance_miles']} miles ({distance_to_shore['location_type']})",
+        icon=folium.Icon(color="red", icon="info-sign")
+    ).add_to(m)
+
+    # ✅ Step 2: Add Weather Station Markers
+    for _, station in df_weather.iterrows():
+        popup_text = f"""
+        <b>{station['name']}</b><br>
+        🌍 Distance: {station['distance_miles']} miles<br>
+        🌡 Temperature: {station['temperature']}°C<br>
+        💨 Wind: {station['wind_speed']} m/s ({station['wind_direction']}°)<br>
+        🌊 Wave Height: {station['wave_height']}m<br>
+        ⏳ Wave Period: {station['wave_period']} sec<br>
+        ☔ Precipitation: {station['precipitation']}mm<br>
+        📅 Observed: {station['observation_time']}<br>
+        """
+
+        folium.Marker(
+            location=[station["lat"], station["lon"]],
+            popup=popup_text,
+            icon=folium.Icon(color="blue", icon="cloud")
+        ).add_to(m)
+
+    # ✅ Save GIS Map
+    map_filename = f"maps/gis_map_{site_id}.html"
+    m.save(map_filename)
+    return map_filename

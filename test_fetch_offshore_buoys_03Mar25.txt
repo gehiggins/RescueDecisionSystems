@@ -1,0 +1,26 @@
+import sys
+import os
+
+# Ensure flask_app is on the path (adjust if your path setup varies)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "flask_app", "app")))
+
+from fetch_NOAA_offshore_buoys import fetch_offshore_buoys
+
+def main():
+    # Test location: Near offshore waters — adjust as desired
+    test_lat = 37.5
+    test_lon = -74.5
+
+    print(f"🌊 Testing offshore buoy fetch for ({test_lat}, {test_lon}) using NDBC JSON API...")
+
+    # Fetch nearest offshore buoys using the new JSON-based system
+    buoy_df = fetch_offshore_buoys(test_lat, test_lon, max_buoys=5)
+
+    if buoy_df.empty:
+        print("❌ No buoys found or no valid data available.")
+    else:
+        print("✅ Retrieved offshore buoy data:")
+        print(buoy_df)
+
+if __name__ == "__main__":
+    main()
