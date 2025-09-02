@@ -30,6 +30,13 @@
 # - **Finalizes alert_df** using `finalize_alert_df.py` before committing to the database.
 # - Logs **missing or malformed fields** for debugging.
 #
+# Map Step (Final Output):
+# - Role: Orchestrates parse → finalize → (call GIS) → [DB/weather etc.]. It calls the mapping function; it does not render maps itself.
+# - Map Step Inputs: one finalized alert row (alert_df.iloc[0]) passed to GIS. (No new ground-truth DataFrame created here in this step.)
+# - Map Step Output: HTML at data/maps/<site_id>/gis_map_<site_id>.html and prints:
+#   ✅ Interactive map saved: data/maps/<site_id>/gis_map_<site_id>.html (current implementation uses generate_gis_map_html(...)).
+# - Notes: DB connectivity is not required for the map smoke; map step should proceed even if DB is unavailable (as seen in prior runs).
+# [RDS-ANCHOR: PREAMBLE_END]
 
 import sys
 import os
@@ -39,7 +46,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 
 from flask_app.setup_imports import *
 from flask_app.app.database import save_alert_to_db, save_weather_to_db, get_existing_alerts
-from flask_app.app.gis_mapping import generate_gis_map
+from flask_app.app.gis_mapping import generate_gis_map, generate_gis_map_html_from_dfs
 from flask_app.app.preparse_coordinate_mapper import pre_scan_for_coordinates
 from flask_app.app.utils import log_error_and_continue, load_sample_message, get_current_utc_timestamp
 
@@ -134,14 +141,72 @@ def process_sarsat_alert(raw_alert_message):
                 logging.error(f"{get_current_utc_timestamp()} ❌ Weather alerts fetch failed for Position {position}: {e}")
         """
                 
-        # Step 7: Generate GIS Map
-        site_id = str(alert_df.iloc[0]['site_id'])
-        data_folder = os.getenv('RDS_DATA_FOLDER', 'C:/Users/gehig/Projects/RescueDecisionSystems/data')
-        map_path = os.path.join(data_folder, 'maps', f"alert_{site_id}_map.html")
 
-        generate_gis_map(alert_df.iloc[0], map_path)
-        logging.info(f"{get_current_utc_timestamp()} ✅ Map generated and saved at: {map_path}")
-        
+
+        # Step 7: Generate GIS Map (HTML, online tiles)
+        alert_row = alert_df.iloc[0]
+        site_id_raw = alert_row.get('site_id')
+        site_id_safe = None
+        fallback_reason = None
+        # Priority logic for site_id_safe
+        if site_id_raw and str(site_id_raw).lower() not in ["none", "nan", ""]:
+            site_id_safe = str(site_id_raw)
+        elif alert_row.get('beacon_id'):
+            site_id_safe = f"BEACON_{str(alert_row.get('beacon_id'))}"
+            fallback_reason = "site_id missing; using beacon_id"
+        elif alert_row.get('alert_sequence_number'):
+            try:
+                site_id_safe = f"ALERT_{int(alert_row.get('alert_sequence_number'))}"
+                fallback_reason = "site_id missing; using alert_sequence_number"
+            except Exception:
+                pass
+        if not site_id_safe:
+            from datetime import datetime
+            site_id_safe = f"SMOKE_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+            fallback_reason = "site_id missing; using UTC fallback"
+        if fallback_reason:
+            logging.warning(f"[RDS] GIS map step fallback: {fallback_reason} (site_id_safe={site_id_safe})")
+
+        out_dir = os.path.join('data', 'maps', site_id_safe)
+        os.makedirs(out_dir, exist_ok=True)
+
+        # Build ephemeral positions_df (A row, and B row if present)
+        rows = []
+        # A
+        lat_a = alert_row.get('position_lat_dd_a', alert_row.get('latitude_a'))
+        lon_a = alert_row.get('position_lon_dd_a', alert_row.get('longitude_a'))
+        rr_a  = alert_row.get('range_ring_meters_a')
+        if pd.notna(lat_a) and pd.notna(lon_a):
+            rows.append({
+                'site_id': site_id_safe, 'role': 'A',
+                'lat_dd': float(lat_a), 'lon_dd': float(lon_a),
+                'range_ring_meters': float(rr_a) if pd.notna(rr_a) else 0.0,
+                'position_status': alert_row.get('position_status_a'),
+                'method': alert_row.get('position_method') or alert_row.get('position_method_a')
+            })
+
+        # B (optional)
+        lat_b = alert_row.get('position_lat_dd_b', alert_row.get('latitude_b'))
+        lon_b = alert_row.get('position_lon_dd_b', alert_row.get('longitude_b'))
+        rr_b  = alert_row.get('range_ring_meters_b')
+        if pd.notna(lat_b) and pd.notna(lon_b):
+            rows.append({
+                'site_id': site_id_safe, 'role': 'B',
+                'lat_dd': float(lat_b), 'lon_dd': float(lon_b),
+                'range_ring_meters': float(rr_b) if pd.notna(rr_b) else 0.0,
+                'position_status': alert_row.get('position_status_b'),
+                'method': alert_row.get('position_method') or alert_row.get('position_method_b')
+            })
+
+        positions_df = pd.DataFrame(rows)
+
+        info = generate_gis_map_html_from_dfs(
+            positions_df,
+            out_dir,
+            site_id=site_id_safe,
+            tiles_mode="online"
+        )
+        print(f"✅ Interactive map saved: data/maps/{site_id_safe}/gis_map_{site_id_safe}.html")
                 
     except Exception as e:
         log_error_and_continue(f"{get_current_utc_timestamp()} ❌ Pipeline processing error: {e}")

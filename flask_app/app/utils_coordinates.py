@@ -10,36 +10,28 @@ def is_valid_coordinate(coord_string):
     pattern = r"\d{2,3} \d{2,3}\.\d+[NSEW]"
     return bool(re.search(pattern, coord_string.strip().upper()))
 
-def clean_and_standardize_coordinate(coord_string):
-    """
-    Normalizes spacing and formatting for lat/lon strings.
-    Example: '37 45.600N' → '37 45.600N'
-    """
+def clean_and_standardize_coordinate(coord_string: str) -> str:
     if coord_string is None:
         return ""
     return re.sub(r"\s+", " ", coord_string.strip().upper())
 
-def parse_any_coordinate(coord_string):
+def parse_any_coordinate(coord_string: str) -> float:
     """
-    Parses an individual coordinate string like '37 45.600N' or '075 30.200W' into decimal degrees.
+    Accepts '37 45.600N' or '075 30.200W' or with seconds '47 06 36.0N'.
+    Returns signed decimal degrees or raises ValueError.
     """
-    if not coord_string:
-        raise ValueError("Empty coordinate string")
-
-    match = re.match(r"(\d{2,3})\s+(\d{2}(?:\.\d+)?)([NSEW])", coord_string.strip().upper())
-    if not match:
+    s = clean_and_standardize_coordinate(coord_string)
+    m = re.match(r"^(\d{1,3})\s+(\d{1,2}(?:\.\d+)?)(?:\s+(\d{1,2}(?:\.\d+)?))?\s*([NSEW])$", s)
+    if not m:
         raise ValueError(f"Invalid coordinate format: {coord_string}")
-
-    degrees = int(match.group(1))
-    minutes = float(match.group(2))
-    direction = match.group(3)
-
-    decimal = degrees + (minutes / 60.0)
-
-    if direction in ['S', 'W']:
-        decimal *= -1
-
-    return decimal
+    deg = int(m.group(1))
+    minutes = float(m.group(2))
+    seconds = float(m.group(3)) if m.group(3) else 0.0
+    if not (0 <= minutes < 60): raise ValueError("minutes out of range")
+    if not (0 <= seconds < 60): raise ValueError("seconds out of range")
+    dd = deg + minutes/60.0 + seconds/3600.0
+    if m.group(4) in ("S", "W"): dd *= -1
+    return dd
 
 def coordinate_pair_to_dd(coord_string):
     """

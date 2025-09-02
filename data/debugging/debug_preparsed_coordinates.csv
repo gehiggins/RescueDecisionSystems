@@ -1,3 +1,3 @@
-lat,lon,lat_dd,lon_dd,start_pos,end_pos,format_type,is_valid
-37 45.600N,30.200W,,,9,31,Unknown,False
-38 15.300N,12.500W,,,9,31,Unknown,False
+lat,lon,lat_dd,lon_dd,start_pos,end_pos,format_type,is_valid,confidence,notes
+37 45.600N,075 30.200W,37.76,-75.50333333333333,253,275,Decimal Minutes,True,0.92,lat: Matched decimal-minutes format; lon: Matched decimal-minutes format; Matched pair decimal-minutes format
+38 15.300N,070 12.500W,38.255,-70.20833333333333,323,345,Decimal Minutes,True,0.92,lat: Matched decimal-minutes format; lon: Matched decimal-minutes format; Matched pair decimal-minutes format

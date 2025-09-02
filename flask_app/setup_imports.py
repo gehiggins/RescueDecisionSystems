@@ -7,11 +7,18 @@ This ensures all scripts load necessary packages consistently.
 
 
 
+
 import os
 import sys
+from pathlib import Path
 
-# Add the flask_app directory to Python path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Add the flask_app directory to Python path (robust)
+repo_root = Path(__file__).resolve().parents[1]      # .../RescueDecisionSystems
+flask_app_dir = repo_root / "flask_app"              # .../RescueDecisionSystems/flask_app
+if str(flask_app_dir) not in sys.path:
+    sys.path.insert(0, str(flask_app_dir))
+    import logging
+    logging.info(f"✅ Added Flask app directory to Python path: {flask_app_dir}")
 
 
 
@@ -49,18 +56,6 @@ from sklearn.preprocessing import StandardScaler
 # ✅ Utility Functions
 from typing import Dict, List, Tuple, Optional
 
-# ✅ Ensure Python recognizes the `flask_app` directory
-PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
-FLASK_APP_DIR = os.path.join(PROJECT_ROOT, "flask_app")
-PARENT_DIR = os.path.abspath(os.path.join(PROJECT_ROOT, ".."))
-
-if FLASK_APP_DIR not in sys.path:
-    sys.path.append(FLASK_APP_DIR)
-    logging.info(f"✅ Added Flask app directory to Python path: {FLASK_APP_DIR}")
-
-if PARENT_DIR not in sys.path:
-    sys.path.append(PARENT_DIR)
-    logging.info(f"✅ Added parent directory to Python path: {PARENT_DIR}")
 
 logging.info("✅ Loaded setup_imports for consistent imports across scripts.")
 

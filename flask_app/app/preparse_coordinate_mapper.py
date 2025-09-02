@@ -1,3 +1,4 @@
+
 # preparse_coordinate_mapper.py - 2025-03-07 (Updated for Maximum Robustness)
 # 
 # Description:
@@ -33,7 +34,15 @@
 #
 
 from flask_app.setup_imports import *
-from flask_app.app.utils_coordinates import is_valid_coordinate, coordinate_pair_to_dd, clean_and_standardize_coordinate, parse_any_coordinate
+
+from app.utils_coordinates import clean_and_standardize_coordinate
+from app.field_validator import (
+    validate_and_extract_coordinate_token,
+    validate_and_extract_coordinate_pair,
+)
+
+def _short(s, n=200):
+    return (s or "")[:n]
 
 def pre_scan_for_coordinates(raw_message):
     """
@@ -53,72 +62,52 @@ def pre_scan_for_coordinates(raw_message):
             - format_type: Type of format detected (e.g., DMS, Decimal Minutes, Decimal Degrees)
             - is_valid: Whether the pair is fully valid
     """
-    
+
+
+    import os
     coordinate_pairs = []
     lines = raw_message.splitlines()
-    
-    coord_pattern = re.compile(
-        r'(\d{2,3}[\s°-]?\d{0,2}[\s\'-]?\d{0,2}\.\d{1,6}[NS])\s*[^NSWE]*\s*(\d{2,3}[\s°-]?\d{0,2}[\s\'-]?\d{0,2}\.\d{1,6}[EW])'
-    )
-    
+    offset = 0  # Running character offset for global spans
+
     for line_idx, line in enumerate(lines):
-        for match in coord_pattern.finditer(line):
-            first_coord, second_coord = match.groups()
-            start_pos = match.start()
-            end_pos = match.end()
-            
-            # Standardize coordinates
-            first_coord = clean_and_standardize_coordinate(first_coord)
-            second_coord = clean_and_standardize_coordinate(second_coord)
-            
-            # Determine lat/lon based on NSEW
-            if 'N' in first_coord or 'S' in first_coord:
-                lat_str, lon_str = first_coord, second_coord
-            else:
-                lon_str, lat_str = first_coord, second_coord
-            
-            # Validate and parse coordinates
-            lat_valid = is_valid_coordinate(lat_str)
-            lon_valid = is_valid_coordinate(lon_str)
-            is_valid_pair = lat_valid and lon_valid
-            
-            lat_dd, lon_dd = np.nan, np.nan  # Ensure columns always exist
-            format_type = "Unknown"
-            
-            if is_valid_pair:
-                lat_dd, lon_dd = parse_any_coordinate(lat_str), parse_any_coordinate(lon_str)
-                if '°' in lat_str or '"' in lat_str:
-                    format_type = "DMS"
-                elif '.' in lat_str and ' ' in lat_str:
-                    format_type = "Decimal Minutes"
-                else:
-                    format_type = "Decimal Degrees"
-            else:
-                logging.warning(f"Invalid coordinate pair detected: {lat_str}, {lon_str}")
-            
+        result = validate_and_extract_coordinate_pair(
+            field_name="coord_pair",
+            raw_text=line,
+            config={},
+            context={}
+        )
+        if result.get("is_valid"):
+            lat_token = result.get("lat_token")
+            lon_token = result.get("lon_token")
+            # Use validator tokens if present, else fallback to slice
+            lat_val = lat_token if lat_token else line[result.get("start_pos"):result.get("end_pos")] if result.get("start_pos") is not None and result.get("end_pos") is not None else line
+            lon_val = lon_token if lon_token else line[result.get("start_pos"):result.get("end_pos")] if result.get("start_pos") is not None and result.get("end_pos") is not None else line
+            # Compute global spans
+            start_pos = offset + (result.get("start_pos") if result.get("start_pos") is not None else 0)
+            end_pos = offset + (result.get("end_pos") if result.get("end_pos") is not None else len(line))
             coordinate_pairs.append({
-                "lat": lat_str,
-                "lon": lon_str,
-                "lat_dd": lat_dd,
-                "lon_dd": lon_dd,
+                "lat": lat_val,
+                "lon": lon_val,
+                "lat_dd": result.get("lat_dd"),
+                "lon_dd": result.get("lon_dd"),
                 "start_pos": start_pos,
                 "end_pos": end_pos,
-                "format_type": format_type,
-                "is_valid": is_valid_pair
+                "format_type": result.get("format_type", "Unknown"),
+                "is_valid": result.get("is_valid"),
+                "confidence": result.get("confidence", 0.0),
+                "notes": _short("; ".join(result.get("notes", [])), 120)
             })
-            
-            logging.debug(f"Detected coordinate pair: {lat_str}, {lon_str}, valid={is_valid_pair}, format={format_type}")
-    
-    coord_df = pd.DataFrame(coordinate_pairs)
-    
-    # ✅ NEW: Save Preparsed Coordinates to CSV for Debugging
-    debug_csv_path = "C:/Users/gehig/Projects/RescueDecisionSystems/data/debugging/debug_preparsed_coordinates.csv"
-    coord_df.to_csv(debug_csv_path, index=False)
-    logging.info(f"✅ Saved Preparsed Coordinates to: {debug_csv_path}")
+            # Deterministic: stop on first valid pair per line
+        offset += len(line) + 1  # +1 for newline
 
-    if coord_df.empty:
-        logging.info("📍 No valid coordinate pairs detected.")
-        return pd.DataFrame(columns=["lat", "lon", "lat_dd", "lon_dd", "start_pos", "end_pos", "format_type", "is_valid"])
-    
-    logging.info(f"📍 Pre-parse detected {len(coord_df)} coordinate pairs (valid+invalid).")
+    # Build DataFrame with fixed column order
+    columns = ["lat", "lon", "lat_dd", "lon_dd", "start_pos", "end_pos", "format_type", "is_valid", "confidence", "notes"]
+    coord_df = pd.DataFrame(coordinate_pairs, columns=columns)
+
+    # Ensure output directory exists
+    debug_csv_path = os.path.abspath("data/debugging/debug_preparsed_coordinates.csv")
+    os.makedirs(os.path.dirname(debug_csv_path), exist_ok=True)
+    coord_df.to_csv(debug_csv_path, index=False)
+    print(f"✅ Saved Preparsed Coordinates to: {debug_csv_path}")
+
     return coord_df
