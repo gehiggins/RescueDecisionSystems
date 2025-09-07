@@ -118,3 +118,24 @@ If anchors or patterns don’t match, do not guess. Stop and show the plan with 
 
 After edits, print the acceptance lines exactly as specified in the prompt (mapping step only).
 
+### EDIT→VERIFY→CONFIRM Protocol (MANDATORY)
+
+When I ask for a code change:
+1) EDIT: Propose a unified diff (no prose mixed in). Then apply it.
+2) VERIFY: Re-open the edited file(s) from disk and show:
+   - The exact line numbers changed
+   - A 15–20 line excerpt around each change
+   - A quick grep proving the key token(s) exist (see commands below)
+3) CONFIRM: Only after VERIFY passes, state: "CONFIRMED: Change present on disk."
+
+NEVER say a change exists until you’ve shown the VERIFY evidence.
+
+Verification commands (Windows PowerShell examples):
+- Show matching lines with context:
+  Select-String -Path "<file>" -Pattern "<needle>" -Context 3,3
+- Count matches (should be > 0):
+  (Select-String -Path "<file>" -Pattern "<needle>").Count
+- Git diff preview of what changed:
+  git status
+  git diff -- <file>
+

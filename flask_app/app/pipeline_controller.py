@@ -59,6 +59,7 @@ from flask_app.app.parser_sarsat_msg import parse_sarsat_message  # Standardized
 
 
 def process_sarsat_alert(raw_alert_message):
+
     try:
         logging.info(f"{get_current_utc_timestamp()} 🚀 Starting SARSAT alert processing pipeline")
 
@@ -73,6 +74,149 @@ def process_sarsat_alert(raw_alert_message):
             return
 
         alert_df = pd.DataFrame([parsed_data])
+
+        # DEBUG: show the ring inputs living on the alert row
+        print("\n[DEBUG] alert_df ring fields:")
+        print(alert_df[['site_id','expected_error_nm','range_ring_meters_a','range_ring_meters_b',
+                'position_method','format_type_a','format_type_b']].to_string(index=False))
+
+        # (optional) write a snapshot so you can open it in Excel
+        alert_df.to_csv('data/debugging/debug_final_alert_df.csv', index=False)
+        print("📄 Wrote data/debugging/debug_final_alert_df.csv")
+
+        logging.info(f"{get_current_utc_timestamp()} 📍 Parsed Positions - A: {parsed_data.get('latitude_a')}, "
+                     f"B: {parsed_data.get('latitude_b')}, Status A: {parsed_data.get('position_status_a')}, "
+                     f"Status B: {parsed_data.get('position_status_b')}")
+
+        # Step 3: Finalize Alert Data
+        # Fetch existing alerts from the database for sequence number assignment
+        existing_alerts_db = get_existing_alerts()  # Fetch past alerts from the database
+
+        alert_df = finalize_alert_df(alert_df, existing_alerts_db)  # Pass it to finalize_alert_df()
+        logging.info(f"{get_current_utc_timestamp()} ✅ Finalized alert data.")
+
+        # 🚨 DEBUG STOP: Print alert_df and exit 🚨
+        print("✅ Finalized Alert DataFrame:")
+        print(alert_df.to_string(index=False))  # Displays all columns and rows without truncation
+
+        """
+        # Step 4: Save Alert to Database
+        try:
+            save_alert_to_db(alert_df)
+            logging.info(f"{get_current_utc_timestamp()} ✅ Alert saved with ID: {parsed_data.get('site_id')}")
+        except Exception as e:
+            log_error_and_continue(f"{get_current_utc_timestamp()} ❌ Failed to save alert to DB: {e}")
+
+        # Step 5: Fetch Weather Data
+        for position in ['A', 'B']:
+            lat = parsed_data.get(f'latitude_{position.lower()}')
+            lon = parsed_data.get(f'longitude_{position.lower()}')
+
+            if pd.isna(lat) or pd.isna(lon):
+                logging.info(f"{get_current_utc_timestamp()} 📍 Skipping weather fetch for Position {position} (No valid coordinates)")
+                continue
+
+            logging.info(f"{get_current_utc_timestamp()} 🌦️ Fetching weather for Position {position} ({lat}, {lon})")
+
+            weather_shore_df = fetch_noaa_shore_data(lat, lon, position_label=position)
+            weather_buoy_df = fetch_ndbc_buoy_data(lat, lon, position_label=position)
+
+            combined_weather_df = pd.concat([weather_shore_df, weather_buoy_df], ignore_index=True)
+
+            logging.debug(f"✅ Combined weather DataFrame columns for Position {position}: {combined_weather_df.columns.tolist()}")
+            logging.debug(f"✅ Combined weather DataFrame for Position {position} (first 5 rows):\n{combined_weather_df.head()}")
+
+            if not isinstance(combined_weather_df, pd.DataFrame):
+                raise TypeError(f"Unexpected type for combined_weather_df at Position {position}: {type(combined_weather_df)}")
+
+            if not combined_weather_df.empty:
+                save_weather_to_db(combined_weather_df, parsed_data.get('site_id'), position)
+                logging.info(f"{get_current_utc_timestamp()} ✅ Combined weather data saved for Position {position}")
+            else:
+                logging.warning(f"{get_current_utc_timestamp()} ⚠️ No complete weather data available for Position {position}")
+
+            # Step 6: Fetch Weather Alerts
+            try:
+                alerts_df = fetch_weather_alerts_zone(lat, lon)
+                if not alerts_df.empty:
+                    logging.info(f"{get_current_utc_timestamp()} 🚨 {len(alerts_df)} weather alerts retrieved for Position {position}")
+                else:
+                    logging.info(f"{get_current_utc_timestamp()} ✅ No active weather alerts for Position {position}")
+            except Exception as e:
+                logging.error(f"{get_current_utc_timestamp()} ❌ Weather alerts fetch failed for Position {position}: {e}")
+        """
+
+        # Step 7: Generate GIS Map (HTML, online tiles)
+        alert_row = alert_df.iloc[0]
+        site_id_raw = alert_row.get('site_id')
+        site_id_safe = None
+        fallback_reason = None
+        # Priority logic for site_id_safe
+        if site_id_raw and str(site_id_raw).lower() not in ["none", "nan", ""]:
+            site_id_safe = str(site_id_raw)
+        elif alert_row.get('beacon_id'):
+            site_id_safe = f"BEACON_{str(alert_row.get('beacon_id'))}"
+            fallback_reason = "site_id missing; using beacon_id"
+        elif alert_row.get('alert_sequence_number'):
+            try:
+                site_id_safe = f"ALERT_{int(alert_row.get('alert_sequence_number'))}"
+                fallback_reason = "site_id missing; using alert_sequence_number"
+            except Exception:
+                pass
+        if not site_id_safe:
+            from datetime import datetime
+            site_id_safe = f"SMOKE_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
+            fallback_reason = "site_id missing; using UTC fallback"
+        if fallback_reason:
+            logging.warning(f"[RDS] GIS map step fallback: {fallback_reason} (site_id_safe={site_id_safe})")
+
+        out_dir = os.path.join('data', 'maps', site_id_safe)
+        os.makedirs(out_dir, exist_ok=True)
+
+        # Build ephemeral positions_df (A row, and B row if present)
+        rows = []
+        # A
+        lat_a = alert_row.get('position_lat_dd_a', alert_row.get('latitude_a'))
+        lon_a = alert_row.get('position_lon_dd_a', alert_row.get('longitude_a'))
+        rr_a  = alert_row.get('range_ring_meters_a')
+        if pd.notna(lat_a) and pd.notna(lon_a):
+            rows.append({
+                'site_id': site_id_safe, 'role': 'A',
+                'lat_dd': float(lat_a), 'lon_dd': float(lon_a),
+                'range_ring_meters': float(rr_a) if pd.notna(rr_a) else 0.0,
+                'position_status': alert_row.get('position_status_a'),
+                'method': alert_row.get('position_method') or alert_row.get('position_method_a'),
+                'range_ring_source': alert_row.get('range_ring_source_a'),
+                'ee_nm': alert_row.get('expected_error_nm')
+            })
+
+        # B (optional)
+        lat_b = alert_row.get('position_lat_dd_b', alert_row.get('latitude_b'))
+        lon_b = alert_row.get('position_lon_dd_b', alert_row.get('longitude_b'))
+        rr_b  = alert_row.get('range_ring_meters_b')
+        if pd.notna(lat_b) and pd.notna(lon_b):
+            rows.append({
+                'site_id': site_id_safe, 'role': 'B',
+                'lat_dd': float(lat_b), 'lon_dd': float(lon_b),
+                'range_ring_meters': float(rr_b) if pd.notna(rr_b) else 0.0,
+                'position_status': alert_row.get('position_status_b'),
+                'method': alert_row.get('position_method') or alert_row.get('position_method_b'),
+                'range_ring_source': alert_row.get('range_ring_source_b'),
+                'ee_nm': alert_row.get('expected_error_nm')
+            })
+
+        positions_df = pd.DataFrame(rows)
+
+        info = generate_gis_map_html_from_dfs(
+            positions_df,
+            out_dir,
+            site_id=site_id_safe,
+            tiles_mode="online"
+        )
+        print(f"✅ Interactive map saved: data/maps/{site_id_safe}/gis_map_{site_id_safe}.html")
+
+    except Exception as e:
+        log_error_and_continue(f"{get_current_utc_timestamp()} ❌ Pipeline processing error: {e}")
 
         logging.info(f"{get_current_utc_timestamp()} 📍 Parsed Positions - A: {parsed_data.get('latitude_a')}, "
                      f"B: {parsed_data.get('latitude_b')}, Status A: {parsed_data.get('position_status_a')}, "

@@ -1,12 +1,7 @@
-satellite_id,name,type,altitude_km,footprint_radius_km,country,status,notes
-S7,SARSAT-7,LEO,850,2250.0,USA/Canada/France,Active,Primary operational LEO SARSAT
-S10,SARSAT-10,LEO,850,2250.0,USA/Canada/France,Active,Primary operational LEO SARSAT
-S12,SARSAT-12,LEO,850,2250.0,USA/Canada/France,Active,Primary operational LEO SARSAT
-S13,SARSAT-13,LEO,850,2250.0,USA/Canada/France,Active,Primary operational LEO SARSAT
-G16,GOES-16,GEO,35786,,USA,Active,NOAA geostationary SARSAT payload
-G17,GOES-17,GEO,35786,,USA,Active,NOAA geostationary SARSAT payload
-G18,GOES-18,GEO,35786,,USA,Active,NOAA geostationary SARSAT payload
-MEO-04,Galileo GSAT0223,MEO,23222,5000.0,EU,Active,Galileo MEOSAR payload
-MEO-10,GPS III SV04,MEO,20200,5000.0,USA,Active,GPS MEOSAR payload
-R2,Louch-5A,GEO,35786,,Russia,Active,Russian GEO SARSAT payload
-C14,COSPAS-14,LEO,850,2250.0,Russia,Active,Russian LEO SARSAT payload
+sat_id,name,type,owner,constellation,altitude_km,footprint_radius_km,is_active
+NOAA-15,NOAA-15,LEO,USA,LEOSAR,850.0,2500.0,1
+NOAA-18,NOAA-18,LEO,USA,LEOSAR,850.0,2500.0,1
+NOAA-19,NOAA-19,LEO,USA,LEOSAR,850.0,2500.0,1
+METOP-A,MetOp-A,LEO,EU,LEOSAR,830.0,2500.0,1
+METOP-B,MetOp-B,LEO,EU,LEOSAR,830.0,2500.0,1
+METOP-C,MetOp-C,LEO,EU,LEOSAR,830.0,2500.0,1

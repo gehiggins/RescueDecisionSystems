@@ -492,51 +492,77 @@ def generate_gis_map_html_from_dfs(positions_df, out_dir, *, site_id=None, wx_df
     # --- Alert Positions Layer ---
     alert_group = folium.FeatureGroup(name="Alert Positions", show=True)
     for _, row in ab_positions.iterrows():
-        label = row["role"]
-        lat = row["lat_dd"]
-        lon = row["lon_dd"]
-        ring = row.get("range_ring_meters", 0)
-        popup_fields = [
-            f"Role: {label}",
-            f"Lat/Lon: {lat:.5f}, {lon:.5f}",
-            f"Range Ring: {ring:.0f} m"
-        ]
-        # Optional fields
-        for opt in ["position_status", "method", "confidence", "expected_error_nm"]:
-            if opt in row and pd.notna(row[opt]):
-                popup_fields.append(f"{opt}: {row[opt]}")
-        popup = "<br>".join(popup_fields)
-        folium.Marker(
-            [lat, lon],
-            popup=popup,
-            icon=folium.Icon(color="red", icon="info-sign")
-        ).add_to(alert_group)
-        folium.map.Marker(
-            [lat, lon],
-            icon=DivIcon(
-                icon_size=(150, 36),
-                icon_anchor=(0, 0),
-                html=f'<div style="font-size: 14pt; color: red; font-weight: bold">{label}</div>',
-            )
-        ).add_to(alert_group)
+            label = row["role"]
+            lat = row["lat_dd"]
+            lon = row["lon_dd"]
+            ring = row.get("range_ring_meters", 0)
+            # --- Format radius strings ---
+            radius_m_str = f"{int(round(ring)):,} m" if ring and ring > 0 else "N/A"
+            radius_nm = round(ring / 1852, 2) if ring and ring > 0 else None
+            radius_nm_str = f"{radius_nm} NM" if radius_nm is not None else "N/A"
+            # --- Provenance label ---
+            ring_src = row.get("range_ring_source", None)
+            if ring_src == "EE_95":
+                provenance = "95% confidence (EE)"
+            elif ring_src == "fallback_gnss":
+                provenance = "default radius (GNSS resolution; not 95%)"
+            else:
+                provenance = "default radius (not 95%)"
+            # --- Popup fields ---
+            popup_fields = [
+                f"Role: {label}",
+                f"Lat/Lon: {lat:.5f}, {lon:.5f}",
+                f"Range ring: {radius_m_str} (~{radius_nm_str})",
+                provenance
+            ]
+            # If EE_95 and ee_nm present, add EE value
+            if ring_src == "EE_95" and "ee_nm" in row and pd.notna(row["ee_nm"]):
+                popup_fields.append(f"EE: {row['ee_nm']} NM (95%)")
+            # Existing optional fields
+            for opt in ["position_status", "method", "confidence", "expected_error_nm"]:
+                if opt in row and pd.notna(row[opt]):
+                    popup_fields.append(f"{opt}: {row[opt]}")
+            popup = "<br>".join(popup_fields)
+            folium.Marker(
+                [lat, lon],
+                popup=popup,
+                icon=folium.Icon(color="red", icon="info-sign")
+            ).add_to(alert_group)
+            folium.map.Marker(
+                [lat, lon],
+                icon=DivIcon(
+                    icon_size=(150, 36),
+                    icon_anchor=(0, 0),
+                    html=f'<div style="font-size: 14pt; color: red; font-weight: bold">{label}</div>',
+                )
+            ).add_to(alert_group)
     alert_group.add_to(m)
     layers.append("Alert Positions")
 
     # --- Range Rings Layer ---
     ring_group = folium.FeatureGroup(name="Range Rings", show=True)
     for _, row in ab_positions.iterrows():
-        lat = row["lat_dd"]
-        lon = row["lon_dd"]
-        ring = row.get("range_ring_meters", 0)
-        if ring and ring > 0:
-            folium.Circle(
-                location=[lat, lon],
-                radius=ring,
-                color="red",
-                fill=False,
-                weight=2,
-                popup=f"{row['role']} ring ({ring:.0f} m)"
-            ).add_to(ring_group)
+            lat = row["lat_dd"]
+            lon = row["lon_dd"]
+            ring = row.get("range_ring_meters", 0)
+            label = row["role"]
+            ring_src = row.get("range_ring_source", None)
+            if ring and ring > 0:
+                # Tooltip: "A — 95% confidence (EE)" or "A — default radius (not 95%)"
+                if ring_src == "EE_95":
+                    tooltip = f"{label} — 95% confidence (EE)"
+                elif ring_src == "fallback_gnss":
+                    tooltip = f"{label} — default radius (GNSS resolution; not 95%)"
+                else:
+                    tooltip = f"{label} — default radius (not 95%)"
+                folium.Circle(
+                    location=[lat, lon],
+                    radius=ring,
+                    color="red",
+                    fill=False,
+                    weight=2,
+                    tooltip=tooltip
+                ).add_to(ring_group)
     ring_group.add_to(m)
     layers.append("Range Rings")
 
