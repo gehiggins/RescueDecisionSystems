@@ -1,4 +1,4 @@
-# ============================== RDS STANDARD HEADER ==============================
+﻿# ============================== RDS STANDARD HEADER ==============================
 # Script Name: sat_compute_groundtrack.py
 # Last Updated (UTC): 2025-09-04
 # Update Summary:
@@ -10,14 +10,14 @@
 #   * when_utc (snapshot time)
 # - Primary Outputs:
 #   * subpoints_df: ['sat_id','lat_dd','lon_dd']
-#   * sat_tracks_df: ['sat_id','when_utc','lat_dd','lon_dd','segment'] where segment ∈ {'past','future'}
+#   * sat_tracks_df: ['sat_id','when_utc','lat_dd','lon_dd','segment'] where segment âˆˆ {'past','future'}
 # - External Data Sources:
 #   * None. Uses provided TLEs.
 # - Data Handling Notes:
 #   * MVP returns empty stubs. Future will use SGP4/Skyfield.
 # ===============================================================================
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from datetime import datetime
 from typing import Optional
 
@@ -49,3 +49,4 @@ def compute_tracks(
     """
     logging.info("[sat_compute_groundtrack] Track computation not implemented in MVP.")
     return pd.DataFrame(columns=["sat_id","when_utc","lat_dd","lon_dd","segment"])
+

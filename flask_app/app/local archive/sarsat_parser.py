@@ -1,8 +1,8 @@
-# sarsat_parser.py - SARSAT Alert Parser
+﻿# sarsat_parser.py - SARSAT Alert Parser
 # Location: flask_app/app/sarsat_parser.py
 # 2025-03-06 Updated to use utils_coordinates.py for all coordinate handling
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from app.utils import log_error_and_continue
 from app.utils_coordinates import (
     preparse_coordinate_mapper,
@@ -44,9 +44,9 @@ def parse_sarsat_message(raw_message):
             parsed_data["position_status_b"] = 'C'  # Confirmed position
 
     except Exception as e:
-        log_error_and_continue(f"❌ ❌ Error parsing SARSAT message: {e}")
+        log_error_and_continue(f"âŒ âŒ Error parsing SARSAT message: {e}")
 
-    logging.info(f"📍 Parsed Positions - A: ({parsed_data['latitude_a']}, {parsed_data['longitude_a']}), "
+    logging.info(f"ðŸ“ Parsed Positions - A: ({parsed_data['latitude_a']}, {parsed_data['longitude_a']}), "
                  f"B: ({parsed_data['latitude_b']}, {parsed_data['longitude_b']}), "
                  f"Status A: {parsed_data['position_status_a']}, Status B: {parsed_data['position_status_b']}")
 
@@ -69,3 +69,4 @@ def extract_lat_lon_from_message(segment):
         raise ValueError(f"Invalid coordinates found: {lat_str}, {lon_str}")
 
     return lat_str, lon_str
+

@@ -1,24 +1,34 @@
-# utils_weather.py - Weather Utilities for Rescue Decision Systems
+﻿# utils_weather.py - Weather Utilities for Rescue Decision Systems
 # 2025-03-06 Initial Draft
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from datetime import datetime, timezone
+from app.utils_time import now_utc
+
+def dewpoint_magnus_c(temp_c, rh_pct):
+    """
+    Calculates dew point in Celsius using the Magnus formula.
+    """
+    if pd.isna(temp_c) or pd.isna(rh_pct):
+        return np.nan
+    a, b = 17.625, 243.04
+    gamma = (a * temp_c) / (b + temp_c) + np.log(max(min(rh_pct, 100.0), 0.1) / 100.0)
+    return (b * gamma) / (a - gamma)
 
 def calculate_timelate(observation_time):
     """
     Calculates the age of an observation (in hours) compared to current UTC time.
+    Uses now_utc() from utils_time for consistency.
     Returns:
         float: Age in hours, or NaN if observation_time is invalid.
     """
     try:
         if pd.isna(observation_time) or observation_time is None:
             return np.nan
-
-        now = datetime.now(timezone.utc)
-        age_seconds = (now - observation_time).total_seconds()
+        age_seconds = (now_utc() - observation_time).total_seconds()
         return age_seconds / 3600.0  # Convert seconds to hours
     except Exception as e:
-        logging.warning(f"⚠️ Failed to calculate timelate: {e}")
+        logging.warning(f"âš ï¸ Failed to calculate timelate: {e}")
         return np.nan
 
 def prioritize_weather_stations(weather_df):
@@ -69,3 +79,4 @@ def meters_per_second_to_knots(mps):
     if mps is None or pd.isna(mps):
         return np.nan
     return mps * 1.94384
+

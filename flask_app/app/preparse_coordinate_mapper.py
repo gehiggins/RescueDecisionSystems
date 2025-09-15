@@ -1,4 +1,4 @@
-
+﻿
 # preparse_coordinate_mapper.py - 2025-03-07 (Updated for Maximum Robustness)
 # 
 # Description:
@@ -33,7 +33,7 @@
 # - Supports all observed SARSAT coordinate formats, including Decimal Degrees and DMS with symbols.
 #
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 
 from app.utils_coordinates import clean_and_standardize_coordinate
 from app.field_validator import (
@@ -108,6 +108,7 @@ def pre_scan_for_coordinates(raw_message):
     debug_csv_path = os.path.abspath("data/debugging/debug_preparsed_coordinates.csv")
     os.makedirs(os.path.dirname(debug_csv_path), exist_ok=True)
     coord_df.to_csv(debug_csv_path, index=False)
-    print(f"✅ Saved Preparsed Coordinates to: {debug_csv_path}")
+    print(f"âœ… Saved Preparsed Coordinates to: {debug_csv_path}")
 
     return coord_df
+

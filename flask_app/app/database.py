@@ -1,6 +1,6 @@
-#database.py
+﻿#database.py
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from flask_app.app.sql_models import SARSATAlert, WeatherData, SessionLocal
 
 def save_alert_to_db(df):
@@ -30,11 +30,11 @@ def save_alert_to_db(df):
         )
         session.add(alert)
         session.commit()
-        logging.info(f"✅ Alert saved with ID: {alert.id}")
+        logging.info(f"âœ… Alert saved with ID: {alert.id}")
         return alert.id
     except Exception as e:
         session.rollback()
-        logging.error(f"❌ Failed to save alert to DB: {e}")
+        logging.error(f"âŒ Failed to save alert to DB: {e}")
         return None
     finally:
         session.close()
@@ -68,10 +68,10 @@ def save_weather_to_db(alert_id, weather_df, position):
             )
             session.add(weather)
         session.commit()
-        logging.info(f"✅ Weather data saved for alert ID: {alert_id}, Position: {position}")
+        logging.info(f"âœ… Weather data saved for alert ID: {alert_id}, Position: {position}")
     except Exception as e:
         session.rollback()
-        logging.error(f"❌ Failed to save weather data to DB: {e}")
+        logging.error(f"âŒ Failed to save weather data to DB: {e}")
     finally:
         session.close()
 
@@ -86,7 +86,8 @@ def get_existing_alerts():
         existing_alerts_df = pd.DataFrame(query, columns=["site_id", "alert_sequence_number"])
         return existing_alerts_df
     except Exception as e:
-        logging.error(f"❌ Failed to fetch existing alerts from DB: {e}")
+        logging.error(f"âŒ Failed to fetch existing alerts from DB: {e}")
         return pd.DataFrame(columns=["site_id", "alert_sequence_number"])  # Return empty DataFrame if error
     finally:
         session.close()
+

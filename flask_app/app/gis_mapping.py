@@ -1,4 +1,4 @@
-"""
+﻿"""
 Script Name: gis_mapping.py
 Last Updated (UTC): 2025-09-01
 Update Summary:
@@ -24,9 +24,10 @@ Next step: Add generate_gis_map_html_from_dfs(positions_df, ...) (DF inputs, lay
 #gis_mapping.py
 
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from flask_app.app.utils import log_error_and_continue
 from flask_app.app.utils_weather import celsius_to_fahrenheit
+from app.utils_display import format_us_display, to_dual_time
 import folium
 import geopandas as gpd
 import os
@@ -51,25 +52,25 @@ def generate_gis_map(alert_row, save_path):
     """
     Generates GIS map showing SARSAT alert locations (A/B), weather stations, range rings, and weather alerts.
     """
-    logging.warning(f"🗺️ generate_gis_map() called — context: {traceback.format_stack(limit=3)}")
+    logging.warning(f"ðŸ—ºï¸ generate_gis_map() called â€” context: {traceback.format_stack(limit=3)}")
 
-    site_id = str(alert_row['site_id'])  # ✅ Force site_id to string to avoid int64 serialization issues
+    site_id = str(alert_row['site_id'])  # âœ… Force site_id to string to avoid int64 serialization issues
 
     base_data_path = os.getenv('RDS_DATA_FOLDER', 'C:/Users/gehig/Projects/RescueDecisionSystems/data')
     coastline_shapefile = os.path.join(base_data_path, 'shapefiles', 'coastline', 'ne_10m_coastline.shp')
 
     try:
         gdf_coastline = gpd.read_file(coastline_shapefile)
-        logging.info(f"✅ Loaded coastline shapefile: {coastline_shapefile}")
+        logging.info(f"âœ… Loaded coastline shapefile: {coastline_shapefile}")
     except Exception as e:
-        log_error_and_continue(f"⚠️ Failed to load coastline shapefile: {e}")
+        log_error_and_continue(f"âš ï¸ Failed to load coastline shapefile: {e}")
         gdf_coastline = None
 
     center_lat = alert_row['latitude_a'] if pd.notna(alert_row['latitude_a']) else alert_row['latitude_b']
     center_lon = alert_row['longitude_a'] if pd.notna(alert_row['longitude_a']) else alert_row['longitude_b']
 
     if pd.isna(center_lat) or pd.isna(center_lon):
-        logging.warning("⚠️ No valid position available for map generation.")
+        logging.warning("âš ï¸ No valid position available for map generation.")
         return None
 
     m = folium.Map(location=[center_lat, center_lon], zoom_start=6)
@@ -117,32 +118,42 @@ def generate_gis_map(alert_row, save_path):
             station_name = str(station.get('station_name', 'N/A'))
 
             raw_temp_c = station.get('temperature', np.nan)
+            raw_wind_ms = station.get('wind_speed', np.nan)
+            raw_wave_m = station.get('wave_height', np.nan)
 
-            if isinstance(raw_temp_c, (int, float, np.number)) and pd.notna(raw_temp_c):
-                temp_c = f"{raw_temp_c:.1f}"
-                temp_f = f"{celsius_to_fahrenheit(raw_temp_c):.1f}"
-            else:
-                temp_c = "N/A"
-                temp_f = "N/A"
+            # Use format_us_display for all units
+            display = format_us_display(
+                wave_height_m=raw_wave_m if pd.notna(raw_wave_m) else None,
+                wind_ms=raw_wind_ms if pd.notna(raw_wind_ms) else None,
+                temp_C=raw_temp_c if pd.notna(raw_temp_c) else None
+            )
+            wave_txt = display.get("wave_height_display", "N/A")
+            wind_txt = display.get("wind_display", "N/A")
+            temp_txt = display.get("temp_display", "N/A")
 
-            wind_speed = str(station.get('wind_speed', 'N/A'))
-            wave_height = str(station.get('wave_height', 'N/A'))
             timelate = str(format_timelate(station.get('timelate', np.nan)))
             distance_nm = str(station.get('distance_nm', 'N/A'))
             source = str(station.get('source', 'N/A'))
             owner = str(station.get('owner', 'N/A'))
             notes = str(station.get('deployment_notes', 'N/A'))
 
+            obs_time = station.get('obs_time', None)
+            time_txt = ""
+            if obs_time:
+                dual = to_dual_time(obs_time, "UTC")
+                time_txt = f"{dual[0]} / {dual[1]}"
+
             popup_content = (
                 f"Station: {station_id} ({station_name})<br>"
-                f"Temp: {temp_c}°C / {temp_f}°F<br>"
-                f"Wind: {wind_speed} m/s<br>"
-                f"Waves: {wave_height} m<br>"
+                f"Temp: {temp_txt}<br>"
+                f"Wind: {wind_txt}<br>"
+                f"Waves: {wave_txt}<br>"
                 f"Distance: {distance_nm} NM<br>"
                 f"Timelate (hrs): {timelate}<br>"
                 f"Source: {source}<br>"
                 f"Owner: {owner}<br>"
-                f"Notes: {notes}"
+                f"deployment_notes: {notes}<br>"
+                f"Obs Time: {time_txt}"
             )
 
             color = 'green' if source == 'shore' else 'blue'
@@ -164,13 +175,23 @@ def generate_gis_map(alert_row, save_path):
                 effective = str(alert.get('effective', 'N/A'))
                 expires = str(alert.get('expires', 'N/A'))
 
+                # Use to_dual_time for effective/expires if present
+                effective_txt = effective
+                expires_txt = expires
+                if effective:
+                    dual_eff = to_dual_time(effective, "UTC")
+                    effective_txt = f"{dual_eff[0]} / {dual_eff[1]}"
+                if expires:
+                    dual_exp = to_dual_time(expires, "UTC")
+                    expires_txt = f"{dual_exp[0]} / {dual_exp[1]}"
+
                 popup = (
                     f"Alert: {headline}<br>"
                     f"Event: {event}<br>"
                     f"Severity: {severity}<br>"
                     f"Certainty: {certainty}<br>"
-                    f"Effective: {effective}<br>"
-                    f"Expires: {expires}"
+                    f"Effective: {effective_txt}<br>"
+                    f"Expires: {expires_txt}"
                 )
 
                 folium.Marker(
@@ -179,7 +200,6 @@ def generate_gis_map(alert_row, save_path):
                     icon=folium.Icon(color='orange', icon='exclamation-triangle')
                 ).add_to(m)
 
-
     if gdf_coastline is not None:
         for _, row in gdf_coastline.iterrows():
             if row.geometry.geom_type == 'LineString':
@@ -187,7 +207,7 @@ def generate_gis_map(alert_row, save_path):
                 folium.PolyLine(coords, color='black', weight=1).add_to(m)
 
     m.save(save_path)
-    logging.info(f"✅ Saved GIS map: {save_path}")
+    logging.info(f"âœ… Saved GIS map: {save_path}")
 
     return save_path
 
@@ -279,9 +299,9 @@ def generate_gis_png(alert_row: pd.Series, out_dir: str) -> dict:
     plt.savefig(png_path, dpi=150)
     plt.close(fig)
     if logging.getLogger().hasHandlers():
-        logging.info(f"✅ Map image saved: {png_path}")
+        logging.info(f"âœ… Map image saved: {png_path}")
     else:
-        print(f"✅ Map image saved: {png_path}")
+        print(f"âœ… Map image saved: {png_path}")
 
     # Optionally save GeoJSON
     geojson_written = False
@@ -297,9 +317,9 @@ def generate_gis_png(alert_row: pd.Series, out_dir: str) -> dict:
                 geojson_written = True
                 geojson_path_out = geojson_path
                 if logging.getLogger().hasHandlers():
-                    logging.info(f"✅ Positions GeoJSON saved: {geojson_path}")
+                    logging.info(f"âœ… Positions GeoJSON saved: {geojson_path}")
                 else:
-                    print(f"✅ Positions GeoJSON saved: {geojson_path}")
+                    print(f"âœ… Positions GeoJSON saved: {geojson_path}")
         except Exception as e:
             if logging.getLogger().hasHandlers():
                 logging.warning(f"GeoJSON write failed: {e}")
@@ -354,9 +374,9 @@ def generate_gis_map_html(alert_row, out_dir, tiles_mode="online"):
 
     m.save(html_path)
     if logging.getLogger().hasHandlers():
-        logging.info(f"✅ Interactive map saved: {html_path}")
+        logging.info(f"âœ… Interactive map saved: {html_path}")
     else:
-        print(f"✅ Interactive map saved: {html_path}")
+        print(f"âœ… Interactive map saved: {html_path}")
     return html_path
 
 # --- RDS: PROJ datadir helper (Windows/conda) ---
@@ -548,13 +568,13 @@ def generate_gis_map_html_from_dfs(positions_df, out_dir, *, site_id=None, wx_df
             label = row["role"]
             ring_src = row.get("range_ring_source", None)
             if ring and ring > 0:
-                # Tooltip: "A — 95% confidence (EE)" or "A — default radius (not 95%)"
+                # Tooltip: "A â€” 95% confidence (EE)" or "A â€” default radius (not 95%)"
                 if ring_src == "EE_95":
-                    tooltip = f"{label} — 95% confidence (EE)"
+                    tooltip = f"{label} â€” 95% confidence (EE)"
                 elif ring_src == "fallback_gnss":
-                    tooltip = f"{label} — default radius (GNSS resolution; not 95%)"
+                    tooltip = f"{label} â€” default radius (GNSS resolution; not 95%)"
                 else:
-                    tooltip = f"{label} — default radius (not 95%)"
+                    tooltip = f"{label} â€” default radius (not 95%)"
                 folium.Circle(
                     location=[lat, lon],
                     radius=ring,
@@ -626,5 +646,196 @@ def generate_gis_map_html_from_dfs(positions_df, out_dir, *, site_id=None, wx_df
 
     # --- Save ---
     m.save(html_path)
-    logging.info(f"✅ DF-based HTML map saved: {html_path}")
+    logging.info(f"âœ… DF-based HTML map saved: {html_path}")
     return {"site_id": sid, "map_html_path": html_path, "layers": layers, "status": "ok"}
+
+def generate_gis_map_html_from_inputs(
+    gis_map_inputs_df: pd.DataFrame,
+    out_dir: str,
+    site_id: Optional[str] = None,
+    tiles_mode: str = "online"
+) -> str:
+    """
+    Render Folium map from unified inputs table.
+    Behavior:
+      - Group by 'layer' and render the same FeatureGroups you already use:
+        'alert_positions', 'range_rings', 'weather', 'stations'.
+      - For 'range_rings', geometry is Circle encoded as dict; draw a circle with radius_m (meters).
+      - Use popup_html as-is; do not compute units/time in the renderer.
+      - Satellite layers ('sat_tracks', 'sat_footprints') if present: add FeatureGroups default show=False.
+      - Preserve existing tiles_mode/out_dir behavior consistent with current map generator.
+    Return: path to generated HTML.
+    """
+    import folium
+    import os
+    import pandas as pd
+    import logging
+    from folium import LayerControl, DivIcon
+
+    if gis_map_inputs_df is None or gis_map_inputs_df.empty:
+        logging.warning("[RDS] No gis_map_inputs_df provided; cannot generate map.")
+        return None
+
+    # Site ID logic
+    sid = site_id
+    if not sid:
+        unique_ids = gis_map_inputs_df["site_id"].dropna().unique()
+        if len(unique_ids) == 1:
+            sid = str(unique_ids[0])
+        elif len(unique_ids) > 1:
+            sid = str(unique_ids[0])
+            logging.warning(f"[RDS] Multiple site_ids in gis_map_inputs_df; using first: {sid}")
+        else:
+            sid = f"SMOKE_{pd.Timestamp.utcnow().strftime('%Y%m%d_%H%M%S')}"
+
+    # Directory logic
+    out_dir_final = os.path.join(out_dir, str(sid)) if out_dir and not out_dir.endswith(str(sid)) else out_dir
+    os.makedirs(out_dir_final, exist_ok=True)
+    html_path = os.path.join(out_dir_final, f"gis_map_{sid}.html")
+
+    # --- Base Map ---
+    ab_positions = gis_map_inputs_df[gis_map_inputs_df["role"].isin(["A", "B"])]
+    if ab_positions.empty:
+        logging.warning(f"[RDS] No valid A/B positions for site_id {sid}; map not written.")
+        return {"site_id": sid, "map_html_path": None, "layers": [], "status": "no-op: no valid A/B"}
+    center_row = ab_positions.iloc[0]
+    center_lat = center_row["lat_dd"]
+    center_lon = center_row["lon_dd"]
+    m = folium.Map(location=[center_lat, center_lon], zoom_start=8, tiles="OpenStreetMap" if tiles_mode=="online" else None)
+
+    # --- Grouped by Layer ---
+    for layer_name, group in gis_map_inputs_df.groupby("layer"):
+        if layer_name == "alert_positions":
+            # --- Alert Positions ---
+            for _, row in group.iterrows():
+                label = row["role"]
+                lat = row["lat_dd"]
+                lon = row["lon_dd"]
+                ring = row.get("range_ring_meters", 0)
+                # --- Format radius strings ---
+                radius_m_str = f"{int(round(ring)):,} m" if ring and ring > 0 else "N/A"
+                radius_nm = round(ring / 1852, 2) if ring and ring > 0 else None
+                radius_nm_str = f"{radius_nm} NM" if radius_nm is not None else "N/A"
+                # --- Provenance label ---
+                ring_src = row.get("range_ring_source", None)
+                if ring_src == "EE_95":
+                    provenance = "95% confidence (EE)"
+                elif ring_src == "fallback_gnss":
+                    provenance = "default radius (GNSS resolution; not 95%)"
+                else:
+                    provenance = "default radius (not 95%)"
+                # --- Popup fields ---
+                popup_fields = [
+                    f"Role: {label}",
+                    f"Lat/Lon: {lat:.5f}, {lon:.5f}",
+                    f"Range ring: {radius_m_str} (~{radius_nm_str})",
+                    provenance
+                ]
+                # If EE_95 and ee_nm present, add EE value
+                if ring_src == "EE_95" and "ee_nm" in row and pd.notna(row["ee_nm"]):
+                    popup_fields.append(f"EE: {row['ee_nm']} NM (95%)")
+                # Existing optional fields
+                for opt in ["position_status", "method", "confidence", "expected_error_nm"]:
+                    if opt in row and pd.notna(row[opt]):
+                        popup_fields.append(f"{opt}: {row[opt]}")
+                popup = "<br>".join(popup_fields)
+                folium.Marker(
+                    [lat, lon],
+                    popup=popup,
+                    icon=folium.Icon(color="red", icon="info-sign")
+                ).add_to(m)
+                folium.map.Marker(
+                    [lat, lon],
+                    icon=DivIcon(
+                        icon_size=(150, 36),
+                        icon_anchor=(0, 0),
+                        html=f'<div style="font-size: 14pt; color: red; font-weight: bold">{label}</div>',
+                    )
+                ).add_to(m)
+
+        elif layer_name == "range_rings":
+            # --- Range Rings ---
+            for _, row in group.iterrows():
+                lat = row["lat_dd"]
+                lon = row["lon_dd"]
+                ring = row.get("range_ring_meters", 0)
+                label = row["role"]
+                ring_src = row.get("range_ring_source", None)
+                if ring and ring > 0:
+                    # Tooltip: "A â€” 95% confidence (EE)" or "A â€” default radius (not 95%)"
+                    if ring_src == "EE_95":
+                        tooltip = f"{label} â€” 95% confidence (EE)"
+                    elif ring_src == "fallback_gnss":
+                        tooltip = f"{label} â€” default radius (GNSS resolution; not 95%)"
+                    else:
+                        tooltip = f"{label} â€” default radius (not 95%)"
+                    folium.Circle(
+                        location=[lat, lon],
+                        radius=ring,
+                        color="red",
+                        fill=False,
+                        weight=2,
+                        tooltip=tooltip
+                    ).add_to(m)
+
+        elif layer_name == "weather":
+            # --- Weather Stations ---
+            wx_group = folium.FeatureGroup(name="Weather", show=True)
+            for _, wx in group.iterrows():
+                lat = wx.get("lat_dd")
+                lon = wx.get("lon_dd")
+                if pd.notna(lat) and pd.notna(lon):
+                    popup = "<br>".join([
+                        f"Obs: {wx.get('obs_type', 'N/A')}",
+                        f"Value: {wx.get('obs_value', 'N/A')} {wx.get('obs_unit', '')}",
+                        f"Time: {wx.get('obs_time', 'N/A')}",
+                        f"Station: {wx.get('station_id', 'N/A')}"
+                    ])
+                    folium.Marker(
+                        [lat, lon],
+                        popup=popup,
+                        icon=folium.Icon(color="orange", icon="cloud")
+                    ).add_to(wx_group)
+            wx_group.add_to(m)
+
+        elif layer_name == "stations":
+            # --- Stations ---
+            st_group = folium.FeatureGroup(name="Stations", show=True)
+            for _, st in group.iterrows():
+                lat = st.get("lat_dd")
+                lon = st.get("lon_dd")
+                if pd.notna(lat) and pd.notna(lon):
+                    popup = "<br>".join([
+                        f"ID: {st.get('station_id', 'N/A')}",
+                        f"Name: {st.get('name', 'N/A')}",
+                        f"Type: {st.get('type', 'N/A')}"
+                    ])
+                    folium.Marker(
+                        [lat, lon],
+                        popup=popup,
+                        icon=folium.Icon(color="blue", icon="cloud")
+                    ).add_to(st_group)
+            st_group.add_to(m)
+
+    # --- Layer Control ---
+    LayerControl(collapsed=True).add_to(m)
+
+    # --- Title ---
+    title_html = f'''<h3 align="center" style="font-size:18px"><b>RDS Alert Map: {sid}</b></h3>'''
+    m.get_root().html.add_child(folium.Element(title_html))
+
+    # --- Fit map to largest ring ---
+    max_ring = ab_positions["range_ring_meters"].max() if "range_ring_meters" in ab_positions else 0
+    if max_ring and max_ring > 0:
+        # Pad by 20%
+        pad = max_ring * 1.2
+        m.fit_bounds([
+            [center_lat - pad/111320, center_lon - pad/(111320*max(0.1, math.cos(math.radians(center_lat))))],
+            [center_lat + pad/111320, center_lon + pad/(111320*max(0.1, math.cos(math.radians(center_lat))))]
+        ])
+
+    # --- Save ---
+    m.save(html_path)
+    logging.info(f"âœ… Inputs-based HTML map saved: {html_path}")
+    return html_path
+

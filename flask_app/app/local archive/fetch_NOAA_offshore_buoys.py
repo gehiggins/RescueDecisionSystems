@@ -1,5 +1,5 @@
-# fetch_NOAA_offshore_buoys.py
-from flask_app.setup_imports import *
+﻿# fetch_NOAA_offshore_buoys.py
+from app.setup_imports import *
 from app.utils import log_error_and_continue, calculate_distance_nm, parse_realtime2_data, parse_5day2_data
 
 def fetch_offshore_buoys(lat, lon, max_buoys=10):
@@ -25,7 +25,7 @@ def fetch_offshore_buoys(lat, lon, max_buoys=10):
                 data = parse_5day2_data(buoy_id)
 
             if data is None:
-                logging.warning(f"⚠️ No valid data found for buoy {buoy_id}")
+                logging.warning(f"âš ï¸ No valid data found for buoy {buoy_id}")
                 continue
 
             # Add source column
@@ -44,18 +44,18 @@ def fetch_offshore_buoys(lat, lon, max_buoys=10):
 
             # Log row completeness (count non-null fields)
             non_null_count = sum(1 for value in data.values() if pd.notna(value))
-            logging.info(f"📊 Buoy {buoy_id} ({source}) data completeness: {non_null_count} fields populated.")
+            logging.info(f"ðŸ“Š Buoy {buoy_id} ({source}) data completeness: {non_null_count} fields populated.")
 
             buoy_data.append(data)
 
         if not buoy_data:
-            logging.warning(f"⚠️ No valid observations retrieved for buoys near ({lat}, {lon})")
+            logging.warning(f"âš ï¸ No valid observations retrieved for buoys near ({lat}, {lon})")
             return pd.DataFrame()
 
         return pd.DataFrame(buoy_data)
 
     except Exception as e:
-        log_error_and_continue(f"❌ Error fetching offshore buoys: {e}")
+        log_error_and_continue(f"âŒ Error fetching offshore buoys: {e}")
         return pd.DataFrame()
 
 def _fetch_nearest_buoys(lat, lon, max_buoys):
@@ -73,9 +73,10 @@ def _fetch_nearest_buoys(lat, lon, max_buoys):
             (lat, lon), (row['latitude'], row['longitude'])), axis=1)
 
         nearest_stations = stations.sort_values(by='distance_nm').head(max_buoys).to_dict(orient='records')
-        logging.info(f"✅ Found {len(nearest_stations)} nearest offshore buoys.")
+        logging.info(f"âœ… Found {len(nearest_stations)} nearest offshore buoys.")
         return nearest_stations
 
     except Exception as e:
-        log_error_and_continue(f"❌ Error loading station metadata or calculating distances: {e}")
+        log_error_and_continue(f"âŒ Error loading station metadata or calculating distances: {e}")
         return []
+

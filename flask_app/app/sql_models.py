@@ -1,7 +1,7 @@
-# sql_models.py - Defines Database Models for SARSAT Alert Processing
+﻿# sql_models.py - Defines Database Models for SARSAT Alert Processing
 # 2025-03-07 (Updated for alert_sequence_number & site_creation_time)
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
@@ -9,7 +9,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import os
 
-# ✅ Load environment variables (database connection)
+# âœ… Load environment variables (database connection)
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
@@ -42,7 +42,7 @@ class SARSATAlert(Base):
     probability_distress = Column(Float, nullable=True)
     status = Column(String, default="Pending")
     
-    # ✅ Newly Added Fields
+    # âœ… Newly Added Fields
     alert_sequence_number = Column(Integer, nullable=True)  # Ensures correct sequencing of alerts
     site_creation_time = Column(DateTime, nullable=True)  # Ensures proper site tracking
     
@@ -75,5 +75,6 @@ class WeatherData(Base):
 
     sarsat_alert = relationship("SARSATAlert", back_populates="weather_data")
 
-# ✅ Define Relationship Between Alerts & Weather Data
+# âœ… Define Relationship Between Alerts & Weather Data
 SARSATAlert.weather_data = relationship("WeatherData", order_by=WeatherData.id, back_populates="sarsat_alert")
+

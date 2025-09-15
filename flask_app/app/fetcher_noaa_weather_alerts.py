@@ -1,7 +1,7 @@
-# fetcher_noaa_weather_alerts.py - NOAA Weather Alerts Fetcher for Rescue Decision Systems
+﻿# fetcher_noaa_weather_alerts.py - NOAA Weather Alerts Fetcher for Rescue Decision Systems
 # 2025-03-06 Initial Draft
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from flask_app.app.utils import log_error_and_continue, get_current_utc_timestamp
 
 def fetch_weather_alerts_zone(lat, lon):
@@ -24,7 +24,7 @@ def fetch_weather_alerts_zone(lat, lon):
         zone_url = properties.get('forecastZone')
 
         if not zone_url:
-            logging.warning(f"{get_current_utc_timestamp()} ⚠️ No forecast zone found for ({lat}, {lon})")
+            logging.warning(f"{get_current_utc_timestamp()} âš ï¸ No forecast zone found for ({lat}, {lon})")
             return create_empty_alerts_df()
 
         alerts_url = f"{zone_url}/alerts/active"
@@ -49,14 +49,14 @@ def fetch_weather_alerts_zone(lat, lon):
             })
 
         if alerts:
-            logging.info(f"{get_current_utc_timestamp()} 🚨 Active weather alerts found for zone {zone_url}: {len(alerts)} alerts")
+            logging.info(f"{get_current_utc_timestamp()} ðŸš¨ Active weather alerts found for zone {zone_url}: {len(alerts)} alerts")
         else:
-            logging.info(f"{get_current_utc_timestamp()} ✅ No active weather alerts for zone {zone_url}")
+            logging.info(f"{get_current_utc_timestamp()} âœ… No active weather alerts for zone {zone_url}")
 
         return pd.DataFrame(alerts)
 
     except Exception as e:
-        log_error_and_continue(f"{get_current_utc_timestamp()} ❌ Error fetching weather alerts for ({lat}, {lon}): {e}")
+        log_error_and_continue(f"{get_current_utc_timestamp()} âŒ Error fetching weather alerts for ({lat}, {lon}): {e}")
         return create_empty_alerts_df()
 
 def create_empty_alerts_df():
@@ -69,3 +69,4 @@ if __name__ == '__main__':
     sample_lon = -122.3321
     alerts_df = fetch_weather_alerts_zone(sample_lat, sample_lon)
     print(alerts_df)
+

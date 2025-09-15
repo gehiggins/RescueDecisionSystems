@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_484a4de01eaf278689f6e6ae40b9ebb8 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+
+            <style>html, body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+            </style>
+
+            <style>#map {
+                position:absolute;
+                top:0;
+                bottom:0;
+                right:0;
+                left:0;
+                }
+            </style>
+
+            <script>
+                L_NO_TOUCH = false;
+                L_DISABLE_3D = false;
+            </script>
+
+        
+</head>
+<body>
+    
+    
+            <div class="folium-map" id="map_484a4de01eaf278689f6e6ae40b9ebb8" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_484a4de01eaf278689f6e6ae40b9ebb8 = L.map(
+                "map_484a4de01eaf278689f6e6ae40b9ebb8",
+                {
+                    center: [37.7167, -122.2333],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 8,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_e8403ba4a29f52e9840f02d9be30da70 = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_e8403ba4a29f52e9840f02d9be30da70.addTo(map_484a4de01eaf278689f6e6ae40b9ebb8);
+        
+    
+            var marker_a90d672abbbf6632725a549399db1121 = L.marker(
+                [37.7167, -122.2333],
+                {
+}
+            ).addTo(map_484a4de01eaf278689f6e6ae40b9ebb8);
+        
+    
+        var popup_26e9c50ca7338c5ff41824e9c15ca7ed = L.popup({
+  "maxWidth": 300,
+});
+
+        
+            
+                var html_796566b37b96d514b95dc6e932e1ee4a = $(`<div id="html_796566b37b96d514b95dc6e932e1ee4a" style="width: 100.0%; height: 100.0%;">Provider: Meteostat<br>UTC: 2025-09-14 03:00:00+00:00<br>Wind (m/s): 14.8</div>`)[0];
+                popup_26e9c50ca7338c5ff41824e9c15ca7ed.setContent(html_796566b37b96d514b95dc6e932e1ee4a);
+            
+        
+
+        marker_a90d672abbbf6632725a549399db1121.bindPopup(popup_26e9c50ca7338c5ff41824e9c15ca7ed)
+        ;
+
+        
+    
+    
+            var marker_42fc584f84b1c89b831b7469a3d15587 = L.marker(
+                [37.6167, -122.3667],
+                {
+}
+            ).addTo(map_484a4de01eaf278689f6e6ae40b9ebb8);
+        
+    
+        var popup_4c556b401aa466f08fdc63b6a3c25c87 = L.popup({
+  "maxWidth": 300,
+});
+
+        
+            
+                var html_db91c9a4446ecb16b524ba43ab14d72b = $(`<div id="html_db91c9a4446ecb16b524ba43ab14d72b" style="width: 100.0%; height: 100.0%;">Provider: Meteostat<br>UTC: 2025-09-14 03:00:00+00:00<br>Wind (m/s): 24.1</div>`)[0];
+                popup_4c556b401aa466f08fdc63b6a3c25c87.setContent(html_db91c9a4446ecb16b524ba43ab14d72b);
+            
+        
+
+        marker_42fc584f84b1c89b831b7469a3d15587.bindPopup(popup_4c556b401aa466f08fdc63b6a3c25c87)
+        ;
+
+        
+    
+    
+            var marker_35b320bf3a581d4dc9278264c8826379 = L.marker(
+                [37.7833, -122.3167],
+                {
+}
+            ).addTo(map_484a4de01eaf278689f6e6ae40b9ebb8);
+        
+    
+        var popup_ece17621590bbcfe71d140af4989042f = L.popup({
+  "maxWidth": 300,
+});
+
+        
+            
+                var html_4eb9b1d2b52e9727d594d6424c6a8ec2 = $(`<div id="html_4eb9b1d2b52e9727d594d6424c6a8ec2" style="width: 100.0%; height: 100.0%;">Provider: Meteostat<br>UTC: 2025-09-14 03:00:00+00:00<br>Wind (m/s): 15.1</div>`)[0];
+                popup_ece17621590bbcfe71d140af4989042f.setContent(html_4eb9b1d2b52e9727d594d6424c6a8ec2);
+            
+        
+
+        marker_35b320bf3a581d4dc9278264c8826379.bindPopup(popup_ece17621590bbcfe71d140af4989042f)
+        ;
+
+        
+    
+    
+            var marker_f098e20797176e3f6302da083aa72ea1 = L.marker(
+                [37.7749, -122.4194],
+                {
+}
+            ).addTo(map_484a4de01eaf278689f6e6ae40b9ebb8);
+        
+    
+        var popup_c4255f6e0ca0d79d1da81fa20e3d3eba = L.popup({
+  "maxWidth": 300,
+});
+
+        
+            
+                var html_5eee92afb452d63639f2fb7387937fce = $(`<div id="html_5eee92afb452d63639f2fb7387937fce" style="width: 100.0%; height: 100.0%;">Provider: Open-Meteo<br>UTC: 2025-09-14 03:00:00+00:00<br>Wind (m/s): 21.5<br>Wave Height (m): 1.1<br>Wave Period (s): 8.25</div>`)[0];
+                popup_c4255f6e0ca0d79d1da81fa20e3d3eba.setContent(html_5eee92afb452d63639f2fb7387937fce);
+            
+        
+
+        marker_f098e20797176e3f6302da083aa72ea1.bindPopup(popup_c4255f6e0ca0d79d1da81fa20e3d3eba)
+        ;
+
+        
+    
+</script>
+</html>

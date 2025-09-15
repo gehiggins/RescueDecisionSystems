@@ -46,8 +46,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 
 from app.setup_imports import *
 from flask_app.app.database import save_alert_to_db, save_weather_to_db, get_existing_alerts
-from flask_app.app.gis_map_inputs_builder import build_gis_map_inputs_df
-from flask_app.app.gis_mapping import generate_gis_map_html_from_inputs
+from flask_app.app.gis_mapping import generate_gis_map, generate_gis_map_html_from_dfs
 from flask_app.app.preparse_coordinate_mapper import pre_scan_for_coordinates
 from flask_app.app.utils import log_error_and_continue, load_sample_message, get_current_utc_timestamp
 
@@ -275,36 +274,16 @@ def process_sarsat_alert(raw_alert_message):
         print(f"[debug] wx_df rows: {0 if wx_df is None else len(wx_df)}")
         print(f"[debug] stations_df rows: {0 if stations_df is None else len(stations_df)}")
 
-        # --- Unified GIS map inputs ---
-        gis_map_inputs_df = build_gis_map_inputs_df(
+        # --- Map render (now with wx/stations wired) ---
+        info = generate_gis_map_html_from_dfs(
             positions_df,
-            wx_df if not wx_df.empty else None,
-            stations_df if not stations_df.empty else None,
-            op_tz_env=None,
-            shore_nm=5.0
+            out_dir,
+            site_id=site_id_safe,
+            wx_df=wx_df if not wx_df.empty else None,
+            stations_df=stations_df if not stations_df.empty else None,
+            tiles_mode="online",
         )
-
-        LOG.info(f"GIS map inputs row counts by layer: {gis_map_inputs_df['layer'].value_counts().to_dict()}")
-
-        # --- Map render (choose single-feed or legacy) ---
-        if os.getenv("RDS_MAP_USE_SINGLE_FEED") == "1":
-            info = generate_gis_map_html_from_inputs(
-                gis_map_inputs_df,
-                out_dir,
-                site_id=site_id_safe,
-                tiles_mode="online",
-            )
-            print(f"âœ… Interactive map saved: data/maps/{site_id_safe}/gis_map_{site_id_safe}.html")
-        else:
-            info = generate_gis_map_html_from_dfs(
-                positions_df,
-                out_dir,
-                site_id=site_id_safe,
-                wx_df=wx_df if not wx_df.empty else None,
-                stations_df=stations_df if not stations_df.empty else None,
-                tiles_mode="online",
-            )
-            print(f"âœ… Interactive map saved: data/maps/{site_id_safe}/gis_map_{site_id_safe}.html")
+        print(f"âœ… Interactive map saved: data/maps/{site_id_safe}/gis_map_{site_id_safe}.html")
                 
     except Exception as e:
         log_error_and_continue(f"{get_current_utc_timestamp()} âŒ Pipeline processing error: {e}")

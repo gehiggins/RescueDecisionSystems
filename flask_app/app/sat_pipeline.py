@@ -1,4 +1,4 @@
-# ============================== RDS STANDARD HEADER ==============================
+﻿# ============================== RDS STANDARD HEADER ==============================
 # Script Name: sat_pipeline.py
 # Last Updated (UTC): 2025-09-04
 # Update Summary:
@@ -32,7 +32,7 @@
 #   * Distances in km internally; map handles display conversions.
 # ===============================================================================
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
@@ -127,7 +127,7 @@ def build_sat_overlay_df(
     overlay = annotate_footprint_radius(overlay)
 
     logging.info(
-        "[sat_pipeline] ✅ sat_overlay_df built (MVP). "
+        "[sat_pipeline] âœ… sat_overlay_df built (MVP). "
         f"name={overlay.loc[0,'name']} type={overlay.loc[0,'type']} "
         f"radius_km={overlay.loc[0,'footprint_radius_km']}"
     )
@@ -177,3 +177,4 @@ def _empty_overlay_df() -> pd.DataFrame:
 
 def _empty_tracks_df() -> pd.DataFrame:
     return pd.DataFrame(columns=["sat_id","when_utc","lat_dd","lon_dd","segment"])
+

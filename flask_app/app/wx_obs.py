@@ -1,20 +1,22 @@
-# Script Name: wx_obs.py
+﻿# Script Name: wx_obs.py
 # Last Updated (UTC): 2025-09-02
 # Update Summary:
-# • New: Aggregator to build wx_obs from multiple fetchers
+# â€¢ New: Aggregator to build wx_obs from multiple fetchers
 # Description:
-# • Given ref points (A/B coords) + time window, calls fetchers and returns unified wx_obs.
+# â€¢ Given ref points (A/B coords) + time window, calls fetchers and returns unified wx_obs.
 # External Data Sources: via sub-fetchers (Open-Meteo, Meteostat; NOAA later)
 # Internal Variables:
-# • Inputs: list[(lat, lon)], start_utc, end_utc, radius_km, max_stations, include_marine
+# â€¢ Inputs: list[(lat, lon)], start_utc, end_utc, radius_km, max_stations, include_marine
 # Produced DataFrames:
-# • wx_obs: time-series of source observations/samples (schema agreed in chat)
+# â€¢ wx_obs: time-series of source observations/samples (schema agreed in chat)
 # Data Handling Notes:
-# • UTC timestamps; SI units; dedupe by (source_id, valid_utc).
+# â€¢ UTC timestamps; SI units; dedupe by (source_id, valid_utc).
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from .wx_fetch_open_meteo import fetch_open_meteo_obs
 from .wx_fetch_meteostat import fetch_meteostat_obs_near
+from rds_engine.context import classify_zone_context
+from rds_engine.policy_wx import make_wx_data_plan
 LOG = logging.getLogger(__name__)
 
 from datetime import datetime, timezone, timedelta
@@ -58,7 +60,8 @@ def reduce_to_nearest_or_latest(df: pd.DataFrame, *, target_utc, max_age_hours: 
         # fall back: latest by valid_utc
         return g.loc[g["valid_utc"].idxmax()]
 
-    out = df.groupby("source_id", group_keys=False).apply(_pick)
+    # Updated to avoid groupby.apply warning
+    out = df.groupby("source_id", group_keys=False).apply(_pick, include_groups=False)
     out = out.drop(columns=["_age_hours"], errors="ignore").reset_index(drop=True)
     return out
 
@@ -84,13 +87,34 @@ def build_wx_obs_for_area(ref_points: list[tuple[float,float]],
         return _empty_wx_obs()
 
     frames = []
-    for (lat, lon) in ref_points:
+    for r in ref_points:
+        # Accept tuple or dict for ref_points
+        if isinstance(r, dict):
+            lat, lon = r.get("lat"), r.get("lon")
+        else:
+            lat, lon = r
+
+        # Centralized policy decision (per point)
+        # error_radius_km/coast_distance_km: use row fields if available, else None
+        err_km = r.get("error_radius_km") if isinstance(r, dict) else None
+        coast_km = r.get("coast_distance_km") if isinstance(r, dict) else None
+        _ctx = classify_zone_context(lat=lat, lon=lon, error_radius_km=err_km, coast_distance_km=coast_km)
+        _plan = make_wx_data_plan(_ctx, mode=os.getenv("RDS_WX_POLICY_MODE", "auto"))
+
+        # Respect plan for provider params
+        _include_marine = _plan.include_marine
+        _radius_km = radius_km if radius_km is not None else _plan.spatial_radius_km
+        _max_stations = max_stations if max_stations is not None else _plan.station_limit
+
+        LOG.info("wx policy per-point: include_marine=%s radius_km=%.1f stations=%s rationale=%s",
+                 _include_marine, _radius_km, _max_stations, getattr(_plan, "rationale", None))
+
         # Open-Meteo at point
-        df_om = fetch_open_meteo_obs(lat, lon, start_utc, end_utc, include_marine=include_marine)
+        df_om = fetch_open_meteo_obs(lat, lon, start_utc, end_utc, include_marine=_include_marine)
         if not df_om.empty: frames.append(df_om)
 
         # Meteostat nearby
-        df_ms = fetch_meteostat_obs_near(lat, lon, start_utc, end_utc, radius_km=radius_km, max_stations=max_stations)
+        df_ms = fetch_meteostat_obs_near(lat, lon, start_utc, end_utc, radius_km=_radius_km, max_stations=_max_stations)
         if not df_ms.empty: frames.append(df_ms)
 
     if not frames:
@@ -107,7 +131,7 @@ def build_wx_obs_for_area(ref_points: list[tuple[float,float]],
 
     # Decide the target time:
     # Use alert time if you pass it; otherwise default to "end_utc" (i.e., the alert window end),
-    # and if that’s not available, use "now".
+    # and if thatâ€™s not available, use "now".
     try:
         target_utc = end_utc if end_utc is not None else datetime.now(timezone.utc)
     except NameError:
@@ -117,3 +141,4 @@ def build_wx_obs_for_area(ref_points: list[tuple[float,float]],
     df_all = reduce_to_nearest_or_latest(df_all, target_utc=target_utc, max_age_hours=24)
 
     return df_all
+

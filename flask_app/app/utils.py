@@ -1,13 +1,19 @@
-# utils.py
+﻿# utils.py
 # Location: flask_app/app/utils.py
 # Updated: 2025-03-06
 # Follow all locked rules - no removals, only additive.
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from datetime import datetime, timezone
 
-def log_error_and_continue(message):
-    logging.error(f"❌ {message}")
+def log_error_and_continue(context: str, exc: Exception | None = None):
+    """
+    Logs an error with optional exception details, keeping callsites consistent.
+    """
+    if exc is not None:
+        logging.error(f"âŒ {context}: {exc}")
+    else:
+        logging.error(f"âŒ {context}")
 
 def calculate_distance_nm(lat1, lon1, lat2, lon2):
     """
@@ -37,7 +43,7 @@ def parse_realtime2_data(station_id):
         best_row = _select_best_data_row(data_lines)
 
         if best_row is None:
-            logging.warning(f"⚠️ No usable data found for Realtime2 buoy {station_id}")
+            logging.warning(f"âš ï¸ No usable data found for Realtime2 buoy {station_id}")
             return None
 
         return _parse_data_row(header_line, best_row)
@@ -62,7 +68,7 @@ def parse_5day2_data(station_id):
         best_row = _select_best_data_row(data_lines)
 
         if best_row is None:
-            logging.warning(f"⚠️ No usable data found for 5day2 buoy {station_id}")
+            logging.warning(f"âš ï¸ No usable data found for 5day2 buoy {station_id}")
             return None
 
         return _parse_data_row(header_line, best_row)
@@ -121,7 +127,7 @@ def _parse_data_row(header_line, data_row):
         }
 
         if timelate > 1:
-            logging.warning(f"⚠️ OBSERVATION IS OVER 1 HOUR OLD ({timelate:.2f} hrs)")
+            logging.warning(f"âš ï¸ OBSERVATION IS OVER 1 HOUR OLD ({timelate:.2f} hrs)")
 
         return data
 
@@ -154,8 +160,8 @@ def format_weather_summary(station_row):
     timelate = station_row.get('timelate', 'N/A')
     deployment_notes = station_row.get('deployment_notes', 'N/A')
 
-    summary_parts.append(f"Temperature: {temp}°C")
-    summary_parts.append(f"Wind: {wind_speed} m/s @ {wind_dir}°")
+    summary_parts.append(f"Temperature: {temp}Â°C")
+    summary_parts.append(f"Wind: {wind_speed} m/s @ {wind_dir}Â°")
     summary_parts.append(f"Wave Height: {wave_height} m")
     summary_parts.append(f"Timelate (hrs): {timelate}")
     summary_parts.append(f"Notes: {deployment_notes}")
@@ -171,7 +177,7 @@ def load_sample_message(file_path):
         with open(file_path, 'r', encoding='utf-8') as file:
             return file.read()
     except Exception as e:
-        log_error_and_continue(f"❌ Failed to load sample message: {e}")
+        log_error_and_continue(f"âŒ Failed to load sample message: {e}")
         return None
 
 def get_current_utc_timestamp():
@@ -179,4 +185,5 @@ def get_current_utc_timestamp():
     Returns current UTC time as a formatted string.
     """
     return datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S,%f')[:-3]
+
 

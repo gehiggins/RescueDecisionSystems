@@ -1,6 +1,6 @@
-import re
+﻿import re
 import logging
-from flask_app.app.utils import log_error_and_continue
+from app.utils import log_error_and_continue
 
 def is_valid_coordinate(coord_string):
     """
@@ -46,7 +46,7 @@ def coordinate_pair_to_dd(coord_string):
         match = re.search(pattern, coord_string.upper())
 
         if not match:
-            logging.warning(f"❌ No valid coordinate pair found in string: '{coord_string}'")
+            logging.warning(f"âŒ No valid coordinate pair found in string: '{coord_string}'")
             return None, None
 
         lat_string, lon_string = match.groups()
@@ -55,11 +55,22 @@ def coordinate_pair_to_dd(coord_string):
         return lat_dd, lon_dd
 
     except Exception as e:
-        logging.warning(f"⚠️ Coordinate pair parsing failed: {coord_string} — {e}")
+        logging.warning(f"âš ï¸ Coordinate pair parsing failed: {coord_string} â€” {e}")
         return None, None
 
+def _bounds_ok_lat(lat):  
+    return lat is not None and -90.0 <= lat <= 90.0
 
-# Placeholder stubs — original content preserved below
+def _bounds_ok_lon(lon):  
+    return lon is not None and -180.0 <= lon <= 180.0
+
+def coordinate_pair_to_dd_safe(coord_string):
+    lat, lon = coordinate_pair_to_dd(coord_string)
+    if not (_bounds_ok_lat(lat) and _bounds_ok_lon(lon)):
+        return None, None
+    return lat, lon
+
+# Placeholder stubs â€” original content preserved below
 def convert_km_to_miles(km):
     return km * 0.621371
 
@@ -121,7 +132,7 @@ def extract_cardinal(coord_string):
 
 def format_dd_as_dms(lat_dd, lon_dd):
     """
-    Converts decimal degrees to DMS format (e.g., '37°45.6'N, 75°30.2'W').
+    Converts decimal degrees to DMS format (e.g., '37Â°45.6'N, 75Â°30.2'W').
     """
     try:
         def convert(dd, positive, negative):
@@ -129,7 +140,7 @@ def format_dd_as_dms(lat_dd, lon_dd):
             dd = abs(dd)
             degrees = int(dd)
             minutes = (dd - degrees) * 60
-            return f"{degrees}°{minutes:.1f}'{direction}"
+            return f"{degrees}Â°{minutes:.1f}'{direction}"
 
         lat_dms = convert(lat_dd, 'N', 'S')
         lon_dms = convert(lon_dd, 'E', 'W')
@@ -147,3 +158,4 @@ def format_dd_short(lat_dd, lon_dd):
     except Exception as e:
         log_error_and_continue("format_dd_short", e)
         return ""
+

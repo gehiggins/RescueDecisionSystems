@@ -1,6 +1,6 @@
-# noaa_weather_alerts_fetch.py
+﻿# noaa_weather_alerts_fetch.py
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from datetime import datetime
 
 import requests
@@ -26,7 +26,7 @@ def fetch_weather_alerts_zone(lat, lon):
 
         zone_url = properties.get('forecastZone')
         if not zone_url:
-            logging.warning(f"⚠️ No forecast zone found for ({lat}, {lon})")
+            logging.warning(f"âš ï¸ No forecast zone found for ({lat}, {lon})")
             return None, []
 
         # Fetch active alerts for the forecast zone
@@ -38,12 +38,13 @@ def fetch_weather_alerts_zone(lat, lon):
         alerts = [alert['properties']['headline'] for alert in alerts_data.get('features', [])]
 
         if alerts:
-            logging.info(f"🚨 Active weather alerts for zone {zone_url}: {alerts}")
+            logging.info(f"ðŸš¨ Active weather alerts for zone {zone_url}: {alerts}")
         else:
-            logging.info(f"✅ No active weather alerts for zone {zone_url}")
+            logging.info(f"âœ… No active weather alerts for zone {zone_url}")
 
         return zone_url, alerts
 
     except Exception as e:
-        logging.error(f"❌ Error fetching weather alerts for ({lat}, {lon}): {e}")
+        logging.error(f"âŒ Error fetching weather alerts for ({lat}, {lon}): {e}")
         return None, []
+

@@ -1,4 +1,4 @@
-# ============================== RDS STANDARD HEADER ==============================
+﻿# ============================== RDS STANDARD HEADER ==============================
 # Script Name: sat_compute_footprint.py
 # Last Updated (UTC): 2025-09-04
 # Update Summary:
@@ -16,7 +16,7 @@
 #   * Uses Earth mean radius Re=6371 km. Returns radii in km.
 # ===============================================================================
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from math import acos
 
 import pandas as pd
@@ -59,3 +59,4 @@ def annotate_footprint_radius(sat_overlay_df: pd.DataFrame) -> pd.DataFrame:
             mask_missing, "altitude_km"
         ].apply(horizon_radius_km)
     return sat_overlay_df
+

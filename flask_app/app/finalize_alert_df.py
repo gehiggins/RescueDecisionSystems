@@ -1,4 +1,4 @@
-# finalize_alert_df.py - Final Preparation for SARSAT Alert Storage
+﻿# finalize_alert_df.py - Final Preparation for SARSAT Alert Storage
 # Location: flask_app/app/finalize_alert_df.py
 # 2025-03-07 (Fully Aligned with RDS System Architecture & Data Guide)
 #
@@ -24,13 +24,13 @@
 #
 # Data Handling Notes:
 # - Ensures `alert_sequence_number` increments properly for repeated `site_id`.
-# - Validates `detect_time` but does NOT assign it—extraction must occur in `parser_sarsat_msg.py`.
+# - Validates `detect_time` but does NOT assign itâ€”extraction must occur in `parser_sarsat_msg.py`.
 # - Logs a warning if `detect_time` is missing after parsing.
 # - Applies consistency checks to prevent data corruption before database commit.
 # - Can be extended to include additional processing steps as needed.
 #
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 
 def finalize_alert_df(alert_df, existing_alerts_db):
     """
@@ -38,7 +38,7 @@ def finalize_alert_df(alert_df, existing_alerts_db):
     
     This function ensures that:
     - `alert_sequence_number` is assigned based on prior cases in the database.
-    - `detect_time` is validated but not assigned here—it must be extracted in `parser_sarsat_msg.py`.
+    - `detect_time` is validated but not assigned hereâ€”it must be extracted in `parser_sarsat_msg.py`.
     - All required fields are correctly formatted before final storage.
     
     Args:
@@ -59,7 +59,8 @@ def finalize_alert_df(alert_df, existing_alerts_db):
     # Ensure detect_time is present; log a warning if missing
     missing_detect_time = alert_df['detect_time'].isna()
     if missing_detect_time.any():
-        logging.warning(f"⚠️ {missing_detect_time.sum()} alert(s) are missing detect_time. Ensure extraction occurs in parser_sarsat_msg.py.")
+        logging.warning(f"âš ï¸ {missing_detect_time.sum()} alert(s) are missing detect_time. Ensure extraction occurs in parser_sarsat_msg.py.")
     
-    logging.info(f"✅ Finalized alert_df with sequence numbers and detect_time validation.")
+    logging.info(f"âœ… Finalized alert_df with sequence numbers and detect_time validation.")
     return alert_df
+

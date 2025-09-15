@@ -1,8 +1,8 @@
-# utils_coordinates.py - Enhanced Coordinate Handling for RDS
+﻿# utils_coordinates.py - Enhanced Coordinate Handling for RDS
 # Location: flask_app/app/utils_coordinates.py
 # 2025-03-07 (Updated for Robust Pre-Parsing Integration)
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 import re
 
 def clean_and_standardize_coordinate(coord_string):
@@ -34,7 +34,7 @@ def parse_any_coordinate(coord_string):
 
     # Handle Degrees-Minutes-Seconds (DMS) format
     dms_pattern = re.compile(r"""
-        ^\s*(\d{1,3})[°\s]*(\d{1,2})[\s'\-]*(\d{1,2}\.\d+)?\s*([NSWE])\s*$
+        ^\s*(\d{1,3})[Â°\s]*(\d{1,2})[\s'\-]*(\d{1,2}\.\d+)?\s*([NSWE])\s*$
     """, re.VERBOSE)
 
     match = dms_pattern.match(coord_string)
@@ -51,7 +51,7 @@ def parse_any_coordinate(coord_string):
 
     # Handle NMEA-style (Decimal Minutes) format
     nmea_pattern = re.compile(r"""
-        ^\s*(\d{1,3})[°\s]*(\d{1,2}\.\d+)?\s*([NSWE])\s*$
+        ^\s*(\d{1,3})[Â°\s]*(\d{1,2}\.\d+)?\s*([NSWE])\s*$
     """, re.VERBOSE)
 
     match = nmea_pattern.match(coord_string)
@@ -128,8 +128,8 @@ def preparse_coordinate_mapper(raw_message):
     Returns a DataFrame instead of a raw list.
     """
     coord_regex = re.compile(r"""
-        (\d{2,3}[\s°]*\d{1,2}(?:\.\d+)?[\s]*[NS])\s*
-        (\d{2,3}[\s°]*\d{1,2}(?:\.\d+)?[\s]*[EW])
+        (\d{2,3}[\sÂ°]*\d{1,2}(?:\.\d+)?[\s]*[NS])\s*
+        (\d{2,3}[\sÂ°]*\d{1,2}(?:\.\d+)?[\s]*[EW])
     """, re.VERBOSE)
 
     matches = []
@@ -155,4 +155,5 @@ def preparse_coordinate_mapper(raw_message):
     df = pd.DataFrame(matches)
     logging.info(f"Preparse detected {len(df)} coordinate pairs (valid+invalid).")
     return df
+
 

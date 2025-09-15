@@ -1,4 +1,4 @@
-# ============================== RDS STANDARD HEADER ==============================
+﻿# ============================== RDS STANDARD HEADER ==============================
 # Script Name: sat_fetch_tle.py
 # Last Updated (UTC): 2025-09-04
 # Update Summary:
@@ -26,7 +26,7 @@
 #   * Strict column checks; NaN preserved; 'is_active' coerced to bool.
 # ===============================================================================
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -46,7 +46,6 @@ REQUIRED_COLS = [
     "sat_id","name","type","owner","constellation",
     "altitude_km","footprint_radius_km","is_active"
 ]
-
 
 # ---- Auto-seed defaults (core LEOSAR) ----
 DEFAULT_REFERENCE_ROWS = [
@@ -77,23 +76,6 @@ def create_default_sat_reference_csv(path: Path) -> None:
         logging.info(f"[sat_fetch_tle] Seeded default satellite reference at: {path}")
     except Exception as e:
         logging.error(f"[sat_fetch_tle] Failed to seed default reference CSV at {path}: {e}")
-
-
-
-def _resolve_path(default_path: Path, manifest_id: Optional[str] = None) -> Path:
-    if manifest_id and _manifest_get_file_path:
-        try:
-            p = Path(_manifest_get_file_path(manifest_id))
-            if p.exists():
-                return p
-            logging.warning(f"[sat_fetch_tle] Manifest path does not exist: {p}")
-        except Exception as e:
-            logging.warning(f"[sat_fetch_tle] Manifest lookup failed: {e}")
-    p = Path.cwd() / default_path
-    if not p.exists():
-        logging.warning(f"[sat_fetch_tle] Default path not found: {p}")
-    return p
-
 
 def load_sat_reference(manifest_id: Optional[str] = None) -> pd.DataFrame:
     """
@@ -244,3 +226,4 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
     """
     logging.info("[sat_fetch_tle] TLE snapshot not implemented in MVP. Returning empty DataFrame.")
     return pd.DataFrame(columns=["sat_id","name","tle_line1","tle_line2","epoch_utc"])
+

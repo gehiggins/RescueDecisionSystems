@@ -1,6 +1,6 @@
-#test_parser_run.py
+﻿#test_parser_run.py
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from flask_app.app.sarsat_parser import parse_sarsat_message
 
 def main():
@@ -12,8 +12,9 @@ def main():
     # Convert parsed data to DataFrame (simulating pipeline behavior)
     alert_df = pd.DataFrame([parsed_alert])
 
-    print("✅ Parsed Alert DataFrame:")
+    print("âœ… Parsed Alert DataFrame:")
     print(alert_df)
 
 if __name__ == '__main__':
     main()
+

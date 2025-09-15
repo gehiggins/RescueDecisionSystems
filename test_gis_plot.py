@@ -1,7 +1,7 @@
-import sys
+﻿import sys
 import os
 import pandas as pd
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from flask_app.app.gis_mapping import generate_gis_map
 
 def main():
@@ -28,9 +28,10 @@ def main():
 
     save_path = os.path.join(os.getenv('RDS_DATA_FOLDER'), 'maps')
 
-    print("🗺️ Generating GIS map...")
+    print("ðŸ—ºï¸ Generating GIS map...")
     map_path = generate_gis_map(alert_row, save_path)
-    print(f"✅ GIS map generated: {map_path}")
+    print(f"âœ… GIS map generated: {map_path}")
 
 if __name__ == '__main__':
     main()
+

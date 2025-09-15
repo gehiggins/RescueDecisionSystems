@@ -1,7 +1,7 @@
-# preparse_coordinate_mapper.py - 2025-03-06 (Corrected Column Names Version)
+﻿# preparse_coordinate_mapper.py - 2025-03-06 (Corrected Column Names Version)
 # Pre-parse module for scanning SARSAT messages and mapping coordinate locations (A/B pairs)
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from app.utils_coordinates import is_valid_coordinate, coordinate_pair_to_dd
 
 def pre_scan_for_coordinates(raw_message):
@@ -46,8 +46,8 @@ def pre_scan_for_coordinates(raw_message):
             coordinate_pairs.append({
                 "lat": lat_str,
                 "lon": lon_str,
-                "lat_dd": lat_dd,            # ✅ Corrected column name
-                "lon_dd": lon_dd,            # ✅ Corrected column name
+                "lat_dd": lat_dd,            # âœ… Corrected column name
+                "lon_dd": lon_dd,            # âœ… Corrected column name
                 "start_pos": start_pos,
                 "end_pos": end_pos,
                 "is_valid": is_valid_pair
@@ -57,5 +57,6 @@ def pre_scan_for_coordinates(raw_message):
 
     coord_df = pd.DataFrame(coordinate_pairs)
 
-    logging.info(f"📍 Pre-parse detected {len(coord_df)} coordinate pairs (valid+invalid).")
+    logging.info(f"ðŸ“ Pre-parse detected {len(coord_df)} coordinate pairs (valid+invalid).")
     return coord_df
+

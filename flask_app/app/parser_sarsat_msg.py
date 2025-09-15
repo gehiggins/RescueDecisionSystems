@@ -1,12 +1,12 @@
-# parser_sarsat_msg.py - Updated for Full Pre-Scan Integration & Robust Coordinate Handling (2025-03-06)
+﻿# parser_sarsat_msg.py - Updated for Full Pre-Scan Integration & Robust Coordinate Handling (2025-03-06)
 
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 from flask_app.app.utils_coordinates import coordinate_pair_to_dd, is_valid_coordinate, clean_and_standardize_coordinate
 from flask_app.app.utils import log_error_and_continue
 import re
 
-print("📦 LOADED: parser_sarsat_msg.py from flask_app/app")
+print("ðŸ“¦ LOADED: parser_sarsat_msg.py from flask_app/app")
 
 def parse_sarsat_message(message_text, pre_scan_results=None):
     """
@@ -14,7 +14,7 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
     Pre-scan coordinate pairs are passed in as a DataFrame for validation against extracted coordinates.
     """
     try:
-        logging.info("🛰️ Parsing SARSAT message")
+        logging.info("ðŸ›°ï¸ Parsing SARSAT message")
 
 
         parsed_data = {
@@ -170,12 +170,12 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
         if parsed_data.get('beacon_id') is not None:
             parsed_data['beacon_id'] = str(parsed_data['beacon_id'])
 
-        logging.info(f"✅ SARSAT message parsed successfully: Beacon ID {parsed_data['beacon_id']}")
+        logging.info(f"âœ… SARSAT message parsed successfully: Beacon ID {parsed_data['beacon_id']}")
 
         return parsed_data
 
     except Exception as e:
-        log_error_and_continue(f"❌ Error parsing SARSAT message: {e}")
+        log_error_and_continue(f"âŒ Error parsing SARSAT message: {e}")
         return None
 
 import sys
@@ -225,4 +225,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

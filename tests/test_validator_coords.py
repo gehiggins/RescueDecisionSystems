@@ -42,4 +42,4 @@ def test_range_out_of_bounds():
     res = validate_and_extract_coordinate_token("latitude", "99 00.0N", {}, None)
     assert res["valid"] is False
     notes = ";".join(res.get("notes", []))
-    assert "out of range" in notes or
+    assert ("out of range" in notes) or ("range: out of bounds" in notes)

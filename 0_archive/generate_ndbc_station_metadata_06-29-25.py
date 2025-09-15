@@ -1,11 +1,11 @@
-# generate_ndbc_station_metadata.py
+﻿# generate_ndbc_station_metadata.py
 
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 import time
 import os
-from flask_app.setup_imports import *
+from app.setup_imports import *
 
 
 import logging
@@ -24,7 +24,7 @@ def fetch_station_metadata(station_id):
     url = BASE_URL + station_id
     response = requests.get(url)
     if response.status_code != 200:
-        logging.warning(f"⚠️ Failed to fetch station page for {station_id}")
+        logging.warning(f"âš ï¸ Failed to fetch station page for {station_id}")
         return None
 
     soup = BeautifulSoup(response.text, 'html.parser')
@@ -71,7 +71,7 @@ def fetch_station_metadata(station_id):
     }
 
 def main():
-    logging.info("🚀 Starting full NDBC station metadata scan...")
+    logging.info("ðŸš€ Starting full NDBC station metadata scan...")
 
     stations_url = "https://www.ndbc.noaa.gov/to_station.shtml"
     stations_page = requests.get(stations_url)
@@ -86,29 +86,30 @@ def main():
             station_id = href.split('station=')[-1]
             station_ids.add(station_id)
 
-    logging.info(f"📡 Found {len(station_ids)} station IDs for processing.")
+    logging.info(f"ðŸ“¡ Found {len(station_ids)} station IDs for processing.")
 
     metadata = []
     for station_id in sorted(station_ids):
-        logging.info(f"📡 Fetching metadata for station {station_id}...")
+        logging.info(f"ðŸ“¡ Fetching metadata for station {station_id}...")
         metadata.append(fetch_station_metadata(station_id))
         time.sleep(0.5)
 
     df = pd.DataFrame(metadata)
 
-    logging.info("✅ Saving full metadata file...")
+    logging.info("âœ… Saving full metadata file...")
     df.to_csv(FULL_METADATA_FILE, index=False)
 
-    logging.info("📊 Running summary analysis...")
+    logging.info("ðŸ“Š Running summary analysis...")
 
     summary = df.groupby(['owner', 'preferred_data_source']).size().reset_index(name='station_count')
     summary.to_csv(SUMMARY_FILE, index=False)
 
-    logging.info(f"✅ Metadata and summary saved:\n- {FULL_METADATA_FILE}\n- {SUMMARY_FILE}")
+    logging.info(f"âœ… Metadata and summary saved:\n- {FULL_METADATA_FILE}\n- {SUMMARY_FILE}")
 
 if __name__ == "__main__":
     main()
 
 print(f"[DEBUG] Total stations parsed: {len(df)}")
 print(df.head())
+
 

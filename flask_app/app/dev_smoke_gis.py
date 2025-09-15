@@ -1,4 +1,4 @@
-# Script Name: dev_smoke_gis.py
+﻿# Script Name: dev_smoke_gis.py
 # Last Updated (UTC): 2025-09-01
 # Update Summary:
 # - NEW: Minimal developer smoke test for GIS PNG rendering.
@@ -28,14 +28,14 @@ from datetime import datetime
 # --- Standard import block (project-wide) ---
 # setup_imports lives at the flask_app/ level (one directory above app/)
 try:
-    from flask_app.setup_imports import *  # noqa: F401,F403  (provides pandas, logging, etc. per your project)
+    from app.setup_imports import *  # noqa: F401,F403  (provides pandas, logging, etc. per your project)
 except Exception:
     # Fallback: ensure flask_app/ is on sys.path, then retry
     here = Path(__file__).resolve().parent  # .../flask_app/app
     flask_root = here.parent                # .../flask_app
     if str(flask_root) not in sys.path:
         sys.path.insert(0, str(flask_root))
-    from flask_app.setup_imports import *  # type: ignore  # noqa: F401,F403
+    from app.setup_imports import *  # type: ignore  # noqa: F401,F403
 
 import pandas as pd  # in case setup_imports didn't wildcard-import pandas
 import logging
@@ -46,8 +46,8 @@ try:
 except ImportError as e:
     msg = (
         "ImportError: Could not import 'generate_gis_png' from 'app.gis_mapping'.\n"
-        "• Ensure Step 1 (Minimal GIS render) has been implemented in flask_app/app/gis_mapping.py\n"
-        "• The function signature must be: generate_gis_png(alert_row: pandas.Series, out_dir: str) -> dict\n"
+        "â€¢ Ensure Step 1 (Minimal GIS render) has been implemented in flask_app/app/gis_mapping.py\n"
+        "â€¢ The function signature must be: generate_gis_png(alert_row: pandas.Series, out_dir: str) -> dict\n"
         f"Details: {e}"
     )
     raise SystemExit(msg)
@@ -98,9 +98,9 @@ def main():
     info = generate_gis_png(alert_row, str(out_dir))
 
     # Acceptance prints (renderer should also print these; duplicating here is okay)
-    print(f"✅ Map image saved: {expected_png}")
+    print(f"âœ… Map image saved: {expected_png}")
     if expected_geojson.exists():
-        print(f"✅ Positions GeoJSON saved: {expected_geojson}")
+        print(f"âœ… Positions GeoJSON saved: {expected_geojson}")
 
     # Minimal verification
     if not expected_png.exists():
@@ -110,3 +110,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

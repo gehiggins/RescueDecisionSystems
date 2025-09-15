@@ -1,4 +1,4 @@
-# ============================== RDS STANDARD HEADER ==============================
+﻿# ============================== RDS STANDARD HEADER ==============================
 # Script Name: sat_filter_for_alert.py
 # Last Updated (UTC): 2025-09-04
 # Update Summary:
@@ -10,7 +10,7 @@
 #   * sat_overlay_df: per-satellite overlay rows (requires lat_dd/lon_dd for visibility tests).
 #   * alert_df: authoritative alert with positions A/B (lat/lon).
 # - Primary Outputs:
-#   * sat_overlay_df with 'visible_for' ∈ {'A','B','AB', NaN}
+#   * sat_overlay_df with 'visible_for' âˆˆ {'A','B','AB', NaN}
 # - External Data Sources:
 #   * None.
 # - Data Handling Notes:
@@ -18,7 +18,7 @@
 #   * Distance method: great-circle (Haversine) vs. footprint_radius_km.
 # ===============================================================================
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 import pandas as pd
 import numpy as np
 from math import radians, sin, cos, asin, sqrt
@@ -98,3 +98,4 @@ def _first_pair(df: pd.DataFrame, lat_col: str, lon_col: str) -> Optional[tuple[
             except Exception:
                 return None
     return None
+

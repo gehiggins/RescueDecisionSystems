@@ -1,4 +1,4 @@
-# generate_ndbc_station_metadata.py
+﻿# generate_ndbc_station_metadata.py
 
 import pandas as pd
 import requests
@@ -7,7 +7,7 @@ import time
 import os
 import logging
 
-from flask_app.setup_imports import *
+from app.setup_imports import *
 
 # --------------------------------------------
 # Logging Setup
@@ -121,3 +121,4 @@ if __name__ == "__main__":
     main()
 
 print('TEST RUN COMPLETE')
+
