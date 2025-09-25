@@ -159,3 +159,18 @@ def format_dd_short(lat_dd, lon_dd):
         log_error_and_continue("format_dd_short", e)
         return ""
 
+def to_latlon_polyline(coords_lonlat):
+    """
+    Input:  [[lon, lat], ...]  (GeoJSON-style)
+    Output: [[lat, lon], ...]  (Leaflet/Folium)
+    Drops bad pairs gracefully.
+    """
+    out = []
+    for pt in (coords_lonlat or []):
+        if pt and len(pt) == 2:
+            lon, lat = pt
+            try:
+                out.append([float(lat), float(lon)])
+            except Exception:
+                continue
+    return out

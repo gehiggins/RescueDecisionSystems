@@ -127,7 +127,10 @@ def _parse_data_row(header_line, data_row):
         }
 
         if timelate > 1:
-            logging.warning(f"âš ï¸ OBSERVATION IS OVER 1 HOUR OLD ({timelate:.2f} hrs)")
+            if isinstance(timelate, (int, float)):
+                logging.warning(f"âš ï¸ OBSERVATION IS OVER 1 HOUR OLD ({timelate:.2f} hrs)")
+            else:
+                logging.warning(f"âš ï¸ OBSERVATION IS OVER 1 HOUR OLD (unknown hrs)")
 
         return data
 

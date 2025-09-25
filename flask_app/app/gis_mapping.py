@@ -24,29 +24,92 @@ Next step: Add generate_gis_map_html_from_dfs(positions_df, ...) (DF inputs, lay
 #gis_mapping.py
 
 
+import os
+import math
+import numpy as np
+from app.utils_display import format_us_display, to_dual_time, derive_local_tz
 from app.setup_imports import *
-from flask_app.app.utils import log_error_and_continue
-from flask_app.app.utils_weather import celsius_to_fahrenheit
-from app.utils_display import format_us_display, to_dual_time
+from app.utils import log_error_and_continue
 import folium
 import geopandas as gpd
-import os
-import pandas as pd
 from folium import DivIcon
 import traceback
-import math
 import matplotlib.pyplot as plt
-from shapely.geometry import Point
-from pyproj import CRS, Transformer
+from app.utils_coordinates import to_latlon_polyline
+
 
 try:
-    import geopandas as gpd
-    from shapely.geometry import Point
     from pyproj import CRS, Transformer
     HAS_PROJ = True
-except ImportError:
+except Exception:
     HAS_PROJ = False
-    logging.warning("pyproj/geopandas not available; using lat/lon approximation for range rings.")
+
+from shapely.geometry import Point
+
+DEBUG_MARKERS = os.getenv("RDS_DEBUG_MARKERS", "0") == "1"
+
+WEATHER_STYLE = {
+    "radius": 10 if DEBUG_MARKERS else 5,
+    "weight": 3 if DEBUG_MARKERS else 1,
+    "opacity": 1.0,
+    "fillOpacity": 0.9 if DEBUG_MARKERS else 0.6,
+    "color": "#00E5FF" if DEBUG_MARKERS else "#1f77b4",
+    "fillColor": "#00E5FF" if DEBUG_MARKERS else "#1f77b4",
+}
+STATION_STYLE = {
+    "radius": 10 if DEBUG_MARKERS else 5,
+    "weight": 3 if DEBUG_MARKERS else 1,
+    "opacity": 1.0,
+    "fillOpacity": 0.9 if DEBUG_MARKERS else 0.6,
+    "color": "#FF2D95" if DEBUG_MARKERS else "#6a51a3",
+    "fillColor": "#FF2D95" if DEBUG_MARKERS else "#6a51a3",
+}
+if DEBUG_MARKERS:
+    WEATHER_STYLE["zIndexOffset"] = 500
+    STATION_STYLE["zIndexOffset"] = 500
+
+def first_notna(row, keys):
+    for k in keys:
+        v = row.get(k, np.nan)
+        if pd.notna(v):
+            return v
+    return None
+
+def get_lat_lon(row):
+    lat = first_notna(row, ["lat", "latitude", "lat_dd", "latitude_dd"])
+    lon = first_notna(row, ["lon", "longitude", "lon_dd", "longitude_dd"])
+    return lat, lon
+
+def fmt_num(x, fmt=".1f"):
+    """Safe numeric formatting: returns 'N/A' if x is None/NaN or not castable."""
+    try:
+        if x is None:
+            return "N/A"
+        if hasattr(pd, "isna") and pd.isna(x):
+            return "N/A"
+        if not isinstance(x, (int, float)):
+            x = float(x)
+        if math.isnan(x):
+            return "N/A"
+        return format(x, fmt)
+    except Exception:
+        return "N/A"
+
+def fmt_coord(x):
+    """Latitude/longitude display, 4 dp, safe."""
+    return fmt_num(x, ".4f")
+
+def _fmt_num(v, prec=5, dash="—"):
+    """Safe float formatting for UI: returns '—' if v is None/NaN; else formats to given precision."""
+    try:
+        if v is None:
+            return dash
+        f = float(v)
+        if math.isnan(f):
+            return dash
+        return f"{f:.{prec}f}"
+    except Exception:
+        return dash
 
 def generate_gis_map(alert_row, save_path):
     """
@@ -79,7 +142,7 @@ def generate_gis_map(alert_row, save_path):
         if pd.notna(lat) and pd.notna(lon):
             folium.Marker(
                 location=[lat, lon],
-                popup=f"{label} Location<br>{lat:.5f}, {lon:.5f}",
+                popup=f"{label} Location<br>{_fmt_num(lat, 5)}, {_fmt_num(lon, 5)}",
                 icon=folium.Icon(color="red", icon="info-sign")
             ).add_to(m)
 
@@ -114,34 +177,37 @@ def generate_gis_map(alert_row, save_path):
 
     if not weather_stations_df.empty:
         for _, station in weather_stations_df.iterrows():
-            station_id = str(station.get('station_id', 'Unknown'))
-            station_name = str(station.get('station_name', 'N/A'))
+            lat, lon = get_lat_lon(station)
+            if lat is None or lon is None:
+                continue
 
-            raw_temp_c = station.get('temperature', np.nan)
-            raw_wind_ms = station.get('wind_speed', np.nan)
-            raw_wave_m = station.get('wave_height', np.nan)
+            # Weather stations block
+            raw_temp_C= first_notna(station, ["temp_C", "temperature", "temp_c"])
+            raw_wind_ms = first_notna(station, ["wind_ms", "wind_speed"])
+            raw_wave_height_m= first_notna(station, ["wave_m", "wave_height", "wave_height_m"])
 
-            # Use format_us_display for all units
-            display = format_us_display(
-                wave_height_m=raw_wave_m if pd.notna(raw_wave_m) else None,
-                wind_ms=raw_wind_ms if pd.notna(raw_wind_ms) else None,
-                temp_C=raw_temp_c if pd.notna(raw_temp_c) else None
-            )
+            display = format_us_display(wave_height_m=raw_wave_height_m, wind_ms=raw_wind_ms, temp_C=raw_temp_C)
             wave_txt = display.get("wave_height_display", "N/A")
             wind_txt = display.get("wind_display", "N/A")
             temp_txt = display.get("temp_display", "N/A")
 
-            timelate = str(format_timelate(station.get('timelate', np.nan)))
+            obs_time = station.get("ts_utc") or station.get("obs_time")
+            time_txt = ""
+            if obs_time:
+                tz = derive_local_tz(lat, lon, os.getenv("RDS_OPERATOR_TZ"))
+                utc_iso, local_iso = to_dual_time(obs_time, tz)
+                time_txt = f"{utc_iso} / {local_iso}"
+
+            timelate = station.get("timelate")
+            if pd.isna(timelate):
+                timelate = ""
+
+            station_id = str(station.get('station_id', 'Unknown'))
+            station_name = str(station.get('station_name', 'N/A'))
             distance_nm = str(station.get('distance_nm', 'N/A'))
             source = str(station.get('source', 'N/A'))
             owner = str(station.get('owner', 'N/A'))
             notes = str(station.get('deployment_notes', 'N/A'))
-
-            obs_time = station.get('obs_time', None)
-            time_txt = ""
-            if obs_time:
-                dual = to_dual_time(obs_time, "UTC")
-                time_txt = f"{dual[0]} / {dual[1]}"
 
             popup_content = (
                 f"Station: {station_id} ({station_name})<br>"
@@ -159,7 +225,7 @@ def generate_gis_map(alert_row, save_path):
             color = 'green' if source == 'shore' else 'blue'
 
             folium.Marker(
-                location=[station['latitude'], station['longitude']],
+                location=[lat, lon],
                 popup=popup_content,
                 icon=folium.Icon(color=color, icon="cloud")
             ).add_to(m)
@@ -172,18 +238,19 @@ def generate_gis_map(alert_row, save_path):
                 event = str(alert.get('event', 'N/A'))
                 severity = str(alert.get('severity', 'N/A'))
                 certainty = str(alert.get('certainty', 'N/A'))
-                effective = str(alert.get('effective', 'N/A'))
-                expires = str(alert.get('expires', 'N/A'))
+                effective = str(alert.get("effective", "N/A"))
+                expires   = str(alert.get("expires", "N/A"))
 
-                # Use to_dual_time for effective/expires if present
                 effective_txt = effective
-                expires_txt = expires
-                if effective:
-                    dual_eff = to_dual_time(effective, "UTC")
-                    effective_txt = f"{dual_eff[0]} / {dual_eff[1]}"
-                if expires:
-                    dual_exp = to_dual_time(expires, "UTC")
-                    expires_txt = f"{dual_exp[0]} / {dual_exp[1]}"
+                expires_txt   = expires
+
+                if effective and effective != "N/A":
+                    utc_eff, local_eff = to_dual_time(effective, "UTC")
+                    effective_txt = f"{utc_eff} / {local_eff}"
+
+                if expires and expires != "N/A":
+                    utc_exp, local_exp = to_dual_time(expires, "UTC")
+                    expires_txt = f"{utc_exp} / {local_exp}"
 
                 popup = (
                     f"Alert: {headline}<br>"
@@ -212,12 +279,20 @@ def generate_gis_map(alert_row, save_path):
     return save_path
 
 def format_timelate(hours):
-    if pd.isna(hours):
+    if hours is None or (hasattr(pd, "isna") and pd.isna(hours)):
         return "N/A"
-    elif hours < 1:
-        return f"{int(hours * 60)} mins"
-    else:
-        return f"{hours:.2f} hours"
+    try:
+        h = float(hours)
+    except Exception:
+        return "N/A"
+    if h < 1:
+        return f"{int(h * 60)} mins"
+    return f"{fmt_num(h, '.2f')} hours"
+
+def format_hours(hours):
+    if hours is None or (hasattr(pd, "isna") and pd.isna(hours)):
+        return "—"
+    return f"{fmt_num(hours, '.2f')} hours"
 
 def generate_gis_png(alert_row: pd.Series, out_dir: str) -> dict:
     site_id = str(alert_row.get('site_id', 'unknown'))
@@ -445,397 +520,164 @@ def _rds_ring_lonlat_points(lat_deg: float, lon_deg: float, radius_m: float, n: 
 # --- RDS: end PROJ datadir helper ---
 
 # [RDS-ANCHOR: GIS_EXPORTS]
-def generate_gis_map_html_from_dfs(positions_df, out_dir, *, site_id=None, wx_df=None, stations_df=None, tiles_mode="online") -> dict:
-    """
-    Generates a Folium HTML map from DataFrames of alert positions, weather, and stations.
-    Inputs:
-        positions_df: DataFrame with required columns [site_id, role (A/B), lat_dd, lon_dd, range_ring_meters]
-        out_dir: Output directory (created if missing)
-        site_id: Optional; if None, derived from positions_df['site_id'] (must be unique)
-        wx_df: Optional weather DataFrame
-        stations_df: Optional stations DataFrame
-        tiles_mode: "online" for OpenStreetMap tiles
-    Returns:
-        dict: {"site_id": str, "map_html_path": str, "layers": [layer names]}
-    """
-    import folium
-    import os
-    import pandas as pd
-    import logging
-    from datetime import datetime
-    from folium import LayerControl, DivIcon
+def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles_mode="online"):
+    import folium, os, pandas as pd, logging
+    from folium import LayerControl, DivIcon, FeatureGroup, PolyLine, Marker, Circle
 
-    layers = []
-    # Validate positions_df
-    if positions_df is None or positions_df.empty:
-        logging.warning("[RDS] No positions_df provided; cannot generate map.")
-        return {"site_id": None, "map_html_path": None, "layers": [], "status": "no-op: empty positions_df"}
+    # --- Center/Meta ---
+    site_id = str((alert_row or {}).get("site_id", "unknown"))
+    lat0 = (alert_row or {}).get("position_lat_dd_a") or (alert_row or {}).get("alert_lat_dd")
+    lon0 = (alert_row or {}).get("position_lon_dd_a") or (alert_row or {}).get("alert_lon_dd")
+    if pd.isna(lat0) or pd.isna(lon0):
+        lat0, lon0 = 38.255, -70.208333  # safe default
 
-    # Filter for valid A/B positions
-    valid_roles = positions_df[positions_df["role"].isin(["A", "B"])]
-    valid_positions = valid_roles[pd.notna(valid_roles["lat_dd"]) & pd.notna(valid_roles["lon_dd"])]
+    m = folium.Map(location=[float(lat0), float(lon0)], zoom_start=7, tiles="OpenStreetMap" if tiles_mode=="online" else None)
 
-    # Site ID logic
-    sid = site_id
-    if not sid:
-        unique_ids = positions_df["site_id"].dropna().unique()
-        if len(unique_ids) == 1:
-            sid = str(unique_ids[0])
-        elif len(unique_ids) > 1:
-            sid = str(unique_ids[0])
-            logging.warning(f"[RDS] Multiple site_ids in positions_df; using first: {sid}")
-        else:
-            sid = f"SMOKE_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
-
-    # Directory logic
-    out_dir_final = os.path.join(out_dir, str(sid)) if out_dir and not out_dir.endswith(str(sid)) else out_dir
-    os.makedirs(out_dir_final, exist_ok=True)
-    html_path = os.path.join(out_dir_final, f"gis_map_{sid}.html")
-
-    # Safety: must have at least one valid A or B
-    ab_positions = valid_positions[valid_positions["role"].isin(["A", "B"])]
-    if ab_positions.empty:
-        logging.warning(f"[RDS] No valid A/B positions for site_id {sid}; map not written.")
-        return {"site_id": sid, "map_html_path": None, "layers": [], "status": "no-op: no valid A/B"}
-
-    # Center/zoom: use A if present, else B
-    center_row = ab_positions[ab_positions["role"] == "A"]
-    if not center_row.empty:
-        center_lat = center_row.iloc[0]["lat_dd"]
-        center_lon = center_row.iloc[0]["lon_dd"]
-    else:
-        center_lat = ab_positions.iloc[0]["lat_dd"]
-        center_lon = ab_positions.iloc[0]["lon_dd"]
-
-    m = folium.Map(location=[center_lat, center_lon], zoom_start=8, tiles="OpenStreetMap" if tiles_mode=="online" else None)
-
-    # --- Alert Positions Layer ---
-    alert_group = folium.FeatureGroup(name="Alert Positions", show=True)
+    # --- Alert Positions (A/B) ---
+    ab_positions = gis_map_inputs_df[gis_map_inputs_df["layer"] == "alert_position"]
     for _, row in ab_positions.iterrows():
-            label = row["role"]
-            lat = row["lat_dd"]
-            lon = row["lon_dd"]
-            ring = row.get("range_ring_meters", 0)
-            # --- Format radius strings ---
-            radius_m_str = f"{int(round(ring)):,} m" if ring and ring > 0 else "N/A"
-            radius_nm = round(ring / 1852, 2) if ring and ring > 0 else None
-            radius_nm_str = f"{radius_nm} NM" if radius_nm is not None else "N/A"
-            # --- Provenance label ---
-            ring_src = row.get("range_ring_source", None)
-            if ring_src == "EE_95":
-                provenance = "95% confidence (EE)"
-            elif ring_src == "fallback_gnss":
-                provenance = "default radius (GNSS resolution; not 95%)"
-            else:
-                provenance = "default radius (not 95%)"
-            # --- Popup fields ---
-            popup_fields = [
-                f"Role: {label}",
-                f"Lat/Lon: {lat:.5f}, {lon:.5f}",
-                f"Range ring: {radius_m_str} (~{radius_nm_str})",
-                provenance
-            ]
-            # If EE_95 and ee_nm present, add EE value
-            if ring_src == "EE_95" and "ee_nm" in row and pd.notna(row["ee_nm"]):
-                popup_fields.append(f"EE: {row['ee_nm']} NM (95%)")
-            # Existing optional fields
-            for opt in ["position_status", "method", "confidence", "expected_error_nm"]:
-                if opt in row and pd.notna(row[opt]):
-                    popup_fields.append(f"{opt}: {row[opt]}")
-            popup = "<br>".join(popup_fields)
-            folium.Marker(
-                [lat, lon],
-                popup=popup,
-                icon=folium.Icon(color="red", icon="info-sign")
-            ).add_to(alert_group)
-            folium.map.Marker(
-                [lat, lon],
-                icon=DivIcon(
-                    icon_size=(150, 36),
-                    icon_anchor=(0, 0),
-                    html=f'<div style="font-size: 14pt; color: red; font-weight: bold">{label}</div>',
-                )
-            ).add_to(alert_group)
-    alert_group.add_to(m)
-    layers.append("Alert Positions")
+        g = row.get("geometry", {})
+        coords = g.get("coordinates", [None, None]) if isinstance(g, dict) else [None, None]
+        lat_dd = coords[1]; lon_dd = coords[0]
+        label = row.get("label", "")
+        if lat_dd is None or lon_dd is None or pd.isna(lat_dd) or pd.isna(lon_dd):
+            continue
+        popup = f"{label} Location<br>{_fmt_num(lat_dd, 5)}, {_fmt_num(lon_dd, 5)}"
+        folium.Marker([lat_dd, lon_dd], popup=popup, icon=folium.Icon(color="red", icon="info-sign")).add_to(m)
+        folium.map.Marker([lat_dd, lon_dd], icon=DivIcon(icon_size=(150, 36), icon_anchor=(0, 0),
+                              html=f'<div style="font-size: 14pt; color: red; font-weight: bold">{label}</div>')).add_to(m)
 
-    # --- Range Rings Layer ---
-    ring_group = folium.FeatureGroup(name="Range Rings", show=True)
-    for _, row in ab_positions.iterrows():
-            lat = row["lat_dd"]
-            lon = row["lon_dd"]
-            ring = row.get("range_ring_meters", 0)
-            label = row["role"]
-            ring_src = row.get("range_ring_source", None)
-            if ring and ring > 0:
-                # Tooltip: "A â€” 95% confidence (EE)" or "A â€” default radius (not 95%)"
-                if ring_src == "EE_95":
-                    tooltip = f"{label} â€” 95% confidence (EE)"
-                elif ring_src == "fallback_gnss":
-                    tooltip = f"{label} â€” default radius (GNSS resolution; not 95%)"
-                else:
-                    tooltip = f"{label} â€” default radius (not 95%)"
-                folium.Circle(
-                    location=[lat, lon],
-                    radius=ring,
-                    color="red",
-                    fill=False,
-                    weight=2,
-                    tooltip=tooltip
-                ).add_to(ring_group)
-    ring_group.add_to(m)
-    layers.append("Range Rings")
+    # --- Range Rings ---
+    rings = gis_map_inputs_df[gis_map_inputs_df["layer"] == "range_ring"]
+    for _, row in rings.iterrows():
+        g = row.get("geometry", {})
+        center = g.get("center") if isinstance(g, dict) else None
+        rad_m = g.get("radius_m") if isinstance(g, dict) else None
+        if (isinstance(center, (list, tuple)) and len(center) == 2
+                and center[0] is not None and center[1] is not None
+                and rad_m and rad_m > 0):
+            folium.Circle(location=[center[1], center[0]], radius=float(rad_m),
+                          color="red", fill=False, weight=2,
+                          tooltip=f"{row.get('label','')} — EE95 Ring").add_to(m)
 
     # --- Weather Layer ---
-    if wx_df is not None and not wx_df.empty:
+    wx_rows = gis_map_inputs_df[gis_map_inputs_df["layer"] == "weather"]
+    if not wx_rows.empty:
         wx_group = folium.FeatureGroup(name="Weather", show=True)
-        for _, wx in wx_df.iterrows():
-            lat = wx.get("lat_dd")
-            lon = wx.get("lon_dd")
-            if pd.notna(lat) and pd.notna(lon):
-                popup = "<br>".join([
-                    f"Obs: {wx.get('obs_type', 'N/A')}",
-                    f"Value: {wx.get('obs_value', 'N/A')} {wx.get('obs_unit', '')}",
-                    f"Time: {wx.get('obs_time', 'N/A')}",
-                    f"Station: {wx.get('station_id', 'N/A')}"
-                ])
-                folium.Marker(
-                    [lat, lon],
-                    popup=popup,
-                    icon=folium.Icon(color="orange", icon="cloud")
-                ).add_to(wx_group)
+        for _, row in wx_rows.iterrows():
+            g = row.get("geometry", {})
+            coords = g.get("coordinates", [None, None]) if isinstance(g, dict) else [None, None]
+            lat, lon = coords[1], coords[0]
+            if lat is None or lon is None or pd.isna(lat) or pd.isna(lon):
+                continue
+            wave = row.get('wave_height_display', 'None')
+            wind = row.get('wind_display', 'None')
+            temp = row.get('temp_display', 'None')
+            popup_html = "<br>".join([
+                f"<b>Weather</b>",
+                f"Lat: {_fmt_num(lat, 5)}",
+                f"Lon: {_fmt_num(lon, 5)}",
+                f"Temp: {temp}",
+                f"Wind: {wind}",
+                f"Waves: {wave}",
+            ])
+            folium.CircleMarker(location=[lat, lon],
+                                radius=WEATHER_STYLE["radius"],
+                                color=WEATHER_STYLE["color"],
+                                fill=True, fill_color=WEATHER_STYLE["fillColor"],
+                                fill_opacity=WEATHER_STYLE["fillOpacity"],
+                                weight=WEATHER_STYLE["weight"],
+                                popup=popup_html).add_to(wx_group)
         wx_group.add_to(m)
-        layers.append("Weather")
 
     # --- Stations Layer ---
-    if stations_df is not None and not stations_df.empty:
+    st_rows = gis_map_inputs_df[gis_map_inputs_df["layer"] == "station"]
+    if not st_rows.empty:
         st_group = folium.FeatureGroup(name="Stations", show=True)
-        for _, st in stations_df.iterrows():
-            lat = st.get("lat_dd")
-            lon = st.get("lon_dd")
-            if pd.notna(lat) and pd.notna(lon):
-                popup = "<br>".join([
-                    f"ID: {st.get('station_id', 'N/A')}",
-                    f"Name: {st.get('name', 'N/A')}",
-                    f"Type: {st.get('type', 'N/A')}"
-                ])
-                folium.Marker(
-                    [lat, lon],
-                    popup=popup,
-                    icon=folium.Icon(color="blue", icon="cloud")
-                ).add_to(st_group)
+        for _, st in st_rows.iterrows():
+            g = st.get("geometry", {})
+            coords = g.get("coordinates", [None, None]) if isinstance(g, dict) else [None, None]
+            lat, lon = coords[1], coords[0]
+            if lat is None or lon is None or pd.isna(lat) or pd.isna(lon):
+                continue
+            wave = st.get('wave_height_display', 'None')
+            wind = st.get('wind_display', 'None')
+            temp = st.get('temp_display', 'None')
+            popup = "<br>".join([
+                f"<b>Station</b> {st.get('source_id', '')} — {st.get('label','N/A')}",
+                f"Temp: {temp}",
+                f"Wind: {wind}",
+                f"Waves: {wave}",
+                f"Lat: {_fmt_num(lat, 5)}",
+                f"Lon: {_fmt_num(lon, 5)}"
+            ])
+            folium.CircleMarker(location=[lat, lon],
+                                radius=STATION_STYLE["radius"],
+                                color=STATION_STYLE["color"],
+                                fill=True, fill_color=STATION_STYLE["fillColor"],
+                                fill_opacity=STATION_STYLE["fillOpacity"],
+                                weight=STATION_STYLE["weight"],
+                                popup=popup).add_to(st_group)
         st_group.add_to(m)
-        layers.append("Stations")
 
-    # --- Layer Control ---
-    LayerControl(collapsed=True).add_to(m)
+    # --- Satellite Overlays (footprints, tracks, next-pass) ---
+    sat_rows = gis_map_inputs_df[gis_map_inputs_df["layer"] == "satellite_overlay"]
+    if not sat_rows.empty:
+        fg_foot = folium.FeatureGroup(name="Satellite footprints", show=True)
+        fg_track = folium.FeatureGroup(name="Satellite tracks", show=True)
+        fg_next  = folium.FeatureGroup(name="Next-pass markers", show=True)
 
-    # --- Title ---
-    title_html = f'''<h3 align="center" style="font-size:18px"><b>RDS Alert Map: {sid}</b></h3>'''
+        for _, sat in sat_rows.iterrows():
+            geom = sat.get("geometry", {})
+            if not isinstance(geom, dict):
+                continue
+            gtype = geom.get("type")
+
+            # Circle (footprint)
+            if gtype == "Circle":
+                center = geom.get("center")
+                rad_m  = geom.get("radius_m")
+                if (isinstance(center, (list, tuple)) and len(center) == 2
+                        and pd.notna(center[0]) and pd.notna(center[1]) and rad_m and rad_m > 0):
+                    folium.Circle(location=[float(center[1]), float(center[0])],
+                                  radius=float(rad_m),
+                                  color="#0b84f3", weight=1, fill=True, fill_opacity=0.15,
+                                  tooltip=sat.get("label","")).add_to(fg_foot)
+
+            # LineString (track)
+            elif gtype == "LineString":
+                coords = geom.get("coordinates") or []
+                clean = []
+                for pt in coords:
+                    try:
+                        lon, lat = pt
+                        if pd.notna(lon) and pd.notna(lat):
+                            clean.append([float(lat), float(lon)])  # folium = [lat, lon]
+                    except Exception:
+                        continue
+                if len(clean) > 1:
+                    PolyLine(locations=clean, weight=2, opacity=0.6, dash_array="4,6").add_to(fg_track)
+
+            # Point (next-pass)
+            elif gtype == "Point":
+                coords = geom.get("coordinates", [None, None])
+                if len(coords) == 2 and pd.notna(coords[0]) and pd.notna(coords[1]):
+                    Marker(location=[float(coords[1]), float(coords[0])],
+                           tooltip=str(sat.get("label","Next pass"))).add_to(fg_next)
+
+        fg_foot.add_to(m); fg_track.add_to(m); fg_next.add_to(m)
+
+        from folium import LayerControl
+        LayerControl(collapsed=True).add_to(m)
+
+    # --- Title & Save ---
+    title_html = f'''<h3 align="center" style="font-size:18px"><b>RDS Alert Map: {site_id}</b></h3>'''
     m.get_root().html.add_child(folium.Element(title_html))
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    m.save(out_path)
+    logging.info(f"✅ DF-based HTML map saved: {out_path}")
+    return {"site_id": site_id, "map_html_path": out_path, "status": "ok"}
 
-    # --- Fit map to largest ring ---
-    max_ring = ab_positions["range_ring_meters"].max() if "range_ring_meters" in ab_positions else 0
-    if max_ring and max_ring > 0:
-        # Pad by 20%
-        pad = max_ring * 1.2
-        m.fit_bounds([
-            [center_lat - pad/111320, center_lon - pad/(111320*max(0.1, math.cos(math.radians(center_lat))))],
-            [center_lat + pad/111320, center_lon + pad/(111320*max(0.1, math.cos(math.radians(center_lat))))]
-        ])
 
-    # --- Save ---
-    m.save(html_path)
-    logging.info(f"âœ… DF-based HTML map saved: {html_path}")
-    return {"site_id": sid, "map_html_path": html_path, "layers": layers, "status": "ok"}
 
-def generate_gis_map_html_from_inputs(
-    gis_map_inputs_df: pd.DataFrame,
-    out_dir: str,
-    site_id: Optional[str] = None,
-    tiles_mode: str = "online"
-) -> str:
-    """
-    Render Folium map from unified inputs table.
-    Behavior:
-      - Group by 'layer' and render the same FeatureGroups you already use:
-        'alert_positions', 'range_rings', 'weather', 'stations'.
-      - For 'range_rings', geometry is Circle encoded as dict; draw a circle with radius_m (meters).
-      - Use popup_html as-is; do not compute units/time in the renderer.
-      - Satellite layers ('sat_tracks', 'sat_footprints') if present: add FeatureGroups default show=False.
-      - Preserve existing tiles_mode/out_dir behavior consistent with current map generator.
-    Return: path to generated HTML.
-    """
-    import folium
-    import os
-    import pandas as pd
-    import logging
-    from folium import LayerControl, DivIcon
-
-    if gis_map_inputs_df is None or gis_map_inputs_df.empty:
-        logging.warning("[RDS] No gis_map_inputs_df provided; cannot generate map.")
-        return None
-
-    # Site ID logic
-    sid = site_id
-    if not sid:
-        unique_ids = gis_map_inputs_df["site_id"].dropna().unique()
-        if len(unique_ids) == 1:
-            sid = str(unique_ids[0])
-        elif len(unique_ids) > 1:
-            sid = str(unique_ids[0])
-            logging.warning(f"[RDS] Multiple site_ids in gis_map_inputs_df; using first: {sid}")
-        else:
-            sid = f"SMOKE_{pd.Timestamp.utcnow().strftime('%Y%m%d_%H%M%S')}"
-
-    # Directory logic
-    out_dir_final = os.path.join(out_dir, str(sid)) if out_dir and not out_dir.endswith(str(sid)) else out_dir
-    os.makedirs(out_dir_final, exist_ok=True)
-    html_path = os.path.join(out_dir_final, f"gis_map_{sid}.html")
-
-    # --- Base Map ---
-    ab_positions = gis_map_inputs_df[gis_map_inputs_df["role"].isin(["A", "B"])]
-    if ab_positions.empty:
-        logging.warning(f"[RDS] No valid A/B positions for site_id {sid}; map not written.")
-        return {"site_id": sid, "map_html_path": None, "layers": [], "status": "no-op: no valid A/B"}
-    center_row = ab_positions.iloc[0]
-    center_lat = center_row["lat_dd"]
-    center_lon = center_row["lon_dd"]
-    m = folium.Map(location=[center_lat, center_lon], zoom_start=8, tiles="OpenStreetMap" if tiles_mode=="online" else None)
-
-    # --- Grouped by Layer ---
-    for layer_name, group in gis_map_inputs_df.groupby("layer"):
-        if layer_name == "alert_positions":
-            # --- Alert Positions ---
-            for _, row in group.iterrows():
-                label = row["role"]
-                lat = row["lat_dd"]
-                lon = row["lon_dd"]
-                ring = row.get("range_ring_meters", 0)
-                # --- Format radius strings ---
-                radius_m_str = f"{int(round(ring)):,} m" if ring and ring > 0 else "N/A"
-                radius_nm = round(ring / 1852, 2) if ring and ring > 0 else None
-                radius_nm_str = f"{radius_nm} NM" if radius_nm is not None else "N/A"
-                # --- Provenance label ---
-                ring_src = row.get("range_ring_source", None)
-                if ring_src == "EE_95":
-                    provenance = "95% confidence (EE)"
-                elif ring_src == "fallback_gnss":
-                    provenance = "default radius (GNSS resolution; not 95%)"
-                else:
-                    provenance = "default radius (not 95%)"
-                # --- Popup fields ---
-                popup_fields = [
-                    f"Role: {label}",
-                    f"Lat/Lon: {lat:.5f}, {lon:.5f}",
-                    f"Range ring: {radius_m_str} (~{radius_nm_str})",
-                    provenance
-                ]
-                # If EE_95 and ee_nm present, add EE value
-                if ring_src == "EE_95" and "ee_nm" in row and pd.notna(row["ee_nm"]):
-                    popup_fields.append(f"EE: {row['ee_nm']} NM (95%)")
-                # Existing optional fields
-                for opt in ["position_status", "method", "confidence", "expected_error_nm"]:
-                    if opt in row and pd.notna(row[opt]):
-                        popup_fields.append(f"{opt}: {row[opt]}")
-                popup = "<br>".join(popup_fields)
-                folium.Marker(
-                    [lat, lon],
-                    popup=popup,
-                    icon=folium.Icon(color="red", icon="info-sign")
-                ).add_to(m)
-                folium.map.Marker(
-                    [lat, lon],
-                    icon=DivIcon(
-                        icon_size=(150, 36),
-                        icon_anchor=(0, 0),
-                        html=f'<div style="font-size: 14pt; color: red; font-weight: bold">{label}</div>',
-                    )
-                ).add_to(m)
-
-        elif layer_name == "range_rings":
-            # --- Range Rings ---
-            for _, row in group.iterrows():
-                lat = row["lat_dd"]
-                lon = row["lon_dd"]
-                ring = row.get("range_ring_meters", 0)
-                label = row["role"]
-                ring_src = row.get("range_ring_source", None)
-                if ring and ring > 0:
-                    # Tooltip: "A â€” 95% confidence (EE)" or "A â€” default radius (not 95%)"
-                    if ring_src == "EE_95":
-                        tooltip = f"{label} â€” 95% confidence (EE)"
-                    elif ring_src == "fallback_gnss":
-                        tooltip = f"{label} â€” default radius (GNSS resolution; not 95%)"
-                    else:
-                        tooltip = f"{label} â€” default radius (not 95%)"
-                    folium.Circle(
-                        location=[lat, lon],
-                        radius=ring,
-                        color="red",
-                        fill=False,
-                        weight=2,
-                        tooltip=tooltip
-                    ).add_to(m)
-
-        elif layer_name == "weather":
-            # --- Weather Stations ---
-            wx_group = folium.FeatureGroup(name="Weather", show=True)
-            for _, wx in group.iterrows():
-                lat = wx.get("lat_dd")
-                lon = wx.get("lon_dd")
-                if pd.notna(lat) and pd.notna(lon):
-                    popup = "<br>".join([
-                        f"Obs: {wx.get('obs_type', 'N/A')}",
-                        f"Value: {wx.get('obs_value', 'N/A')} {wx.get('obs_unit', '')}",
-                        f"Time: {wx.get('obs_time', 'N/A')}",
-                        f"Station: {wx.get('station_id', 'N/A')}"
-                    ])
-                    folium.Marker(
-                        [lat, lon],
-                        popup=popup,
-                        icon=folium.Icon(color="orange", icon="cloud")
-                    ).add_to(wx_group)
-            wx_group.add_to(m)
-
-        elif layer_name == "stations":
-            # --- Stations ---
-            st_group = folium.FeatureGroup(name="Stations", show=True)
-            for _, st in group.iterrows():
-                lat = st.get("lat_dd")
-                lon = st.get("lon_dd")
-                if pd.notna(lat) and pd.notna(lon):
-                    popup = "<br>".join([
-                        f"ID: {st.get('station_id', 'N/A')}",
-                        f"Name: {st.get('name', 'N/A')}",
-                        f"Type: {st.get('type', 'N/A')}"
-                    ])
-                    folium.Marker(
-                        [lat, lon],
-                        popup=popup,
-                        icon=folium.Icon(color="blue", icon="cloud")
-                    ).add_to(st_group)
-            st_group.add_to(m)
-
-    # --- Layer Control ---
-    LayerControl(collapsed=True).add_to(m)
-
-    # --- Title ---
-    title_html = f'''<h3 align="center" style="font-size:18px"><b>RDS Alert Map: {sid}</b></h3>'''
-    m.get_root().html.add_child(folium.Element(title_html))
-
-    # --- Fit map to largest ring ---
-    max_ring = ab_positions["range_ring_meters"].max() if "range_ring_meters" in ab_positions else 0
-    if max_ring and max_ring > 0:
-        # Pad by 20%
-        pad = max_ring * 1.2
-        m.fit_bounds([
-            [center_lat - pad/111320, center_lon - pad/(111320*max(0.1, math.cos(math.radians(center_lat))))],
-            [center_lat + pad/111320, center_lon + pad/(111320*max(0.1, math.cos(math.radians(center_lat))))]
-        ])
-
-    # --- Save ---
-    m.save(html_path)
-    logging.info(f"âœ… Inputs-based HTML map saved: {html_path}")
-    return html_path
 

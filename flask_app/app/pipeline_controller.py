@@ -40,28 +40,53 @@
 
 import sys
 import os
+import logging
+import json
+from pathlib import Path
+LOG = logging.getLogger(__name__)
 
 # Ensure the `flask_app` directory is added to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from app.setup_imports import *
-from flask_app.app.database import save_alert_to_db, save_weather_to_db, get_existing_alerts
-from flask_app.app.gis_map_inputs_builder import build_gis_map_inputs_df
-from flask_app.app.gis_mapping import generate_gis_map_html_from_inputs
-from flask_app.app.preparse_coordinate_mapper import pre_scan_for_coordinates
-from flask_app.app.utils import log_error_and_continue, load_sample_message, get_current_utc_timestamp
+from app.database import save_alert_to_db, save_weather_to_db, get_existing_alerts
+from app.gis_map_inputs_builder import build_gis_map_inputs_df
+from app.gis_mapping import generate_gis_map_html_from_dfs
+from app.preparse_coordinate_mapper import pre_scan_for_coordinates
+from app.utils import log_error_and_continue, load_sample_message, get_current_utc_timestamp
+from app.fetcher_noaa_shore import fetch_noaa_shore_data
+from app.fetcher_ndbc_buoy import fetch_ndbc_buoy_data
+from app.fetcher_noaa_weather_alerts import fetch_weather_alerts_zone
+from app.finalize_alert_df import finalize_alert_df
+from app.parser_sarsat_msg import parse_sarsat_message
+from app.wx_pipeline import run_wx_pipeline
 
-from flask_app.app.fetcher_noaa_shore import fetch_noaa_shore_data
-from flask_app.app.fetcher_ndbc_buoy import fetch_ndbc_buoy_data
-from flask_app.app.fetcher_noaa_weather_alerts import fetch_weather_alerts_zone
+def load_sat_overlays_for_site(site_id: str):
+    """
+    Look for PNG overlays in data/sat_overlays/<site_id>/ with <name>.bounds.json
+    Bounds JSON schema: [[south, west], [north, east]]
+    Returns a list of dicts: {"image_path": str, "bounds": [[s,w],[n,e]], "opacity": float, "name": str}
+    """
+    base = Path("data") / "sat_overlays" / str(site_id)
+    if not base.exists():
+        return []
 
-from flask_app.app.finalize_alert_df import finalize_alert_df  # Fixed import
-from flask_app.app.parser_sarsat_msg import parse_sarsat_message  # Standardized import
-
-import pandas as pd
-from flask_app.app.wx_pipeline import run_wx_pipeline
-
-
+    overlays = []
+    for png in base.glob("*.png"):
+        j = png.with_suffix(".bounds.json")
+        if not j.exists():
+            continue
+        try:
+            bounds = json.loads(j.read_text(encoding="utf-8"))
+            overlays.append({
+                "image_path": str(png).replace("\\", "/"),
+                "bounds": bounds,
+                "opacity": 0.6,
+                "name": png.stem,
+            })
+        except Exception:
+            continue
+    return overlays
 
 def process_sarsat_alert(raw_alert_message):
 
@@ -178,6 +203,18 @@ def process_sarsat_alert(raw_alert_message):
         out_dir = os.path.join('data', 'maps', site_id_safe)
         os.makedirs(out_dir, exist_ok=True)
 
+        # Load satellite overlays for this site
+        sat_overlays = load_sat_overlays_for_site(site_id_safe)
+
+        sat_overlays = load_sat_overlays_for_site(site_id_safe)
+
+        print("[sat_overlays] loaded:", 0 if not sat_overlays else len(sat_overlays))
+        if not sat_overlays:
+            sat_overlays = [{
+                "coordinates": [[-75.60, 37.76], [-75.40, 37.90]],
+                "name": "TEST Overlay"
+            }]
+
         # Build ephemeral positions_df (A row, and B row if present)
         rows = []
         # A
@@ -233,37 +270,47 @@ def process_sarsat_alert(raw_alert_message):
             include_marine=None,  # let policy decide per-point
         )
 
-        # Adapt to mapperâ€™s simple schema
-        # Mapper expects wx_df columns: lat_dd, lon_dd, obs_type, obs_value, obs_unit, obs_time, station_id
-        wx_rows = []
+        # --- Collapse to one row per station with latest values ---
+        wx_df = pd.DataFrame()
         if df_wx_obs is not None and not df_wx_obs.empty:
-            for _, w in df_wx_obs.iterrows():
-                lat = w.get("lat"); lon = w.get("lon"); ts = w.get("valid_utc")
-                sid = w.get("source_id") or w.get("provider")
-                # wind
-                if pd.notna(w.get("wind_ms")):
-                    wx_rows.append({
-                        "lat_dd": lat, "lon_dd": lon, "obs_type": "wind_ms",
-                        "obs_value": float(w["wind_ms"]), "obs_unit": "m/s",
-                        "obs_time": ts, "station_id": sid
-                    })
-                # wave height (Open-Meteo rows when marine is included)
-                if pd.notna(w.get("wave_height_m")):
-                    wx_rows.append({
-                        "lat_dd": lat, "lon_dd": lon, "obs_type": "wave_height_m",
-                        "obs_value": float(w["wave_height_m"]), "obs_unit": "m",
-                        "obs_time": ts, "station_id": sid
-                    })
-        wx_df = pd.DataFrame(wx_rows) if wx_rows else pd.DataFrame()
+            # pick first non-null id across options to be our grouping key
+            id_cols = [c for c in ["station_id", "source_id", "id", "provider"] if c in df_wx_obs.columns]
+            sid_series = (
+                df_wx_obs[id_cols].astype("object").bfill(axis=1).iloc[:, 0].rename("sid")
+            )
 
-        # Optional: stations layer (for popups)
-        # Mapper expects stations_df: station_id, name, type, lat_dd, lon_dd
+            agg = (
+                pd.concat([df_wx_obs, sid_series], axis=1)
+                .sort_values("valid_utc")
+                .groupby("sid", dropna=False)
+                .agg({
+                    "lat": "last",
+                    "lon": "last",
+                    "valid_utc": "last",
+                    "wind_ms": "last",
+                    "wave_height_m": "last",
+                    "temp_c": "last"
+                })
+                .reset_index()
+                .rename(columns={
+                    "sid": "station_id",
+                    "lat": "lat_dd",
+                    "lon": "lon_dd",
+                    "valid_utc": "obs_time",
+                    "temp_c": "temp_C"   # <-- add this
+                })
+            )
+            wx_df = agg
+        else:
+            wx_df = pd.DataFrame()
+
+        # Existing stations skeleton (ID/Name/Type/lat/lon)
         st_rows = []
         if df_wx_obs is not None and not df_wx_obs.empty:
             ms = df_wx_obs[df_wx_obs.get("source_type") == "station"]
             for _, s in ms.iterrows():
                 st_rows.append({
-                    "station_id": s.get("source_id"),
+                    "station_id": s.get("station_id") or s.get("source_id") or s.get("id"),
                     "name": s.get("name"),
                     "type": s.get("provider") or "station",
                     "lat_dd": s.get("lat"),
@@ -271,40 +318,55 @@ def process_sarsat_alert(raw_alert_message):
                 })
         stations_df = pd.DataFrame(st_rows) if st_rows else pd.DataFrame()
 
-        # quick debug during prototyping
-        print(f"[debug] wx_df rows: {0 if wx_df is None else len(wx_df)}")
-        print(f"[debug] stations_df rows: {0 if stations_df is None else len(stations_df)}")
+        # Merge latest wx values into stations_df
+        if not wx_df.empty:
+            merge_cols = [c for c in ["station_id","lat_dd","lon_dd","wind_ms","wave_height_m","temp_C","obs_time"] if c in wx_df.columns]
+            stations_df = stations_df.merge(
+                wx_df[merge_cols],
+                on="station_id",
+                how="left"
+            )
 
         # --- Unified GIS map inputs ---
+        op_tz_env = os.getenv("RDS_OPERATOR_TZ")
+        shore_nm = 5.0
+
         gis_map_inputs_df = build_gis_map_inputs_df(
             positions_df,
-            wx_df if not wx_df.empty else None,
-            stations_df if not stations_df.empty else None,
-            op_tz_env=None,
-            shore_nm=5.0
+            wx_df=wx_df,
+            stations_df=stations_df,
+            op_tz_env=op_tz_env,
+            shore_nm=shore_nm,
+            sat_overlays=sat_overlays
         )
+
+        try:
+            n_sat = int(gis_map_inputs_df[gis_map_inputs_df["layer"]=="satellite_overlay"].shape[0])
+        except Exception:
+            n_sat = 0
+        print("[gis_df] satellite_overlay rows:", n_sat)
 
         LOG.info(f"GIS map inputs row counts by layer: {gis_map_inputs_df['layer'].value_counts().to_dict()}")
 
-        # --- Map render (choose single-feed or legacy) ---
-        if os.getenv("RDS_MAP_USE_SINGLE_FEED") == "1":
-            info = generate_gis_map_html_from_inputs(
-                gis_map_inputs_df,
-                out_dir,
-                site_id=site_id_safe,
-                tiles_mode="online",
-            )
-            print(f"âœ… Interactive map saved: data/maps/{site_id_safe}/gis_map_{site_id_safe}.html")
-        else:
-            info = generate_gis_map_html_from_dfs(
-                positions_df,
-                out_dir,
-                site_id=site_id_safe,
-                wx_df=wx_df if not wx_df.empty else None,
-                stations_df=stations_df if not stations_df.empty else None,
-                tiles_mode="online",
-            )
-            print(f"âœ… Interactive map saved: data/maps/{site_id_safe}/gis_map_{site_id_safe}.html")
+        # --- Map render (write to a real HTML file path) ---
+        from pathlib import Path
+
+        site_id = str(alert_row.get("site_id") or "unknown")
+        out_dir = Path("data/maps") / site_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_html = out_dir / f"gis_map_{site_id}.html"
+
+        result = generate_gis_map_html_from_dfs(
+            gis_map_inputs_df,
+            alert_row.to_dict(),
+            str(out_html)
+        )
+
+
+        LOG.info(f"Available layers: {result.get('layers', [])}")
+
+        print("✅ Map:", result)
+        LOG.info(f"Map HTML output path: {result.get('map_html_path')}")
                 
     except Exception as e:
         log_error_and_continue(f"{get_current_utc_timestamp()} âŒ Pipeline processing error: {e}")
@@ -313,4 +375,6 @@ if __name__ == "__main__":
     sample_message_path = "C:/Users/gehig/Projects/RescueDecisionSystems/sample_sarsat_message.txt"
     example_alert_message = load_sample_message(sample_message_path)
     process_sarsat_alert(example_alert_message)
+
+
 
