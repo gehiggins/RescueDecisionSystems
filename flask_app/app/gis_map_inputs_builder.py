@@ -335,7 +335,9 @@ def build_gis_map_inputs_df(
                     },
                     "ts_utc": None, "ts_local": None, "local_tz": None,
                     "label": o.get("label",""),
-                    "popup_html": o.get("popup_html")
+                    "popup_html": o.get("popup_html"),
+                    "icon_key": o.get("icon_key"),                      # [updated]
+                    "sat_type": (str(o.get("sat_type") or "")).lower()  # [updated]
                 })
                 continue
 
@@ -352,7 +354,9 @@ def build_gis_map_inputs_df(
                     },
                     "ts_utc": None, "ts_local": None, "local_tz": None,
                     "label": o.get("label",""),
-                    "popup_html": o.get("popup_html")
+                    "popup_html": o.get("popup_html"),
+                    "icon_key": o.get("icon_key"),                      # [updated]
+                    "sat_type": (str(o.get("sat_type") or "")).lower()  # [updated]
                 })
                 continue
 
@@ -365,7 +369,9 @@ def build_gis_map_inputs_df(
                     "geometry": {"type": "Point", "coordinates": o["coordinates"]},
                     "ts_utc": None, "ts_local": None, "local_tz": None,
                     "label": o.get("label","Next pass"),
-                    "popup_html": o.get("popup_html")
+                    "popup_html": o.get("popup_html"),
+                    "icon_key": o.get("icon_key"),                      # [updated]
+                    "sat_type": (str(o.get("sat_type") or "")).lower()  # [updated]
                 })
 
     # --- Satellite overlay (footprint + short track + optional next-pass) ---
@@ -474,6 +480,7 @@ def build_gis_map_inputs_df(
                         "lon_dd": float(npm["coordinates"][0]),
                         "icon_key": _icon_key_for_sat(r),
                         "footprint_radius_km": None,
+                        "sat_type": (str(r.get("sat_type") or r.get("type") or "")).lower(),  # [updated]
                     })
     except Exception as _sat_e:
         LOG.warning(f"[SAT] overlay inject skipped: {_sat_e}")

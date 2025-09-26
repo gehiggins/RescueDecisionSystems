@@ -669,6 +669,12 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
         fg_sat_meo = folium.FeatureGroup(name="Satellites • MEO", show=True)  # [updated]
         fg_sat_geo = folium.FeatureGroup(name="Satellites • GEO", show=True)  # [updated]
         fg_sat_leo.add_to(m); fg_sat_meo.add_to(m); fg_sat_geo.add_to(m)      # [updated]
+        def _sat_fg_for(sat_dict):
+            st = str(sat_dict.get("sat_type") or sat_dict.get("label") or "").lower()
+            if "leo" in st:  return fg_sat_leo
+            if "meo" in st:  return fg_sat_meo
+            if "geo" in st:  return fg_sat_geo
+            return fg_sat_leo  # default
 
         from folium import Marker, Icon
         from folium.features import CustomIcon
@@ -722,7 +728,9 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
                 coords = geom.get("coordinates", [None, None])
                 icon_key = sat.get("icon_key")
                 icon_path = _icon_relpath_for_key(icon_key, out_path) if icon_key else None
-                target_feature_group = _sat_fg_for(sat)  # [updated]
+                # Route SAT points to orbit type group (LEO/MEO/GEO)  # [updated]
+                st = str(sat.get("sat_type") or sat.get("label") or "").lower()  # [updated]
+                target_feature_group = fg_sat_leo if "leo" in st else (fg_sat_meo if "meo" in st else fg_sat_geo)  # [updated]
                 if len(coords) == 2 and pd.notna(coords[0]) and pd.notna(coords[1]):
                     if icon_path:
                         Marker(
@@ -756,12 +764,6 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
     logging.info(f"✅ DF-based HTML map saved: {out_path}")
     return {"site_id": site_id, "map_html_path": out_path, "status": "ok"}
 
-def _sat_fg_for(sat_dict):  # [updated]
-    st = str(sat_dict.get("sat_type") or sat_dict.get("label") or "").lower()  # [updated]
-    if "leo" in st:  return fg_sat_leo  # [updated]
-    if "meo" in st:  return fg_sat_meo  # [updated]
-    if "geo" in st:  return fg_sat_geo  # [updated]
-    return fg_sat_leo  # default                                           # [updated]
 
 
 

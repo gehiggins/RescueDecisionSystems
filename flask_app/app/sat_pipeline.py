@@ -178,18 +178,18 @@ def build_sat_overlay_df(
         la = float(alert_df.iloc[0].get("alert_lat_dd"))
         lo = float(alert_df.iloc[0].get("alert_lon_dd"))
         exclude = set([int(x) for x in overlay["norad_id"].dropna().astype(int).tolist()])
-        # Nearby-not-detected: top 3 visible LEOs excluding reported
-        show_all = os.getenv("RDS_SAT_SHOW_ALL_VISIBLE", "0") == "1"  # [updated]
-        nearby_top_n = int(os.getenv("RDS_SAT_TOPN_NEARBY", "6"))      # [updated]
-        extra.append(_visible_candidates(la, lo, at_time_utc, exclude_norad=exclude,  # [updated]
-                                     max_candidates=int(os.getenv("RDS_SAT_MAX_CANDIDATES","256")),  # [updated]
-                                     top_n=(10**9 if show_all else nearby_top_n)))  # [updated]
+        show_all = os.getenv("RDS_SAT_SHOW_ALL_VISIBLE", "0") == "1"
+        nearby_top_n = int(os.getenv("RDS_SAT_TOPN_NEARBY", "6"))
+        extra.append(_visible_candidates(la, lo, at_time_utc, exclude_norad=exclude,
+                                         max_candidates=int(os.getenv("RDS_SAT_MAX_CANDIDATES","256")),
+                                         top_n=(10**9 if show_all else nearby_top_n)))
 
-    max_hours = float(os.getenv("RDS_SAT_MAX_HOURS", "12"))
-    upcoming_top_n = int(os.getenv("RDS_SAT_TOPN_UPCOMING", "4"))  # [updated]
-    extra.append(_upcoming_passes(la, lo, at_time_utc, exclude_norad=exclude, max_hours=max_hours,  # [updated]
-                                  max_candidates=int(os.getenv("RDS_SAT_MAX_CANDIDATES","256")),    # [updated]
-                                  top_n=upcoming_top_n))                                             # [updated]
+        # [fixed] upcoming pass search — must be inside the same try:
+        max_hours = float(os.getenv("RDS_SAT_MAX_HOURS", "12"))
+        upcoming_top_n = int(os.getenv("RDS_SAT_TOPN_UPCOMING", "4"))
+        extra.append(_upcoming_passes(la, lo, at_time_utc, exclude_norad=exclude,
+                                      max_candidates=int(os.getenv("RDS_SAT_MAX_CANDIDATES","256")),
+                                      top_n=upcoming_top_n))
     except Exception as _e:
         pass
 
@@ -402,6 +402,7 @@ def _upcoming_passes(alert_lat: float, alert_lon: float, at_time_utc: pd.Timesta
         if pd.notna(nid) and int(nid) in exclude_norad:
             continue
         try:
+            # --- [fixed] upcoming pass search — must be inside the same try:
             marker = find_next_pass_marker(t["tle_line1"], t["tle_line2"],
                                            target_point=(float(alert_lat), float(alert_lon)),
                                            start_time=at_time_utc.to_pydatetime(),
