@@ -79,7 +79,9 @@ def build_sat_overlay_df(
         "sat_name","norad_id","at_time_utc","lat_dd","lon_dd","alt_km",
         "footprint_radius_km","tle_epoch_utc","tle_age_hours","source",
         "track_coords","track_start_utc","track_end_utc","next_pass_marker",
-        "_variant","distance_km"
+        "_variant","distance_km",
+        # keep these in final DF:
+        "role","popup_html","sat_type"
     ]
     if alert_df.empty:
         return pd.DataFrame(columns=COLS)
@@ -165,14 +167,39 @@ def build_sat_overlay_df(
     overlay = annotate_footprint_radius(overlay).drop(columns=["altitude_km"])
     overlay = overlay.dropna(subset=["lat_dd","lon_dd","footprint_radius_km"])
 
-    # If nothing to show and fallback enabled, try nearest LEO to alert location
-    if overlay.dropna(subset=["lat_dd","lon_dd","footprint_radius_km"]).empty and fallback_to_nearest:
-        if {"alert_lat_dd","alert_lon_dd"}.issubset(alert_df.columns):
-            la, lo = alert_df.iloc[0].get("alert_lat_dd"), alert_df.iloc[0].get("alert_lon_dd")
-            if pd.notna(la) and pd.notna(lo):
-                nearest = _fallback_nearest_leo(float(la), float(lo), at_time_utc, max_candidates=16, top_n=3)
-                if not nearest.empty:
-                    overlay = pd.concat([overlay, nearest], ignore_index=True)
+    # Tag primary as 'reported'
+    if not overlay.empty:
+        overlay["role"] = "reported"
+        overlay["popup_html"] = overlay.apply(lambda r: _build_sat_popup(r), axis=1)
+
+    # Nearby-not-detected & upcoming (optional window via env)
+    extra = []
+    try:
+        la = float(alert_df.iloc[0].get("alert_lat_dd"))
+        lo = float(alert_df.iloc[0].get("alert_lon_dd"))
+        exclude = set([int(x) for x in overlay["norad_id"].dropna().astype(int).tolist()])
+        # Nearby-not-detected: top 3 visible LEOs excluding reported
+        show_all = os.getenv("RDS_SAT_SHOW_ALL_VISIBLE", "0") == "1"  # [updated]
+        nearby_top_n = int(os.getenv("RDS_SAT_TOPN_NEARBY", "6"))      # [updated]
+        extra.append(_visible_candidates(la, lo, at_time_utc, exclude_norad=exclude,  # [updated]
+                                     max_candidates=int(os.getenv("RDS_SAT_MAX_CANDIDATES","256")),  # [updated]
+                                     top_n=(10**9 if show_all else nearby_top_n)))  # [updated]
+
+    max_hours = float(os.getenv("RDS_SAT_MAX_HOURS", "12"))
+    upcoming_top_n = int(os.getenv("RDS_SAT_TOPN_UPCOMING", "4"))  # [updated]
+    extra.append(_upcoming_passes(la, lo, at_time_utc, exclude_norad=exclude, max_hours=max_hours,  # [updated]
+                                  max_candidates=int(os.getenv("RDS_SAT_MAX_CANDIDATES","256")),    # [updated]
+                                  top_n=upcoming_top_n))                                             # [updated]
+    except Exception as _e:
+        pass
+
+    if extra:
+        extra_df = pd.concat([e for e in extra if isinstance(e, pd.DataFrame) and not e.empty], ignore_index=True) if any(isinstance(e, pd.DataFrame) for e in extra) else pd.DataFrame()
+        if not extra_df.empty:
+            # Ensure same columns exist
+            for c in set(overlay.columns) - set(extra_df.columns):
+                extra_df[c] = np.nan
+            overlay = pd.concat([overlay, extra_df[overlay.columns]], ignore_index=True)
 
     import os, logging
     from pathlib import Path
@@ -185,6 +212,22 @@ def build_sat_overlay_df(
             overlay.to_parquet(outp, index=False)
         except Exception as e:
             LOG.warning(f"[SAT] parquet dump skipped: {e}")
+
+    # --- Merge baseline 'type' as 'sat_type' for icon selection downstream ---
+    try:
+        ref = load_sat_reference()
+        sat_types = (ref[["norad_id","type"]]
+                     .dropna(subset=["norad_id"])
+                     .copy())
+        sat_types["norad_id"] = sat_types["norad_id"].astype(int)
+        sat_types = sat_types.rename(columns={"type": "sat_type"})
+        if not overlay.empty and "norad_id" in overlay.columns:
+            overlay["norad_id"] = overlay["norad_id"].astype("Int64")
+            overlay = overlay.merge(sat_types, on="norad_id", how="left")
+    except Exception:
+        # non-fatal: icon helper will still have a fallback
+        pass
+    # --- end merge ---
 
     return overlay.reindex(columns=COLS)
 
@@ -275,4 +318,119 @@ def _fallback_nearest_leo(alert_lat, alert_lon, at_time_utc, max_candidates=12, 
     mask = pd.notna(out["tle_epoch_utc"])
     out.loc[mask, "tle_age_hours"] = (out.loc[mask, "at_time_utc"] - out.loc[mask, "tle_epoch_utc"]).dt.total_seconds()/3600.0
     return out
+
+# --- RDS SAT ROLE HELPERS ---
+def _sat_role_style(role: str) -> str:
+    # Style is applied downstream; this is a hint for clarity/tests
+    return {"reported": "solid", "nearby_not_detected": "outline", "upcoming": "dashed"}.get(role, "solid")
+
+def _build_sat_popup(row: dict) -> str:
+    nm = str(row.get("sat_name") or "Unknown")
+    nid = row.get("norad_id")
+    role = str(row.get("role") or "")
+    tle_epoch = row.get("tle_epoch_utc")
+    tle_age = row.get("tle_age_hours")
+    nxt = row.get("next_pass_marker") or {}
+    nxt_when = nxt.get("when_utc")
+    nxt_elev = nxt.get("max_elev_deg")
+    parts = [f"<b>{nm}</b>{' ('+str(int(nid))+')' if pd.notna(nid) else ''}",
+             f"Role: <b>{role}</b>"]
+    if pd.notna(tle_epoch):
+        parts.append(f"TLE epoch: {pd.to_datetime(tle_epoch).strftime('%Y-%m-%d %H:%MZ')}")
+    if pd.notna(tle_age):
+        parts.append(f"TLE age: {round(float(tle_age),1)} h")
+    parts.append(f"Time@alert: {pd.to_datetime(row.get('at_time_utc')).strftime('%Y-%m-%d %H:%MZ')}")
+    if nxt_when:
+        np_txt = f"Next pass: {pd.to_datetime(nxt_when).strftime('%Y-%m-%d %H:%MZ')}"
+        if nxt_elev is not None:
+            np_txt += f" • max elev {round(float(nxt_elev),1)}°"
+        parts.append(np_txt)
+    return "<br/>".join(parts)
+
+def _visible_candidates(alert_lat: float, alert_lon: float, at_time_utc: pd.Timestamp,
+                        exclude_norad: set[int], max_candidates: int = 32, top_n: int = 3) -> pd.DataFrame:
+    """Pick LEOs whose footprint contains the alert point at alert time (no detect)."""
+    ref = load_sat_reference()
+    cand = ref[ref["type"].str.upper().isin(["LEO","LEOSAR"]) & pd.notna(ref["norad_id"])].copy()
+    if cand.empty:
+        return pd.DataFrame()
+    catnrs = [str(int(x)) for x in cand["norad_id"].tolist()][:max_candidates]
+    tles = load_tle_snapshot(catnrs)
+    rows = []
+    for _, t in tles.iterrows():
+        nid = t.get("norad_id")
+        if pd.notna(nid) and int(nid) in exclude_norad:
+            continue
+        try:
+            lat, lon, alt_km = compute_subpoint_at(t["tle_line1"], t["tle_line2"], at_time_utc.to_pydatetime())
+            dist_km = _haversine_km(alert_lat, alert_lon, lat, lon)
+            r = pd.DataFrame([{"sat_name": t.get("name"),
+                               "norad_id": nid,
+                               "at_time_utc": at_time_utc,
+                               "lat_dd": lat, "lon_dd": lon, "alt_km": alt_km,
+                               "tle_epoch_utc": pd.to_datetime(t.get("epoch_utc"), utc=True, errors="coerce"),
+                               "source": "celestrak:catnr"}])
+            r["altitude_km"] = r["alt_km"]
+            r = annotate_footprint_radius(r).drop(columns=["altitude_km"])
+            r["distance_km"] = float(dist_km)
+            rows.append(r.iloc[0].to_dict())
+        except Exception:
+            continue
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows)
+    df["tle_age_hours"] = (df["at_time_utc"] - df["tle_epoch_utc"]).dt.total_seconds()/3600.0
+    df = df[pd.notna(df["footprint_radius_km"]) & pd.notna(df["distance_km"])]
+    df = df[df["distance_km"] <= df["footprint_radius_km"]].copy()
+    df["role"] = "nearby_not_detected"
+    df["popup_html"] = df.apply(lambda r: _build_sat_popup(r), axis=1)
+    return df.sort_values("distance_km").head(top_n)
+
+def _upcoming_passes(alert_lat: float, alert_lon: float, at_time_utc: pd.Timestamp,
+                     exclude_norad: set[int], max_hours: float = 12.0,
+                     max_candidates: int = 64, top_n: int = 2) -> pd.DataFrame:
+    """Find next pass within window; center footprint at pass time, add next_pass_marker."""
+    ref = load_sat_reference()
+    cand = ref[ref["type"].str.upper().isin(["LEO","LEOSAR"]) & pd.notna(ref["norad_id"])].copy()
+    if cand.empty:
+        return pd.DataFrame()
+    catnrs = [str(int(x)) for x in cand["norad_id"].tolist()][:max_candidates]
+    tles = load_tle_snapshot(catnrs)
+    rows = []
+    for _, t in tles.iterrows():
+        nid = t.get("norad_id")
+        if pd.notna(nid) and int(nid) in exclude_norad:
+            continue
+        try:
+            marker = find_next_pass_marker(t["tle_line1"], t["tle_line2"],
+                                           target_point=(float(alert_lat), float(alert_lon)),
+                                           start_time=at_time_utc.to_pydatetime(),
+                                           max_hours=float(max_hours))
+            if not marker:
+                continue
+            when = pd.to_datetime(marker.get("when_utc"), utc=True, errors="coerce")
+            if pd.isna(when):
+                continue
+            # subpoint & footprint at pass time
+            plat, plon, alt_km = compute_subpoint_at(t["tle_line1"], t["tle_line2"], when.to_pydatetime())
+            r = pd.DataFrame([{"sat_name": t.get("name"),
+                               "norad_id": nid,
+                               "at_time_utc": when,
+                               "lat_dd": plat, "lon_dd": plon, "alt_km": alt_km,
+                               "tle_epoch_utc": pd.to_datetime(t.get("epoch_utc"), utc=True, errors="coerce"),
+                               "source": "celestrak:catnr",
+                               "next_pass_marker": marker}])
+            r["altitude_km"] = r["alt_km"]
+            r = annotate_footprint_radius(r).drop(columns=["altitude_km"])
+            r["role"] = "upcoming"
+            r["popup_html"] = r.apply(lambda rr: _build_sat_popup(rr), axis=1)
+            rows.append(r.iloc[0].to_dict())
+        except Exception:
+            continue
+    if not rows:
+        return pd.DataFrame()
+    return (pd.DataFrame(rows)
+            .sort_values("at_time_utc")
+            .head(top_n))
+# --- RDS SAT ROLE HELPERS end ---
 

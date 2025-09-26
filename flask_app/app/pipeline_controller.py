@@ -206,11 +206,10 @@ def process_sarsat_alert(raw_alert_message):
         # Load satellite overlays for this site
         sat_overlays = load_sat_overlays_for_site(site_id_safe)
 
-        sat_overlays = load_sat_overlays_for_site(site_id_safe)
-
         print("[sat_overlays] loaded:", 0 if not sat_overlays else len(sat_overlays))
         if not sat_overlays:
             sat_overlays = [{
+                "type": "LineString",
                 "coordinates": [[-75.60, 37.76], [-75.40, 37.90]],
                 "name": "TEST Overlay"
             }]
@@ -303,6 +302,27 @@ def process_sarsat_alert(raw_alert_message):
             wx_df = agg
         else:
             wx_df = pd.DataFrame()
+
+        # ---- Append model/interpolated SPOT predictions (for ring-dot icon) ----
+        try:
+            if df_wx_obs is not None and df_wx_obs.empty:
+                spot = df_wx_obs[df_wx_obs.get("source_type") == "model_interpolated"].copy()
+                if not spot.empty:
+                    # Normalize columns for the builder
+                    spot = spot.rename(columns({
+                        "lat": "lat_dd",
+                        "lon": "lon_dd",
+                        "valid_utc": "obs_time",
+                        "temp_c": "temp_C"
+                    }))
+                    keep_cols = [c for c in ["lat_dd","lon_dd","obs_time","wind_ms","wave_height_m","temp_C","source_type"] if c in spot.columns]
+                    spot = spot[keep_cols]
+                    # Ensure the column exists and is correct for icon selection
+                    spot["source_type"] = "model_interpolated"
+                    # Concatenate with wx_df (may be empty)
+                    wx_df = pd.concat([wx_df, spot], ignore_index=True) if isinstance(wx_df, pd.DataFrame) else spot
+        except Exception as _e:
+            logging.warning(f"[WX] Spot append skipped: {_e}")
 
         # Existing stations skeleton (ID/Name/Type/lat/lon)
         st_rows = []

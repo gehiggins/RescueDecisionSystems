@@ -24,9 +24,10 @@ Next step: Add generate_gis_map_html_from_dfs(positions_df, ...) (DF inputs, lay
 #gis_mapping.py
 
 
-import os
-import math
+import os, math, logging, base64
 import numpy as np
+import pandas as pd
+from typing import Optional
 from app.utils_display import format_us_display, to_dual_time, derive_local_tz
 from app.setup_imports import *
 from app.utils import log_error_and_continue
@@ -47,26 +48,53 @@ except Exception:
 from shapely.geometry import Point
 
 DEBUG_MARKERS = os.getenv("RDS_DEBUG_MARKERS", "0") == "1"
+ICON_MODE = os.getenv("RDS_ICON_MODE", "base64").lower()
 
-WEATHER_STYLE = {
-    "radius": 10 if DEBUG_MARKERS else 5,
-    "weight": 3 if DEBUG_MARKERS else 1,
-    "opacity": 1.0,
-    "fillOpacity": 0.9 if DEBUG_MARKERS else 0.6,
-    "color": "#00E5FF" if DEBUG_MARKERS else "#1f77b4",
-    "fillColor": "#00E5FF" if DEBUG_MARKERS else "#1f77b4",
+# --- ICON RESOLVER ---
+ICON_FILES = {
+    "wx_buoy": "wx_buoy_yellow.png",
+    "wx_station": "wx_station_yellow.png",
+    "wx_spot": "wx_pred_ringdot.png",  # NEW: model/interpolated “spot” prediction
+    "sat_leo": "leo_sat.png",
+    "sat_meo": "meo_sat.png",
+    "sat_geo": "geo_sat.png",
+    # Optional: add "wx_spot": "wx_spot.png" when you provide it
 }
-STATION_STYLE = {
-    "radius": 10 if DEBUG_MARKERS else 5,
-    "weight": 3 if DEBUG_MARKERS else 1,
-    "opacity": 1.0,
-    "fillOpacity": 0.9 if DEBUG_MARKERS else 0.6,
-    "color": "#FF2D95" if DEBUG_MARKERS else "#6a51a3",
-    "fillColor": "#FF2D95" if DEBUG_MARKERS else "#6a51a3",
-}
-if DEBUG_MARKERS:
-    WEATHER_STYLE["zIndexOffset"] = 500
-    STATION_STYLE["zIndexOffset"] = 500
+
+def _icon_relpath_for_key(icon_key: str, map_out_path: str) -> Optional[str]:
+    """
+    Return a path to flask_app/static/icons/<file> relative to the map HTML directory,
+    so the icons load when opening the HTML directly from disk.
+    """
+    fn = ICON_FILES.get(icon_key)
+    if not fn or not map_out_path:
+        return None
+    try:
+        from pathlib import Path
+        # __file__ = .../flask_app/app/gis_mapping.py → parents[1] = .../flask_app
+        flask_app_dir = Path(__file__).resolve().parents[1]
+        icon_abs = flask_app_dir / "static" / "icons" / fn
+        logging.info(f"[icons] map_out_path={map_out_path}")
+        logging.info(f"[icons] icon_abs={icon_abs} exists={os.path.exists(icon_abs)}")
+        # Ensure icon exists; otherwise skip CustomIcon (fallback draws a dot)  # [updated]
+        if not os.path.exists(icon_abs):  # [updated]
+            logging.warning(f"[icons] Missing icon file on disk: {icon_abs}")  # [updated]
+            return None  # [updated]
+        
+    except Exception:
+        rel = None
+    # Build rel path using relpath to map directory
+    # Dual-mode: 'url' → Flask static path; 'base64' → embed bytes in HTML
+    try:
+        if ICON_MODE == "url":
+            return f"/static/icons/{fn}"
+        with open(icon_abs, "rb") as _f:
+            _b64 = base64.b64encode(_f.read()).decode("ascii")
+        return f"data:image/png;base64,{_b64}"
+    except Exception as _e:
+        logging.warning(f"[icons] Failed to produce icon ref for {fn}: {_e}")
+        return None
+# --- END ICON RESOLVER ---
 
 def first_notna(row, keys):
     for k in keys:
@@ -564,60 +592,70 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
     wx_rows = gis_map_inputs_df[gis_map_inputs_df["layer"] == "weather"]
     if not wx_rows.empty:
         wx_group = folium.FeatureGroup(name="Weather", show=True)
+        from folium import Marker, Icon
+        from folium.features import CustomIcon
         for _, row in wx_rows.iterrows():
             g = row.get("geometry", {})
             coords = g.get("coordinates", [None, None]) if isinstance(g, dict) else [None, None]
             lat, lon = coords[1], coords[0]
             if lat is None or lon is None or pd.isna(lat) or pd.isna(lon):
                 continue
-            wave = row.get('wave_height_display', 'None')
-            wind = row.get('wind_display', 'None')
-            temp = row.get('temp_display', 'None')
-            popup_html = "<br>".join([
-                f"<b>Weather</b>",
-                f"Lat: {_fmt_num(lat, 5)}",
-                f"Lon: {_fmt_num(lon, 5)}",
-                f"Temp: {temp}",
-                f"Wind: {wind}",
-                f"Waves: {wave}",
-            ])
-            folium.CircleMarker(location=[lat, lon],
-                                radius=WEATHER_STYLE["radius"],
-                                color=WEATHER_STYLE["color"],
-                                fill=True, fill_color=WEATHER_STYLE["fillColor"],
-                                fill_opacity=WEATHER_STYLE["fillOpacity"],
-                                weight=WEATHER_STYLE["weight"],
-                                popup=popup_html).add_to(wx_group)
+            icon_key = row.get("icon_key")
+            icon_path = _icon_relpath_for_key(icon_key, out_path) if icon_key else None
+            logging.info(f"[icons] Using icon_path={icon_path} (icon_key={icon_key})")
+            if icon_path:
+                Marker(
+                    location=[float(lat), float(lon)],
+                    tooltip=str(row.get("label","")),
+                    popup=row.get("popup_html"),
+                    icon=CustomIcon(icon_image=icon_path, icon_size=(28, 28))
+                ).add_to(wx_group)
+            else:
+                folium.CircleMarker(
+                    location=[float(lat), float(lon)],
+                    radius=6,
+                    weight=1,
+                    fill=True,
+                    fill_opacity=0.9,
+                    color="#22aa22" if (icon_key == "wx_spot") else "#0b84f3",
+                    tooltip=str(row.get("label","")),  # [updated]
+                    popup=row.get("popup_html"),       # [updated]
+                ).add_to(wx_group)
         wx_group.add_to(m)
 
     # --- Stations Layer ---
     st_rows = gis_map_inputs_df[gis_map_inputs_df["layer"] == "station"]
     if not st_rows.empty:
         st_group = folium.FeatureGroup(name="Stations", show=True)
-        for _, st in st_rows.iterrows():
-            g = st.get("geometry", {})
+        from folium import Marker, Icon
+        from folium.features import CustomIcon
+        for _, row in st_rows.iterrows():
+            g = row.get("geometry", {})
             coords = g.get("coordinates", [None, None]) if isinstance(g, dict) else [None, None]
             lat, lon = coords[1], coords[0]
             if lat is None or lon is None or pd.isna(lat) or pd.isna(lon):
                 continue
-            wave = st.get('wave_height_display', 'None')
-            wind = st.get('wind_display', 'None')
-            temp = st.get('temp_display', 'None')
-            popup = "<br>".join([
-                f"<b>Station</b> {st.get('source_id', '')} — {st.get('label','N/A')}",
-                f"Temp: {temp}",
-                f"Wind: {wind}",
-                f"Waves: {wave}",
-                f"Lat: {_fmt_num(lat, 5)}",
-                f"Lon: {_fmt_num(lon, 5)}"
-            ])
-            folium.CircleMarker(location=[lat, lon],
-                                radius=STATION_STYLE["radius"],
-                                color=STATION_STYLE["color"],
-                                fill=True, fill_color=STATION_STYLE["fillColor"],
-                                fill_opacity=STATION_STYLE["fillOpacity"],
-                                weight=STATION_STYLE["weight"],
-                                popup=popup).add_to(st_group)
+            icon_key = row.get("icon_key")
+            icon_path = _icon_relpath_for_key(icon_key, out_path) if icon_key else None
+            logging.info(f"[icons] Using icon_path={icon_path} (icon_key={icon_key})")
+            if icon_path:
+                Marker(
+                    location=[float(lat), float(lon)],
+                    tooltip=str(row.get("label","")),
+                    popup=row.get("popup_html"),
+                    icon=CustomIcon(icon_image=icon_path, icon_size=(28, 28))
+                ).add_to(st_group)
+            else:
+                folium.CircleMarker(
+                    location=[float(lat), float(lon)],
+                    radius=6,
+                    weight=1,
+                    fill=True,
+                    fill_opacity=0.9,
+                    color="#0b84f3",
+                    tooltip=str(row.get("label","")),
+                    popup=row.get("popup_html"),
+                ).add_to(st_group)
         st_group.add_to(m)
 
     # --- Satellite Overlays (footprints, tracks, next-pass) ---
@@ -626,6 +664,14 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
         fg_foot = folium.FeatureGroup(name="Satellite footprints", show=True)
         fg_track = folium.FeatureGroup(name="Satellite tracks", show=True)
         fg_next  = folium.FeatureGroup(name="Next-pass markers", show=True)
+
+        fg_sat_leo = folium.FeatureGroup(name="Satellites • LEO", show=True)  # [updated]
+        fg_sat_meo = folium.FeatureGroup(name="Satellites • MEO", show=True)  # [updated]
+        fg_sat_geo = folium.FeatureGroup(name="Satellites • GEO", show=True)  # [updated]
+        fg_sat_leo.add_to(m); fg_sat_meo.add_to(m); fg_sat_geo.add_to(m)      # [updated]
+
+        from folium import Marker, Icon
+        from folium.features import CustomIcon
 
         for _, sat in sat_rows.iterrows():
             geom = sat.get("geometry", {})
@@ -639,10 +685,16 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
                 rad_m  = geom.get("radius_m")
                 if (isinstance(center, (list, tuple)) and len(center) == 2
                         and pd.notna(center[0]) and pd.notna(center[1]) and rad_m and rad_m > 0):
+                    sty = (geom.get("style") or {})
                     folium.Circle(location=[float(center[1]), float(center[0])],
-                                  radius=float(rad_m),
-                                  color="#0b84f3", weight=1, fill=True, fill_opacity=0.15,
-                                  tooltip=sat.get("label","")).add_to(fg_foot)
+                          radius=float(rad_m),
+                          color=sty.get("color", "#0b84f3"),
+                          weight=int(sty.get("weight", 1)),
+                          fill=bool(sty.get("fill", True)),
+                          fill_opacity=float(sty.get("fillOpacity", 0.15)),
+                          dash_array=sty.get("dashArray"),
+                          tooltip=sat.get("label",""),
+                          popup=sat.get("popup_html")).add_to(_sat_fg_for(sat))  # [updated]
 
             # LineString (track)
             elif gtype == "LineString":
@@ -656,14 +708,40 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
                     except Exception:
                         continue
                 if len(clean) > 1:
-                    PolyLine(locations=clean, weight=2, opacity=0.6, dash_array="4,6").add_to(fg_track)
+                    sty = (geom.get("style") or {})
+                    PolyLine(locations=clean,
+                     weight=int(sty.get("weight", 1)),
+                     opacity=float(sty.get("opacity", 0.6)),
+                     color=sty.get("color", "#0b84f3"),
+                     dash_array=sty.get("dashArray", "4,6"),
+                     tooltip=sat.get("label",""),
+                     popup=sat.get("popup_html")).add_to(_sat_fg_for(sat))  # [updated]
 
             # Point (next-pass)
             elif gtype == "Point":
                 coords = geom.get("coordinates", [None, None])
+                icon_key = sat.get("icon_key")
+                icon_path = _icon_relpath_for_key(icon_key, out_path) if icon_key else None
+                target_feature_group = _sat_fg_for(sat)  # [updated]
                 if len(coords) == 2 and pd.notna(coords[0]) and pd.notna(coords[1]):
-                    Marker(location=[float(coords[1]), float(coords[0])],
-                           tooltip=str(sat.get("label","Next pass"))).add_to(fg_next)
+                    if icon_path:
+                        Marker(
+                            location=[float(coords[1]), float(coords[0])],
+                            tooltip=str(sat.get("label","Next pass")),
+                            popup=sat.get("popup_html"),
+                            icon=CustomIcon(icon_image=icon_path, icon_size=(28, 28))
+                        ).add_to(target_feature_group)
+                    else:
+                        folium.CircleMarker(
+                            location=[float(coords[1]), float(coords[0])],
+                            radius=6,
+                            weight=1,
+                            fill=True,
+                            fill_opacity=0.9,
+                            color="#0b84f3",
+                            tooltip=str(sat.get("label","Next pass")),
+                            popup=sat.get("popup_html"),
+                        ).add_to(target_feature_group)
 
         fg_foot.add_to(m); fg_track.add_to(m); fg_next.add_to(m)
 
@@ -677,6 +755,13 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
     m.save(out_path)
     logging.info(f"✅ DF-based HTML map saved: {out_path}")
     return {"site_id": site_id, "map_html_path": out_path, "status": "ok"}
+
+def _sat_fg_for(sat_dict):  # [updated]
+    st = str(sat_dict.get("sat_type") or sat_dict.get("label") or "").lower()  # [updated]
+    if "leo" in st:  return fg_sat_leo  # [updated]
+    if "meo" in st:  return fg_sat_meo  # [updated]
+    if "geo" in st:  return fg_sat_geo  # [updated]
+    return fg_sat_leo  # default                                           # [updated]
 
 
 
