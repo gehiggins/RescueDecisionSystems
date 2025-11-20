@@ -50,7 +50,7 @@ import pandas as pd, numpy as np
 
 def build_sat_overlay_df(
     alert_df: pd.DataFrame,
-    types: Tuple[str, ...] = ("LEO",),
+    types: Tuple[str, ...] = None,   # [updated] default via RDS_SAT_TYPES
     use_tle: bool = True,
     scope: str = "reporting",
     fallback_to_nearest: bool = False
@@ -87,11 +87,15 @@ def build_sat_overlay_df(
         return pd.DataFrame(columns=COLS)
 
     sat_ref = load_sat_reference()
-    if types is not None:
-        TYPE_MAP = {"LEOSAR":"LEO","GEOSAR":"GEO","MEOSAR":"MEO","LEO":"LEO","GEO":"GEO","MEO":"MEO"}
-        want = {TYPE_MAP.get(str(t).upper(), str(t).upper()) for t in types}
-        sat_ref["type_norm"] = sat_ref["type"].str.upper().map(TYPE_MAP)
-        sat_ref = sat_ref[sat_ref["type_norm"].isin(want)]
+    # [updated] allow env override: RDS_SAT_TYPES="LEO,MEO,GEO"
+    if types is None:
+        import os as _os  # [updated]
+        types = tuple(s.strip().upper() for s in _os.getenv("RDS_SAT_TYPES","LEO,MEO,GEO").split(",") if s.strip())  # [updated]
+    if types:
+        TYPE_MAP = {"LEOSAR":"LEO","GEOSAR":"GEO","MEOSAR":"MEO","LEO":"LEO","GEO":"GEO","MEO":"MEO"}  # [updated]
+        want = {TYPE_MAP.get(str(t).upper(), str(t).upper()) for t in types}  # [updated]
+        sat_ref["type_norm"] = sat_ref["type"].str.upper().map(TYPE_MAP)  # [updated]
+        sat_ref = sat_ref[sat_ref["type_norm"].isin(want)]  # [updated]
 
     row = resolve_reporting_sat(alert_df)
 
@@ -178,17 +182,19 @@ def build_sat_overlay_df(
         la = float(alert_df.iloc[0].get("alert_lat_dd"))
         lo = float(alert_df.iloc[0].get("alert_lon_dd"))
         exclude = set([int(x) for x in overlay["norad_id"].dropna().astype(int).tolist()])
-        show_all = os.getenv("RDS_SAT_SHOW_ALL_VISIBLE", "0") == "1"
-        nearby_top_n = int(os.getenv("RDS_SAT_TOPN_NEARBY", "6"))
+        import os as _os  # [updated]
+        nearby_top_n = int(_os.getenv("RDS_SAT_TOPN_NEARBY","6"))  # [updated]
+        show_all = _os.getenv("RDS_SAT_SHOW_ALL_VISIBLE","0") == "1"  # [updated]
+        max_cand = int(_os.getenv("RDS_SAT_MAX_CANDIDATES","256"))  # [updated]
         extra.append(_visible_candidates(la, lo, at_time_utc, exclude_norad=exclude,
-                                         max_candidates=int(os.getenv("RDS_SAT_MAX_CANDIDATES","256")),
+                                         max_candidates=max_cand,
                                          top_n=(10**9 if show_all else nearby_top_n)))
 
         # [fixed] upcoming pass search — must be inside the same try:
-        max_hours = float(os.getenv("RDS_SAT_MAX_HOURS", "12"))
-        upcoming_top_n = int(os.getenv("RDS_SAT_TOPN_UPCOMING", "4"))
+        max_hours = float(_os.getenv("RDS_SAT_MAX_HOURS", "12"))
+        upcoming_top_n = int(_os.getenv("RDS_SAT_TOPN_UPCOMING", "4"))
         extra.append(_upcoming_passes(la, lo, at_time_utc, exclude_norad=exclude,
-                                      max_candidates=int(os.getenv("RDS_SAT_MAX_CANDIDATES","256")),
+                                      max_candidates=max_cand,
                                       top_n=upcoming_top_n))
     except Exception as _e:
         pass
@@ -209,6 +215,37 @@ def build_sat_overlay_df(
         try:
             outp = Path("data/overlays") / f"{alert_df.iloc[0]['alert_id']}_sat_overlay.parquet"
             outp.parent.mkdir(parents=True, exist_ok=True)
+
+            # --- SAT TYPE + ICON NORMALIZATION (before dump/return) ---------------------  # [updated]
+            import numpy as _np  # [updated]
+            import pandas as _pd  # [updated]
+            TYPE_MAP = {"LEOSAR":"LEO","MEOSAR":"MEO","GEOSAR":"GEO","LEO":"LEO","MEO":"MEO","GEO":"GEO"}  # [updated]
+
+            if "sat_type" not in overlay.columns:  # [updated]
+                overlay["sat_type"] = _pd.NA  # [updated]
+
+            # fill from type_norm, then from type mapping (if present)  # [updated]
+            if "type_norm" in overlay.columns:
+                overlay["sat_type"] = overlay["sat_type"].fillna(overlay["type_norm"])  # [updated]
+            if "type" in overlay.columns:
+                overlay["sat_type"] = overlay["sat_type"].fillna(overlay["type"].astype(str).str.upper().map(lambda x: TYPE_MAP.get(x, x)))  # [updated]
+
+            # derive from altitude where still missing  # [updated]
+            if "alt_km" in overlay.columns:
+                _m = overlay["sat_type"].isna() & overlay["alt_km"].notna()  # [updated]
+                overlay.loc[_m, "sat_type"] = _np.where(overlay.loc[_m, "alt_km"] > 15000, "GEO",
+                                             _np.where(overlay.loc[_m, "alt_km"] > 2000, "MEO", "LEO"))  # [updated]
+
+            overlay["sat_type"] = overlay["sat_type"].fillna("LEO").str.upper()  # [updated]
+
+            # icon_key for renderer (maps to sat_* icons)  # [updated]
+            if "icon_key" not in overlay.columns:
+                overlay["icon_key"] = _pd.NA  # [updated]
+            overlay.loc[overlay["sat_type"]=="LEO","icon_key"] = "sat_leo"  # [updated]
+            overlay.loc[overlay["sat_type"]=="MEO","icon_key"] = "sat_meo"  # [updated]
+            overlay.loc[overlay["sat_type"]=="GEO","icon_key"] = "sat_geo"  # [updated]
+            # -----------------------------------------------------------------------------  # [updated]
+
             overlay.to_parquet(outp, index=False)
         except Exception as e:
             LOG.warning(f"[SAT] parquet dump skipped: {e}")
@@ -278,9 +315,13 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     return 2*r*math.asin(math.sqrt(a))
 
 def _fallback_nearest_leo(alert_lat, alert_lon, at_time_utc, max_candidates=12, top_n=3):
+    # [updated] honor RDS_SAT_TYPES (default "LEO")
     ref = load_sat_reference()
-    cand = ref[ref["type"].str.upper().isin(["LEO","LEOSAR"])]
-    cand = cand[pd.notna(cand["norad_id"])].copy()
+    import os as _os  # [updated]
+    _types = tuple(s.strip().upper() for s in _os.getenv("RDS_SAT_TYPES","LEO").split(",") if s.strip())  # [updated]
+    TYPE_MAP = {"LEOSAR":"LEO","MEOSAR":"MEO","GEOSAR":"GEO"}  # [updated]
+    ref["type_norm"] = ref["type"].str.upper().map(lambda x: TYPE_MAP.get(x, x))  # [updated]
+    cand = ref[ref["type_norm"].isin(_types) & pd.notna(ref["norad_id"])] .copy()  # [updated]
     if cand.empty: 
         return pd.DataFrame()
     catnrs = [str(int(x)) for x in cand["norad_id"].head(max_candidates).tolist()]
@@ -298,7 +339,8 @@ def _fallback_nearest_leo(alert_lat, alert_lon, at_time_utc, max_candidates=12, 
                 "footprint_radius_km": np.nan,  # filled later
                 "tle_epoch_utc": pd.to_datetime(t.get("epoch_utc"), utc=True, errors="coerce"),
                 "tle_age_hours": np.nan,
-                "source": "fallback:nearest-LEO",
+                "sat_type": (str(ref.loc[ref["norad_id"]==t.get("norad_id"), "type_norm"].iloc[0]) if not ref.empty else None),  # [updated]
+                "source": "fallback:nearest",  # [updated]
                 "track_coords": None,
                 "track_start_utc": None,
                 "track_end_utc": None,
@@ -351,7 +393,11 @@ def _visible_candidates(alert_lat: float, alert_lon: float, at_time_utc: pd.Time
                         exclude_norad: set[int], max_candidates: int = 32, top_n: int = 3) -> pd.DataFrame:
     """Pick LEOs whose footprint contains the alert point at alert time (no detect)."""
     ref = load_sat_reference()
-    cand = ref[ref["type"].str.upper().isin(["LEO","LEOSAR"]) & pd.notna(ref["norad_id"])].copy()
+    import os as _os  # [updated]
+    _mode_types = [s.strip().upper() for s in _os.getenv("RDS_SAT_TYPES","LEO").split(",") if s.strip()]  # [updated]
+    TYPE_MAP = {"LEOSAR":"LEO","MEOSAR":"MEO","GEOSAR":"GEO"}  # [updated]
+    ref["type_norm"] = ref["type"].str.upper().map(lambda x: TYPE_MAP.get(x, x))  # [updated]
+    cand = ref[ref["type_norm"].isin(_mode_types) & pd.notna(ref["norad_id"])] .copy()  # [updated]
     if cand.empty:
         return pd.DataFrame()
     catnrs = [str(int(x)) for x in cand["norad_id"].tolist()][:max_candidates]
@@ -391,7 +437,11 @@ def _upcoming_passes(alert_lat: float, alert_lon: float, at_time_utc: pd.Timesta
                      max_candidates: int = 64, top_n: int = 2) -> pd.DataFrame:
     """Find next pass within window; center footprint at pass time, add next_pass_marker."""
     ref = load_sat_reference()
-    cand = ref[ref["type"].str.upper().isin(["LEO","LEOSAR"]) & pd.notna(ref["norad_id"])].copy()
+    import os as _os  # [updated]
+    _mode_types = [s.strip().upper() for s in _os.getenv("RDS_SAT_TYPES","LEO").split(",") if s.strip()]  # [updated]
+    TYPE_MAP = {"LEOSAR":"LEO","MEOSAR":"MEO","GEOSAR":"GEO"}  # [updated]
+    ref["type_norm"] = ref["type"].str.upper().map(lambda x: TYPE_MAP.get(x, x))  # [updated]
+    cand = ref[ref["type_norm"].isin(_mode_types) & pd.notna(ref["norad_id"])] .copy()  # [updated]
     if cand.empty:
         return pd.DataFrame()
     catnrs = [str(int(x)) for x in cand["norad_id"].tolist()][:max_candidates]

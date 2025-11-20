@@ -669,15 +669,15 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
         fg_sat_meo = folium.FeatureGroup(name="Satellites • MEO", show=True)  # [updated]
         fg_sat_geo = folium.FeatureGroup(name="Satellites • GEO", show=True)  # [updated]
         fg_sat_leo.add_to(m); fg_sat_meo.add_to(m); fg_sat_geo.add_to(m)      # [updated]
-        def _sat_fg_for(sat_dict):
-            st = str(sat_dict.get("sat_type") or sat_dict.get("label") or "").lower()
+
+        from folium import Marker, Icon
+        from folium.features import CustomIcon
+        def _sat_fg_for(sat):
+            st = str(sat.get("sat_type") or sat.get("label") or "").lower()
             if "leo" in st:  return fg_sat_leo
             if "meo" in st:  return fg_sat_meo
             if "geo" in st:  return fg_sat_geo
             return fg_sat_leo  # default
-
-        from folium import Marker, Icon
-        from folium.features import CustomIcon
 
         for _, sat in sat_rows.iterrows():
             geom = sat.get("geometry", {})
@@ -700,7 +700,10 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
                           fill_opacity=float(sty.get("fillOpacity", 0.15)),
                           dash_array=sty.get("dashArray"),
                           tooltip=sat.get("label",""),
-                          popup=sat.get("popup_html")).add_to(_sat_fg_for(sat))  # [updated]
+                          popup=sat.get("popup_html")).add_to(
+                        fg_sat_leo if "leo" in str(sat.get("sat_type") or sat.get("label") or "").lower()
+                        else (fg_sat_meo if "meo" in str(sat.get("sat_type") or "").lower() else fg_sat_geo)
+                    )  # [updated]
 
             # LineString (track)
             elif gtype == "LineString":
@@ -721,16 +724,16 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
                      color=sty.get("color", "#0b84f3"),
                      dash_array=sty.get("dashArray", "4,6"),
                      tooltip=sat.get("label",""),
-                     popup=sat.get("popup_html")).add_to(_sat_fg_for(sat))  # [updated]
+                     popup=sat.get("popup_html")).add_to(
+                        fg_sat_leo if "leo" in str(sat.get("sat_type") or sat.get("label") or "").lower()
+                        else (fg_sat_meo if "meo" in str(sat.get("sat_type") or "").lower() else fg_sat_geo)
+                    )  # [updated]
 
             # Point (next-pass)
             elif gtype == "Point":
                 coords = geom.get("coordinates", [None, None])
                 icon_key = sat.get("icon_key")
                 icon_path = _icon_relpath_for_key(icon_key, out_path) if icon_key else None
-                # Route SAT points to orbit type group (LEO/MEO/GEO)  # [updated]
-                st = str(sat.get("sat_type") or sat.get("label") or "").lower()  # [updated]
-                target_feature_group = fg_sat_leo if "leo" in st else (fg_sat_meo if "meo" in st else fg_sat_geo)  # [updated]
                 if len(coords) == 2 and pd.notna(coords[0]) and pd.notna(coords[1]):
                     if icon_path:
                         Marker(
@@ -738,7 +741,10 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
                             tooltip=str(sat.get("label","Next pass")),
                             popup=sat.get("popup_html"),
                             icon=CustomIcon(icon_image=icon_path, icon_size=(28, 28))
-                        ).add_to(target_feature_group)
+                        ).add_to(
+                            fg_sat_leo if "leo" in str(sat.get("sat_type") or sat.get("label") or "").lower()
+                            else (fg_sat_meo if "meo" in str(sat.get("sat_type") or "").lower() else fg_sat_geo)
+                        )  # [updated]
                     else:
                         folium.CircleMarker(
                             location=[float(coords[1]), float(coords[0])],
@@ -749,7 +755,10 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
                             color="#0b84f3",
                             tooltip=str(sat.get("label","Next pass")),
                             popup=sat.get("popup_html"),
-                        ).add_to(target_feature_group)
+                        ).add_to(
+                            fg_sat_leo if "leo" in str(sat.get("sat_type") or sat.get("label") or "").lower()
+                            else (fg_sat_meo if "meo" in str(sat.get("sat_type") or "").lower() else fg_sat_geo)
+                        )  # [updated]
 
         fg_foot.add_to(m); fg_track.add_to(m); fg_next.add_to(m)
 

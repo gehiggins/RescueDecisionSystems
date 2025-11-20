@@ -392,10 +392,15 @@ def build_gis_map_inputs_df(
 
         import os
         _test_norad = os.getenv("RDS_SAT_TEST_NORAD")
+
         if _test_norad and _test_norad.isdigit():
             _alert.loc[0, 'norad_id'] = int(_test_norad)
 
-        _sat_df = build_sat_overlay_df(_alert, types=("LEO",), use_tle=True, fallback_to_nearest=True)
+        # UPDATED: honor RDS_SAT_TYPES instead of hard-coding LEO  # [updated]
+        types_env = (os.getenv("RDS_SAT_TYPES","LEO") or "LEO").split(",")  # [updated]
+        _sat_df = build_sat_overlay_df(_alert,  # [updated]
+                               types=tuple(t.strip().upper() for t in types_env if t.strip()),  # [updated]
+                               use_tle=True, fallback_to_nearest=True)  # [updated]
 
         if _sat_df is not None and not _sat_df.empty:
             # Footprint circle (guardrail: require center + radius)
@@ -419,21 +424,23 @@ def build_gis_map_inputs_df(
                         "lat_dd": float(lat),
                         "lon_dd": float(lon),
                         "footprint_radius_km": float(rad_km),
-                        "icon_key": _icon_key_for_sat(r),                                   # [updated]
-                        "sat_type": (str(r.get("sat_type") or r.get("type") or "")).lower(),# [updated]
+                        "icon_key": _icon_key_for_sat(r),
+                        "sat_type": (str(r.get("sat_type") or r.get("type") or "")).lower(),  # [updated]
                     })
 
-                    # Subpoint marker at footprint center (always show a SAT icon)           # [updated]
-                    rows.append({                                                            # [updated]
-                        "site_id": site_id,                                                  # [updated]
-                        "layer": "satellite_overlay",                                        # [updated]
-                        "geom_type": "Point",                                                # [updated]
-                        "geometry": {"type": "Point", "coordinates": [float(lon), float(lat)]},  # [updated]
-                        "label": f"{r.get('sat_name','SAT')} – subpoint",                    # [updated]
-                        "popup_html": r.get("popup_html"),                                   # [updated]
-                        "icon_key": _icon_key_for_sat(r),                                    # [updated]
-                        "sat_type": (str(r.get("sat_type") or r.get("type") or "")).lower(), # [updated]
-                    })                                                               # [updated]
+                    # Subpoint marker at footprint center (always show a SAT icon/marker)  # [updated]
+                    rows.append({
+                        "site_id": site_id,
+                        "layer": "satellite_overlay",
+                        "geom_type": "Point",
+                        "geometry": {"type": "Point", "coordinates": [float(lon), float(lat)]},
+                        "label": f"{r.get('sat_name','SAT')} – subpoint",
+                        "popup_html": r.get("popup_html"),
+                        "icon_key": _icon_key_for_sat(r),
+                        "lat_dd": float(lat), "lon_dd": float(lon),
+                        "footprint_radius_km": None,
+                        "sat_type": (str(r.get("sat_type") or r.get("type") or "")).lower(),  # [updated]
+                    })
 
                 # Short forward track
                 _track = r.get("track_coords")
@@ -464,23 +471,25 @@ def build_gis_map_inputs_df(
                             "sat_type": (str(r.get("sat_type") or r.get("type") or "")).lower(),  # [updated]
                         })
 
-                # Next-pass marker
-                npm = r.get("next_pass_marker")
-                if isinstance(npm, dict) and isinstance(npm.get("coordinates"), (list, tuple)) and len(npm["coordinates"]) == 2 and all(pd.notna(v) for v in npm["coordinates"]):
+                # Next-pass marker (prefer npm['coordinates'] if present)
+                npm = r.get("next_pass_marker") or {}
+                coords = npm.get("coordinates")
+                if isinstance(coords, (list, tuple)) and len(coords) == 2 and all(pd.notna(v) for v in coords):
+                    _sat_type = (str(r.get("sat_type") or r.get("type") or "")).lower()
+                    _icon_key = "sat_geo" if "geo" in _sat_type else ("sat_meo" if "meo" in _sat_type else "sat_leo")
                     rows.append({
                         "site_id": site_id,
                         "layer": "satellite_overlay",
                         "geom_type": "Point",
-                        "geometry": {"type": "Point", "coordinates": [float(npm["coordinates"][0]), float(npm["coordinates"][1])]},
+                        "geometry": {"type": "Point", "coordinates": [float(coords[0]), float(coords[1])]},
                         "label": "Next pass",
                         "popup_html": r.get("popup_html"),
                         "style_hint": {"icon": "pin"},
-                        # keep columns present for renderer:
-                        "lat_dd": float(npm["coordinates"][1]),
-                        "lon_dd": float(npm["coordinates"][0]),
-                        "icon_key": _icon_key_for_sat(r),
+                        "lat_dd": float(coords[1]),
+                        "lon_dd": float(coords[0]),
                         "footprint_radius_km": None,
-                        "sat_type": (str(r.get("sat_type") or r.get("type") or "")).lower(),  # [updated]
+                        "icon_key": _icon_key,
+                        "sat_type": _sat_type,
                     })
     except Exception as _sat_e:
         LOG.warning(f"[SAT] overlay inject skipped: {_sat_e}")
