@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from app import wx_fetch_meteostat
 
@@ -87,6 +88,34 @@ def test_meteostat_rejects_invalid_time_window_without_station_lookup(monkeypatc
         37.5,
         -75.5,
         "invalid",
+        "2026-10-20T12:00:00Z",
+    )
+
+    assert result.empty
+    assert "valid_utc" in result.columns
+
+
+@pytest.mark.parametrize(
+    ("latitude", "longitude"),
+    [("bad", -75.5), (91.0, -75.5), (37.5, -181.0), (float("nan"), 0.0)],
+)
+def test_meteostat_rejects_invalid_coordinates_without_station_lookup(
+    monkeypatch, latitude, longitude
+):
+    monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
+    monkeypatch.setattr(
+        wx_fetch_meteostat,
+        "Stations",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("station provider called with invalid coordinates")
+        ),
+        raising=False,
+    )
+
+    result = wx_fetch_meteostat.fetch_meteostat_obs_near(
+        latitude,
+        longitude,
+        "2026-10-20T12:00:00Z",
         "2026-10-20T12:00:00Z",
     )
 

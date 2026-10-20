@@ -44,6 +44,20 @@ def fetch_meteostat_obs_near(lat: float, lon: float, start_utc, end_utc,
     ]
     out = pd.DataFrame(columns=cols)
 
+    try:
+        lat, lon = float(lat), float(lon)
+    except (TypeError, ValueError):
+        LOG.warning("Meteostat fetch skipped because coordinates are invalid")
+        return out
+    if (
+        not np.isfinite(lat)
+        or not np.isfinite(lon)
+        or not -90.0 <= lat <= 90.0
+        or not -180.0 <= lon <= 180.0
+    ):
+        LOG.warning("Meteostat fetch skipped because coordinates are invalid")
+        return out
+
     if not _HAS_METEOSTAT:
         LOG.info("Meteostat not installed; skipping.")
         return out
