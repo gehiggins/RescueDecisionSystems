@@ -4,7 +4,9 @@ Status: current
 
 Reviewed against code: 2026-10-19
 
-Baseline: `main` commit `10e41ddb54e85ab17543f339137f7f1da2d78f26`
+Last verified maintenance update: 2026-10-20
+
+Baseline: `main` commit `b4c626a6b87914c8e7532fae6582a0a8f046f818`
 
 This index separates documentation that was checked against the repository from
 historical drafts and external reference material. A review date means the
@@ -81,6 +83,7 @@ Use annotated tags for recoverable whole-repository snapshots:
   preserves the entire repository, while `docs/archive/` provides a browsable
   home for superseded document files.
 
-This cleanup intentionally does not create `archive/2026-10-19`: the work is
-still in a pull request. The first tag under this policy should be created on
-`main` after the pull request is reviewed and merged.
+The annotated `archive/2026-10-19` tag is the first snapshot under this policy.
+It points to the merge of the initial documentation reconciliation and remains
+the historical anchor for that review; subsequent repairs remain in normal Git
+history and do not move the tag.
