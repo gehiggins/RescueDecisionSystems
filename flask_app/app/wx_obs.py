@@ -77,6 +77,48 @@ _WX_OBS_COLS = [
     "sst_c","name","owner","deployment_notes"
 ]
 
+_DEFAULT_RADIUS_KM = 50.0
+_DEFAULT_MAX_STATIONS = 5
+
+
+def _normalize_search_parameters(radius_km, max_stations):
+    """Return safe provider-search values while preserving policy-driven ``None``."""
+    normalized_radius = radius_km
+    if radius_km is not None:
+        try:
+            normalized_radius = float(radius_km)
+        except (TypeError, ValueError):
+            normalized_radius = float("nan")
+        if not math.isfinite(normalized_radius) or normalized_radius <= 0:
+            LOG.warning(
+                "Invalid weather radius_km=%r; using default %.1f",
+                radius_km,
+                _DEFAULT_RADIUS_KM,
+            )
+            normalized_radius = _DEFAULT_RADIUS_KM
+
+    normalized_max_stations = max_stations
+    if max_stations is not None:
+        try:
+            numeric_max_stations = float(max_stations)
+        except (TypeError, ValueError):
+            numeric_max_stations = float("nan")
+        if (
+            not math.isfinite(numeric_max_stations)
+            or numeric_max_stations < 1
+            or not numeric_max_stations.is_integer()
+        ):
+            LOG.warning(
+                "Invalid weather max_stations=%r; using default %s",
+                max_stations,
+                _DEFAULT_MAX_STATIONS,
+            )
+            normalized_max_stations = _DEFAULT_MAX_STATIONS
+        else:
+            normalized_max_stations = int(numeric_max_stations)
+
+    return normalized_radius, normalized_max_stations
+
 def _empty_wx_obs() -> pd.DataFrame:
     return pd.DataFrame(columns=_WX_OBS_COLS)
 
@@ -87,6 +129,10 @@ def build_wx_obs_for_area(ref_points: list[tuple[float,float]],
                           include_marine: bool = True) -> pd.DataFrame:
     if not ref_points:
         return _empty_wx_obs()
+
+    radius_km, max_stations = _normalize_search_parameters(
+        radius_km, max_stations
+    )
 
     valid_ref_points = []
     rejected_points = 0
