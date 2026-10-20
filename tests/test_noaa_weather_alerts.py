@@ -205,3 +205,46 @@ def test_compatibility_alert_fetch_skips_nullable_or_non_text_headlines(
 
     assert zone_url.endswith("/VAZ099")
     assert headlines == ["Coastal Flood Advisory"]
+
+
+@pytest.mark.parametrize("properties", [None, [], pd.NA, "unexpected"])
+def test_shared_alert_fetcher_rejects_malformed_point_properties(
+    monkeypatch, properties
+):
+    calls = []
+
+    def get(_url, **_kwargs):
+        calls.append(_url)
+        return _Response({"properties": properties})
+
+    monkeypatch.setattr(fetcher_noaa_weather_alerts.requests, "get", get)
+
+    result = fetcher_noaa_weather_alerts.fetch_weather_alert_features(37.76, -75.5)
+
+    assert result == (None, None, [])
+    assert len(calls) == 1
+
+
+def test_structured_alert_fetch_preserves_empty_schema(monkeypatch):
+    responses = iter(
+        [
+            _Response(
+                {
+                    "properties": {
+                        "forecastZone": "https://api.weather.gov/zones/forecast/VAZ099"
+                    }
+                }
+            ),
+            _Response({"features": []}),
+        ]
+    )
+    monkeypatch.setattr(
+        fetcher_noaa_weather_alerts.requests,
+        "get",
+        lambda *_args, **_kwargs: next(responses),
+    )
+
+    result = fetcher_noaa_weather_alerts.fetch_weather_alerts_zone(37.76, -75.5)
+
+    assert result.empty
+    assert result.columns.tolist() == fetcher_noaa_weather_alerts.NOAA_ALERT_COLUMNS
