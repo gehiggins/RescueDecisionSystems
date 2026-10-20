@@ -229,6 +229,34 @@ def test_process_alert_returns_json_when_request_body_is_too_large():
     )
 
 
+def test_request_body_limit_accepts_integer_text():
+    application = create_app({"TESTING": True, "MAX_CONTENT_LENGTH": "32"})
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "x" * 64}
+    )
+
+    assert application.config["MAX_CONTENT_LENGTH"] == 32
+    assert response.status_code == 413
+    assert response.get_json()["error"] == (
+        "Request is too large to process as a SARSAT alert."
+    )
+
+
+@pytest.mark.parametrize(
+    "invalid_limit", [None, False, 0, -1, 2.5, float("inf"), "bad"]
+)
+def test_request_body_limit_falls_back_from_invalid_setting(
+    caplog, invalid_limit
+):
+    application = create_app(
+        {"TESTING": True, "MAX_CONTENT_LENGTH": invalid_limit}
+    )
+
+    assert application.config["MAX_CONTENT_LENGTH"] == 256 * 1024
+    assert "Invalid MAX_CONTENT_LENGTH" in caplog.text
+
+
 def test_process_alert_returns_active_parser_shape(monkeypatch, tmp_path):
     application = create_app(
         {"TESTING": True, "RDS_MAPS_DIR": str(tmp_path / "maps")}
