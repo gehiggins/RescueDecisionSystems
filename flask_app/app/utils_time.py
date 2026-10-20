@@ -41,9 +41,19 @@ def ensure_utc(ts) -> Optional[pd.Timestamp]:
     Mirrors the proven logic used in the Meteostat path so downstream code
     can rely on consistent semantics.
     """
-    t = pd.to_datetime(ts, errors="coerce")
+    if not pd.api.types.is_scalar(ts):
+        return None
+    try:
+        t = pd.to_datetime(ts, errors="coerce")
+    except (TypeError, ValueError):
+        return None
+    # This helper is intentionally scalar. Treat array-like inputs as invalid
+    # instead of triggering ambiguous truth-value errors in the NaT check.
+    if not isinstance(t, (pd.Timestamp, datetime)):
+        return None
     if t is None or pd.isna(t):
         return None
+    t = pd.Timestamp(t)
     if getattr(t, "tzinfo", None) is None:
         return t.tz_localize("UTC")
     return t.tz_convert("UTC")
@@ -67,11 +77,10 @@ def ensure_utc_index(idx: pd.Index) -> pd.DatetimeIndex:
     Convert any datetime-like index to tz-aware UTC DatetimeIndex.
     Non-datetime indexes are attempted via to_datetime(coerce).
     """
-    dt = pd.to_datetime(idx, errors="coerce")
-    if getattr(dt, "tz", None) is None:
-        dt = dt.tz_localize("UTC")
-    else:
-        dt = dt.tz_convert("UTC")
+    # ``utc=True`` handles naive, aware, and mixed-offset values in one pass.
+    # Without it, daylight-saving transitions can produce an object index that
+    # has no tz_localize/tz_convert methods.
+    dt = pd.to_datetime(idx, errors="coerce", utc=True)
     return pd.DatetimeIndex(dt)
 
 
@@ -121,10 +130,12 @@ def clamp_index_to_range(idx: pd.DatetimeIndex,
     if idx.tz is None or str(idx.tz) != "UTC":
         idx = ensure_utc_index(idx)
     mask = pd.Series(True, index=idx)
+    start_utc = ensure_utc(start_utc)
+    end_utc = ensure_utc(end_utc)
     if start_utc is not None:
-        mask &= idx >= pd.Timestamp(start_utc)
+        mask &= idx >= start_utc
     if end_utc is not None:
-        mask &= idx <= pd.Timestamp(end_utc)
+        mask &= idx <= end_utc
     return idx[mask.values]
 
 
@@ -148,8 +159,8 @@ def window_slice(df: pd.DataFrame,
     df = df.copy()
     df.index = ensure_utc_index(df.index)
 
-    s = pd.Timestamp(start_utc) if start_utc is not None else None
-    e = pd.Timestamp(end_utc) if end_utc is not None else None
+    s = ensure_utc(start_utc)
+    e = ensure_utc(end_utc)
 
     if s is not None:
         df = df[df.index >= s]
