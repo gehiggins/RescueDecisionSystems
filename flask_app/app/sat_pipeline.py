@@ -34,6 +34,7 @@
 
 from app.setup_imports import *
 from datetime import datetime, timezone
+from html import escape as html_escape
 from typing import Optional, Tuple
 import logging
 import math
@@ -537,9 +538,11 @@ def _sat_role_style(role: str) -> str:
     return {"reported": "solid", "nearby_not_detected": "outline", "upcoming": "dashed"}.get(role, "solid")
 
 def _build_sat_popup(row: dict) -> str:
-    nm = str(row.get("sat_name") or "Unknown")
+    # Satellite names originate in provider/reference data. Escape display
+    # values while retaining the small amount of markup created here.
+    nm = html_escape(str(row.get("sat_name") or "Unknown"), quote=True)
     nid = row.get("norad_id")
-    role = str(row.get("role") or "")
+    role = html_escape(str(row.get("role") or ""), quote=True)
     tle_epoch = row.get("tle_epoch_utc")
     tle_age = row.get("tle_age_hours")
     nxt = row.get("next_pass_marker") or {}
