@@ -338,6 +338,31 @@ def test_weather_pipeline_preserves_usable_per_point_policy_metadata(monkeypatch
     assert captured["include_marine"] is None
 
 
+def test_weather_pipeline_rejects_numpy_boolean_policy_metadata(monkeypatch):
+    captured = {}
+
+    def capture_targets(**kwargs):
+        captured.update(kwargs)
+        return _station_observation()
+
+    monkeypatch.setattr(wx_pipeline, "build_wx_obs_for_area", capture_targets)
+    targets = pd.DataFrame(
+        [
+            {
+                "lat": 37.5,
+                "lon": -75.5,
+                "error_radius_km": np.bool_(True),
+                "coast_distance_km": np.bool_(False),
+            }
+        ]
+    )
+
+    result = wx_pipeline.run_wx_pipeline(targets, include_marine=None)
+
+    assert result["source_id"].tolist() == ["TEST-STATION"]
+    assert captured["ref_points"] == [{"lat": 37.5, "lon": -75.5}]
+
+
 def test_weather_pipeline_applies_existing_marine_policy_per_point(monkeypatch):
     captured = []
 
@@ -665,7 +690,9 @@ def test_weather_context_normalizes_numeric_text_distance(
     assert context.zone == expected_zone
 
 
-@pytest.mark.parametrize("invalid", ["bad", -1, float("nan"), float("inf"), True])
+@pytest.mark.parametrize(
+    "invalid", ["bad", -1, float("nan"), float("inf"), True, np.bool_(True)]
+)
 def test_weather_context_treats_invalid_optional_distance_as_unknown(invalid):
     context = classify_zone_context(
         lat=37.5,
@@ -694,6 +721,7 @@ def test_weather_context_normalizes_numeric_text_coordinates():
         (float("nan"), -75.5),
         (37.5, float("inf")),
         (True, -75.5),
+        (np.bool_(True), -75.5),
         (91, -75.5),
         (37.5, -181),
     ],
