@@ -60,6 +60,10 @@ database; alert sequence numbering then starts from an empty local history.
 Live weather and TLE retrieval require outbound internet access. Production
 deployment configuration is intentionally outside this installation check.
 
+`RDS_SAT_REQUEST_TIMEOUT_SECONDS` optionally controls the per-request
+CelesTrak timeout. It defaults to 10 seconds; invalid, non-finite, zero, or
+negative values fall back to that default.
+
 ## Continuous verification
 
 GitHub Actions runs the supported Python 3.9 and Python 3.11 installations,
