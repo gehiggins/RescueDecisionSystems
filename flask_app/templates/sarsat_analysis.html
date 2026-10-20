@@ -144,9 +144,14 @@ document.getElementById("sarsat-form").addEventListener("submit", function (even
     })
     .then(data => {
         if (data.success) {
+            const parsedAlert = data.parsed_data?.[0] || {};
+            const hasPositionA = parsedAlert.latitude_a != null && parsedAlert.longitude_a != null;
+            const hasPositionB = parsedAlert.latitude_b != null && parsedAlert.longitude_b != null;
             // A returned map URL is authoritative. The server may validly use
             // position B or a generated site identifier when A/site ID is absent.
-            if (data.map_url) {
+            // Do not present the renderer's fallback center as an alert location
+            // when the parser found no usable position at all.
+            if (data.map_url && (hasPositionA || hasPositionB)) {
                 // The server owns the output path; the browser only consumes the returned URL.
                 let mapUrl = data.map_url;
                 
