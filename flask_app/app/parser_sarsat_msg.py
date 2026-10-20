@@ -8,6 +8,29 @@ import re
 
 print("ðŸ“¦ LOADED: parser_sarsat_msg.py from flask_app/app")
 
+
+def _parse_detect_time(message_text):
+    """Parse the explicit DATE/TIME DETECTED fields as a UTC timestamp."""
+    date_match = re.search(
+        r"DATE\s+DETECTED\s*:\s*(\d{1,2}\s+[A-Z]{3}\s+\d{4})",
+        message_text,
+        re.IGNORECASE,
+    )
+    time_match = re.search(
+        r"TIME\s+DETECTED\s*:\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*UTC",
+        message_text,
+        re.IGNORECASE,
+    )
+    if not date_match or not time_match:
+        return None
+
+    detected = pd.to_datetime(
+        f"{date_match.group(1)} {time_match.group(1)}",
+        utc=True,
+        errors="coerce",
+    )
+    return None if pd.isna(detected) else detected
+
 def parse_sarsat_message(message_text, pre_scan_results=None):
     """
     Parses a SARSAT message and extracts key data fields.
@@ -34,7 +57,11 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
 
         # --- Header parse for SITE ID and BEACON ID ---
         site_id_match = re.search(r"SITE\s*ID\s*:\s*([0-9]{1,10})", message_text, re.IGNORECASE)
-        beacon_id_match = re.search(r"BEACON\s*ID\s*:\s*([A-Za-z0-9\-\s]+)", message_text, re.IGNORECASE)
+        beacon_id_match = re.search(
+            r"BEACON\s*ID\s*:\s*(.+?)(?=\s+SITE\s*ID\s*:|[\r\n]|$)",
+            message_text,
+            re.IGNORECASE,
+        )
         if site_id_match:
             parsed_data["site_id"] = str(site_id_match.group(1)).strip()
         if beacon_id_match:
@@ -109,7 +136,11 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
         if 'site_id' in pre_scan_results.columns:
             parsed_data['site_id'] = pre_scan_results['site_id'].iloc[0]
         if 'detect_time' in pre_scan_results.columns:
-            parsed_data['detect_time'] = pre_scan_results['detect_time'].iloc[0]
+            pre_scanned_detect_time = pre_scan_results['detect_time'].iloc[0]
+            if pd.notna(pre_scanned_detect_time):
+                parsed_data['detect_time'] = pre_scanned_detect_time
+        if parsed_data['detect_time'] is None:
+            parsed_data['detect_time'] = _parse_detect_time(message_text)
         if 'position_method' in pre_scan_results.columns:
             parsed_data['position_method'] = pre_scan_results['position_method'].iloc[0]
         if 'position_resolution' in pre_scan_results.columns:
