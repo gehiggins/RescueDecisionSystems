@@ -290,6 +290,51 @@ def test_renderer_skips_malformed_image_overlay_path(tmp_path, image_path):
     assert "Malformed coverage image" not in html
 
 
+@pytest.mark.parametrize("overlay_name", [[], {"name": "bad"}, ["a", "b"]])
+def test_renderer_handles_malformed_image_overlay_name(
+    tmp_path, overlay_name
+):
+    image_path = tmp_path / "coverage.png"
+    image_path.write_bytes(
+        base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+            "/x8AAusB9Wl2nWQAAAAASUVORK5CYII="
+        )
+    )
+    output_path = tmp_path / "map.html"
+    inputs = pd.DataFrame(
+        [
+            {
+                "site_id": "TEST",
+                "layer": "satellite_overlay",
+                "geometry": {
+                    "type": "ImageOverlay",
+                    "image_path": str(image_path),
+                    "bounds": [[35.0, -78.0], [40.0, -72.0]],
+                    "name": overlay_name,
+                },
+                "label": "Coverage fallback",
+            }
+        ]
+    )
+
+    result = generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row={
+            "site_id": "TEST",
+            "position_lat_dd_a": 37.5,
+            "position_lon_dd_a": -75.0,
+        },
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["status"] == "ok"
+    assert "Satellite imagery" in html
+    assert "data:image/png;base64" in html
+    assert "bad" not in html
+
+
 def test_renderer_skips_image_overlay_with_reversed_bounds(tmp_path):
     image_path = tmp_path / "coverage.png"
     image_path.write_bytes(
