@@ -522,8 +522,8 @@ def _upcoming_passes(alert_lat: float, alert_lon: float, at_time_utc: pd.Timesta
                 continue
             # --- [fixed] upcoming pass search — must be inside the same try:
             marker = find_next_pass_marker(t["tle_line1"], t["tle_line2"],
-                                           target_point=(float(alert_lat), float(alert_lon)),
-                                           start_time=at_time_utc.to_pydatetime(),
+                                           alert_latlon=(float(alert_lat), float(alert_lon)),
+                                           start_utc=at_time_utc.to_pydatetime(),
                                            max_hours=float(max_hours))
             if not marker:
                 continue
