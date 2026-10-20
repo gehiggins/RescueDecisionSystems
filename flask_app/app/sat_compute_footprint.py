@@ -48,10 +48,27 @@ def annotate_footprint_radius(sat_overlay_df: pd.DataFrame) -> pd.DataFrame:
     Ensure 'footprint_radius_km' is present; if NaN, compute from altitude_km.
     If both are missing, leave as NaN (map can still draw other features).
     """
+    if not isinstance(sat_overlay_df, pd.DataFrame):
+        raise TypeError("sat_overlay_df must be a pandas DataFrame")
+
+    sat_overlay_df = sat_overlay_df.copy()
     if "footprint_radius_km" not in sat_overlay_df.columns:
         sat_overlay_df["footprint_radius_km"] = np.nan
     if "altitude_km" not in sat_overlay_df.columns:
         sat_overlay_df["altitude_km"] = np.nan
+
+    # Provider radii must be positive and finite. Normalize valid numeric text
+    # and mark every other value missing so a valid altitude can repair it.
+    def normalize_radius(value):
+        try:
+            radius = float(value)
+        except (TypeError, ValueError):
+            return float("nan")
+        return radius if np.isfinite(radius) and radius > 0 else float("nan")
+
+    sat_overlay_df["footprint_radius_km"] = sat_overlay_df[
+        "footprint_radius_km"
+    ].map(normalize_radius)
 
     mask_missing = sat_overlay_df["footprint_radius_km"].isna()
     if mask_missing.any():
