@@ -3,6 +3,7 @@ from app.field_validator import (
     validate_and_extract_coordinate_token,
     validate_and_extract_coordinate_pair
 )
+from flask_app.app.preparse_coordinate_mapper import pre_scan_for_coordinates
 
 def approx(val, ref, tol=1e-4):
     return abs(val - ref) < tol
@@ -43,3 +44,42 @@ def test_range_out_of_bounds():
     assert res["valid"] is False
     notes = ";".join(res.get("notes", []))
     assert ("out of range" in notes) or ("range: out of bounds" in notes)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "token"),
+    [
+        ("latitude", "37 99.000N"),
+        ("longitude", "075 75.000W"),
+        ("latitude", "47 06 99.0N"),
+    ],
+)
+def test_dms_components_must_be_below_sixty(field_name, token):
+    res = validate_and_extract_coordinate_token(field_name, token, {}, None)
+
+    assert res["valid"] is False
+    assert "components" in res["checks_failed"]
+    assert "out of bounds" in ";".join(res["notes"])
+
+
+@pytest.mark.parametrize(
+    "coordinate_pair",
+    [
+        "99 00.000N 075 30.000W",
+        "37 99.000N 075 30.000W",
+        "37 45.000N 181 00.000W",
+    ],
+)
+def test_coordinate_pair_requires_both_tokens_to_be_valid(coordinate_pair):
+    res = validate_and_extract_coordinate_pair(
+        "coordinate_pair", coordinate_pair, {}, None
+    )
+
+    assert res["valid"] is False
+    assert res["is_valid"] is False
+
+
+def test_coordinate_prescan_excludes_invalid_component_pair():
+    result = pre_scan_for_coordinates("POSITION: 37 99.000N 075 30.000W")
+
+    assert result.empty
