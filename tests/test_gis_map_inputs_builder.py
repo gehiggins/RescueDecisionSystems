@@ -238,3 +238,35 @@ def test_numeric_text_range_ring_is_normalized():
     ring = result[result["layer"] == "range_ring"].iloc[0]
     assert ring["range_ring_meters"] == 1000.0
     assert ring["geometry"]["radius_m"] == 1000.0
+
+
+def test_satellite_overlay_accepts_missing_catalog_metadata():
+    sat_overlays = pd.DataFrame(
+        [
+            {
+                "sat_name": pd.NA,
+                "norad_id": pd.NA,
+                "role": pd.NA,
+                "sat_type": pd.NA,
+                "lat_dd": 38.0,
+                "lon_dd": -74.0,
+                "footprint_radius_km": 1000.0,
+                "track_coords": None,
+                "next_pass_marker": pd.NA,
+                "popup_html": pd.NA,
+            }
+        ]
+    )
+
+    result = build_gis_map_inputs_df(
+        make_positions_df(), sat_overlays=sat_overlays, op_tz_env="UTC"
+    )
+
+    satellite_rows = result[result["layer"] == "satellite_overlay"]
+    assert satellite_rows["geom_type"].tolist() == ["Circle", "Point"]
+    assert satellite_rows["sat_type"].tolist() == ["", ""]
+    assert satellite_rows["label"].tolist() == [
+        "Satellite",
+        "Satellite – subpoint",
+    ]
+    assert satellite_rows["popup_html"].isna().all()
