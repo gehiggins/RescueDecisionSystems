@@ -34,7 +34,7 @@ def _numeric_at(mapping, key, index):
         return np.nan
     try:
         value = float(values[index])
-    except (IndexError, TypeError, ValueError):
+    except (IndexError, KeyError, TypeError, ValueError):
         return np.nan
     return value if np.isfinite(value) else np.nan
 
@@ -91,9 +91,12 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
     times = hourly.get("time") or []
     if not isinstance(times, (list, tuple)):
         times = []
-    if not times:
-        return out
-    marine = {}
+    atmosphere_index = {}
+    for i, raw_time in enumerate(times):
+        atmosphere_time = _to_utc(raw_time)
+        if atmosphere_time is not None:
+            atmosphere_index.setdefault(atmosphere_time, i)
+
     m_map = {}
     if include_marine:
         try:
@@ -127,16 +130,17 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
                 )
         except Exception as e:
             LOG.info(f"Open-Meteo marine unavailable @({lat:.4f},{lon:.4f}): {e}")
-            marine = {}
             m_map = {}
 
+    sample_times = sorted(set(atmosphere_index) | set(m_map))
+    if not sample_times:
+        return out
+
     rows = []
-    for i, t in enumerate(times):
-        ts = _to_utc(t)
-        if ts is None:
-            continue
+    for ts in sample_times:
         if ts < start_utc or ts > end_utc:
             continue
+        i = atmosphere_index.get(ts)
         temp_c = _numeric_at(hourly, "temperature_2m", i)
         rh = _numeric_at(hourly, "relative_humidity_2m", i)
         wh, wp, wd = m_map.get(ts, (np.nan, np.nan, np.nan))
