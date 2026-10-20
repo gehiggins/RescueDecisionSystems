@@ -60,6 +60,31 @@ def test_process_alert_rejects_non_json_request():
     assert response.get_json()["error"] == "Invalid request format. Must be JSON."
 
 
+@pytest.mark.parametrize("payload", [[], ["message"], "message", 42])
+def test_process_alert_rejects_json_that_is_not_an_object(payload):
+    application = create_app({"TESTING": True})
+
+    response = application.test_client().post("/process_alert", json=payload)
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == (
+        "Invalid request format. Must be a JSON object."
+    )
+
+
+def test_process_alert_rejects_json_null():
+    application = create_app({"TESTING": True})
+
+    response = application.test_client().post(
+        "/process_alert", data="null", content_type="application/json"
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == (
+        "Invalid request format. Must be a JSON object."
+    )
+
+
 def test_process_alert_rejects_blank_message():
     application = create_app({"TESTING": True})
 

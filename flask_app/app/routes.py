@@ -90,7 +90,9 @@ def process_alert():
     if not request.is_json:
         return jsonify({"error": "Invalid request format. Must be JSON."}), 400
 
-    payload = request.get_json(silent=True) or {}
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Invalid request format. Must be a JSON object."}), 400
     raw_message = payload.get("message")
     if not isinstance(raw_message, str) or not raw_message.strip():
         return jsonify({"error": "No message provided"}), 400
