@@ -808,9 +808,6 @@ def generate_gis_map_html_from_dfs(
     # --- Satellite Overlays (footprints, tracks, next-pass) ---
     sat_rows = gis_map_inputs_df[gis_map_inputs_df["layer"] == "satellite_overlay"]
     if not sat_rows.empty:
-        fg_foot = folium.FeatureGroup(name="Satellite footprints", show=True)
-        fg_track = folium.FeatureGroup(name="Satellite tracks", show=True)
-        fg_next  = folium.FeatureGroup(name="Next-pass markers", show=True)
         fg_image = folium.FeatureGroup(name="Satellite imagery", show=True)
 
         fg_sat_leo = folium.FeatureGroup(name="Satellites • LEO", show=True)  # [updated]
@@ -941,7 +938,7 @@ def generate_gis_map_html_from_dfs(
                             popup=sat.get("popup_html"),
                         ).add_to(_sat_fg_for(sat))
 
-        fg_foot.add_to(m); fg_track.add_to(m); fg_next.add_to(m); fg_image.add_to(m)
+        fg_image.add_to(m)
 
         from folium import LayerControl
         LayerControl(collapsed=True).add_to(m)
