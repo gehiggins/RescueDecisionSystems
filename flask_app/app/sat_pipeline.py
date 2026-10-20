@@ -100,6 +100,26 @@ def _coordinate_pair(lat, lon):
     return lat_value, lon_value
 
 
+def _satellite_subpoint(values):
+    """Validate one propagated ``(lat, lon, altitude_km)`` result."""
+    try:
+        lat, lon, altitude_km = values
+    except (TypeError, ValueError):
+        return None
+    position = _coordinate_pair(lat, lon)
+    if position is None or isinstance(altitude_km, (bool, np.bool_)):
+        return None
+    if not pd.api.types.is_scalar(altitude_km):
+        return None
+    try:
+        altitude_value = float(altitude_km)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(altitude_value) or altitude_value < 0:
+        return None
+    return position[0], position[1], altitude_value
+
+
 def _positive_env_int(name: str, default: int) -> int:
     """Read a positive integer setting, falling back on invalid input."""
     try:
@@ -283,32 +303,50 @@ def build_sat_overlay_df(
         # subpoint, track, or pass from elements that cannot be displayed is
         # both unnecessary and potentially misleading during diagnostics.
         if _tle_is_fresh(at_time_utc, tle_epoch):
-            lat, lon, alt_km = compute_subpoint_at(
-                tle1, tle2, at_time_utc.to_pydatetime()
-            )
-            # forward track (+60 min)
             try:
-                track_coords, track_start_utc, track_end_utc = compute_short_track(
-                    tle1, tle2, at_time_utc.to_pydatetime(), forward_min=30, step_s=60
+                propagated = compute_subpoint_at(
+                    tle1, tle2, at_time_utc.to_pydatetime()
                 )
-            except Exception:
-                track_coords, track_start_utc, track_end_utc = None, None, None
-            # next-pass marker (if alert lat/lon provided)
-            if {"alert_lat_dd","alert_lon_dd"}.issubset(alert_df.columns):
-                la = alert_df.iloc[0].get("alert_lat_dd")
-                lo = alert_df.iloc[0].get("alert_lon_dd")
-                alert_position = _coordinate_pair(la, lo)
-                if alert_position is not None:
-                    try:
-                        next_pass_marker = find_next_pass_marker(
+                subpoint = _satellite_subpoint(propagated)
+            except Exception as exc:
+                LOG.warning(
+                    "Skipping satellite after subpoint propagation failure: %s", exc
+                )
+                subpoint = None
+            else:
+                if subpoint is None:
+                    LOG.warning("Skipping satellite with invalid propagated subpoint")
+            if subpoint is not None:
+                lat, lon, alt_km = subpoint
+                # Track and pass calculations are optional enrichments once a
+                # valid primary satellite position has been established.
+                try:
+                    track_coords, track_start_utc, track_end_utc = (
+                        compute_short_track(
                             tle1,
                             tle2,
-                            alert_position,
                             at_time_utc.to_pydatetime(),
-                            max_hours=12,
+                            forward_min=30,
+                            step_s=60,
                         )
-                    except Exception:
-                        next_pass_marker = None
+                    )
+                except Exception:
+                    track_coords, track_start_utc, track_end_utc = None, None, None
+                if {"alert_lat_dd","alert_lon_dd"}.issubset(alert_df.columns):
+                    la = alert_df.iloc[0].get("alert_lat_dd")
+                    lo = alert_df.iloc[0].get("alert_lon_dd")
+                    alert_position = _coordinate_pair(la, lo)
+                    if alert_position is not None:
+                        try:
+                            next_pass_marker = find_next_pass_marker(
+                                tle1,
+                                tle2,
+                                alert_position,
+                                at_time_utc.to_pydatetime(),
+                                max_hours=12,
+                            )
+                        except Exception:
+                            next_pass_marker = None
         # prefer provider name/CATNR when present
         name = _optional_text(t.get("name")) or name
         provider_norad_id = _positive_catalog_id(t.get("norad_id"))
