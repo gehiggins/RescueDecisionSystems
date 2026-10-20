@@ -4,7 +4,7 @@ Status: verified current
 
 Reviewed against code and runtime: 2026-10-19
 
-Baseline: `main` commit `ecf19b70b5ebedf97adc8af8e38f049dcad14c17`
+Baseline: `main` commit `5da6e1f9e50935b42d008251f5ba1e3e9bcaee31`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -52,21 +52,42 @@ potentially misleading position. The limit is configurable through
 The browser now reports processing state, returned layers, and weather and
 satellite row counts. Invalid or excessive alert requests are rejected before
 pipeline work starts, and the direct map endpoint rejects non-finite or
-out-of-range coordinates.
+out-of-range coordinates. Generated map serving is confined to the configured
+map directory, including when a requested file is a symbolic link.
+
+Detailed pipeline failures are logged on the server but are not returned to
+the browser. The web application adds frame, content-type, referrer, and
+no-store response headers where appropriate. Its four public pages render with
+valid references to committed static assets.
 
 Diagnostic alert CSVs are disabled during normal operation. They can be
 enabled deliberately with `RDS_DEBUG_DUMP=1`; `RDS_DEBUG_DIR` selects their
 output directory. Untimestamped map-input transforms remain offline instead of
 silently contacting the satellite service.
 
+Active data and projection defaults no longer depend on one developer's file
+system. Repository-relative paths are used by default, with environment
+variables available for deliberate overrides. Legacy TLE and sample-message
+utilities are quiet on import and perform file or network work only when
+called explicitly.
+
+Database modules can be imported without a database URL. Database setup is
+lazy and explicit, and missing configuration produces a clear error if a
+database operation is actually requested. A retired local database credential
+was removed from the active tree; it may still exist in Git history and should
+be rotated if it was ever used. History was not rewritten during this work.
+
 ## Automated verification
 
-- Default offline suite: 50 passed; 2 live tests deselected.
+- Default offline suite: 68 passed; 2 live tests deselected.
 - Explicit external-service suite: 2 passed.
 - Editable development installation succeeded.
 - The deployment requirements wrapper installed successfully.
 - `pip check` reported no broken requirements.
 - Gunicorn application configuration validation passed.
+- GitHub Actions repeats the installation, dependency, offline-test, and
+  Gunicorn checks on Python 3.9 and Python 3.11 for each pull request and push
+  to `main`.
 
 The default and live test commands are documented in `pytest.ini` and
 `INSTALLATION_REQUIREMENTS.md`.
@@ -86,7 +107,7 @@ The default and live test commands are documented in `pytest.ini` and
   unavailable, RDS continues with the alert positions and range rings it can
   verify.
 - Python 3.9 is the local installation environment verified during this review;
-  continuous verification also covers Python 3.11.
+  continuous verification covers both Python 3.9 and Python 3.11.
 - That macOS Python 3.9 environment emits third-party compatibility warnings
   for LibreSSL/urllib3 and the installed Matplotlib/pyparsing versions. They do
   not currently fail the offline or live suites, but a newer Python runtime and
