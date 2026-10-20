@@ -43,14 +43,39 @@ def reduce_to_nearest_or_latest(df: pd.DataFrame, *, target_utc, max_age_hours: 
     if df is None or len(df) == 0:
         return df
 
+    missing_columns = {"source_id", "valid_utc"} - set(df.columns)
+    if missing_columns:
+        raise ValueError(
+            "weather observations require columns: "
+            + ", ".join(sorted(missing_columns))
+        )
+
+    if target_utc is None or not pd.api.types.is_scalar(target_utc):
+        raise ValueError("target_utc must be a valid timestamp")
+    target = pd.to_datetime(target_utc, utc=True, errors="coerce")
+    if pd.isna(target):
+        raise ValueError("target_utc must be a valid timestamp")
+    if isinstance(max_age_hours, bool):
+        raise ValueError("max_age_hours must be a finite non-negative number")
+    try:
+        max_age_hours = float(max_age_hours)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("max_age_hours must be a finite non-negative number") from exc
+    if not math.isfinite(max_age_hours) or max_age_hours < 0:
+        raise ValueError("max_age_hours must be a finite non-negative number")
+
     # Selection below uses index labels returned by idxmin/idxmax. Normalize
     # them first so duplicate caller indexes cannot expand one selected label
     # back into multiple observations.
     df = df.copy().reset_index(drop=True)
 
     # Ensure tz-aware UTC
-    df["valid_utc"] = pd.to_datetime(df["valid_utc"], utc=True)
-    target = pd.to_datetime(target_utc, utc=True)
+    df["valid_utc"] = df["valid_utc"].map(
+        lambda value: pd.to_datetime(value, utc=True, errors="coerce")
+    )
+    df = df.loc[df["valid_utc"].notna()].copy()
+    if df.empty:
+        return df
 
     # Age in hours (absolute)
     age = (df["valid_utc"] - target).abs()

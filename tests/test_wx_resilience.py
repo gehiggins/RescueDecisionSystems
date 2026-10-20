@@ -119,6 +119,41 @@ def test_weather_reducer_returns_one_row_per_source_with_duplicate_input_index()
     )
 
 
+def test_weather_reducer_discards_malformed_timestamps():
+    observations = pd.DataFrame(
+        [
+            {"source_id": "A", "valid_utc": "not-a-time"},
+            {"source_id": "A", "valid_utc": "2026-10-19T18:00:00Z"},
+            {"source_id": "B", "valid_utc": None},
+        ]
+    )
+
+    result = wx_obs.reduce_to_nearest_or_latest(
+        observations,
+        target_utc="2026-10-19T18:00:00Z",
+    )
+
+    assert result["source_id"].tolist() == ["A"]
+    assert result["valid_utc"].tolist() == [pd.Timestamp("2026-10-19T18:00:00Z")]
+
+
+@pytest.mark.parametrize("max_age_hours", [-1, float("inf"), "bad"])
+def test_weather_reducer_rejects_invalid_age_window(max_age_hours):
+    with pytest.raises(ValueError, match="max_age_hours"):
+        wx_obs.reduce_to_nearest_or_latest(
+            _station_observation(),
+            target_utc="2026-10-19T18:00:00Z",
+            max_age_hours=max_age_hours,
+        )
+
+
+def test_weather_reducer_rejects_invalid_target_timestamp():
+    with pytest.raises(ValueError, match="target_utc"):
+        wx_obs.reduce_to_nearest_or_latest(
+            _station_observation(), target_utc="not-a-time"
+        )
+
+
 def test_malformed_provider_rows_do_not_discard_valid_observations(
     monkeypatch, caplog
 ):
