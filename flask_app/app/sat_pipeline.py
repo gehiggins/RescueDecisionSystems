@@ -45,6 +45,29 @@ from app.sat_compute_groundtrack import compute_subpoint_at, compute_short_track
 from app.sat_compute_footprint import annotate_footprint_radius
 import pandas as pd, numpy as np
 
+LOG = logging.getLogger(__name__)
+
+
+def _max_tle_age_hours() -> float:
+    """Maximum event-to-TLE epoch difference allowed for map propagation."""
+    try:
+        return float(os.getenv("RDS_SAT_MAX_TLE_AGE_HOURS", "168"))
+    except (TypeError, ValueError):
+        return 168.0
+
+
+def _tle_age_hours(at_time_utc, tle_epoch_utc) -> float:
+    at_time = pd.to_datetime(at_time_utc, utc=True, errors="coerce")
+    epoch = pd.to_datetime(tle_epoch_utc, utc=True, errors="coerce")
+    if pd.isna(at_time) or pd.isna(epoch):
+        return float("nan")
+    return float(abs((at_time - epoch).total_seconds()) / 3600.0)
+
+
+def _tle_is_fresh(at_time_utc, tle_epoch_utc) -> bool:
+    age = _tle_age_hours(at_time_utc, tle_epoch_utc)
+    return not math.isnan(age) and age <= _max_tle_age_hours()
+
 
 # ----------------------- Public API -----------------------
 
@@ -156,6 +179,18 @@ def build_sat_overlay_df(
         name = str(t.get("name") or name)
         if pd.notna(t.get("norad_id")): norad_id = int(t["norad_id"])
 
+    if use_tle and not _tle_is_fresh(at_time_utc, tle_epoch):
+        if pd.notna(tle_epoch):
+            LOG.warning(
+                "Skipping satellite %s: TLE age %.1f hours exceeds %.1f-hour limit",
+                norad_id,
+                _tle_age_hours(at_time_utc, tle_epoch),
+                _max_tle_age_hours(),
+            )
+        lat = lon = alt_km = np.nan
+        track_coords = track_start_utc = track_end_utc = None
+        next_pass_marker = None
+
     # assemble
     overlay = pd.DataFrame([{
         "sat_name": name, "norad_id": norad_id, "at_time_utc": at_time_utc,
@@ -218,9 +253,7 @@ def build_sat_overlay_df(
                 extra_df[c] = np.nan
             overlay = pd.concat([overlay, extra_df[overlay.columns]], ignore_index=True)
 
-    import os, logging
     from pathlib import Path
-    LOG = logging.getLogger(__name__)
 
     if os.getenv("RDS_SAT_DEBUG_DUMP") == "1" and not overlay.empty:
         try:
@@ -340,6 +373,9 @@ def _fallback_nearest_leo(alert_lat, alert_lon, at_time_utc, max_candidates=12, 
     rows = []
     for _, t in tles.iterrows():
         try:
+            tle_epoch = pd.to_datetime(t.get("epoch_utc"), utc=True, errors="coerce")
+            if not _tle_is_fresh(at_time_utc, tle_epoch):
+                continue
             lat, lon, alt_km = compute_subpoint_at(t["tle_line1"], t["tle_line2"], at_time_utc.to_pydatetime())
             dist_km = _haversine_km(alert_lat, alert_lon, lat, lon)
             rows.append({
@@ -348,7 +384,7 @@ def _fallback_nearest_leo(alert_lat, alert_lon, at_time_utc, max_candidates=12, 
                 "at_time_utc": at_time_utc,
                 "lat_dd": lat, "lon_dd": lon, "alt_km": alt_km,
                 "footprint_radius_km": np.nan,  # filled later
-                "tle_epoch_utc": pd.to_datetime(t.get("epoch_utc"), utc=True, errors="coerce"),
+                "tle_epoch_utc": tle_epoch,
                 "tle_age_hours": np.nan,
                 "sat_type": (str(ref.loc[ref["norad_id"]==t.get("norad_id"), "type_norm"].iloc[0]) if not ref.empty else None),  # [updated]
                 "source": "fallback:nearest",  # [updated]
@@ -369,7 +405,9 @@ def _fallback_nearest_leo(alert_lat, alert_lon, at_time_utc, max_candidates=12, 
     out = annotate_footprint_radius(df).drop(columns=["altitude_km"])
     # compute tle_age_hours where epoch exists
     mask = pd.notna(out["tle_epoch_utc"])
-    out.loc[mask, "tle_age_hours"] = (out.loc[mask, "at_time_utc"] - out.loc[mask, "tle_epoch_utc"]).dt.total_seconds()/3600.0
+    out.loc[mask, "tle_age_hours"] = (
+        out.loc[mask, "at_time_utc"] - out.loc[mask, "tle_epoch_utc"]
+    ).dt.total_seconds().abs() / 3600.0
     return out
 
 # --- RDS SAT ROLE HELPERS ---
@@ -419,13 +457,16 @@ def _visible_candidates(alert_lat: float, alert_lon: float, at_time_utc: pd.Time
         if pd.notna(nid) and int(nid) in exclude_norad:
             continue
         try:
+            tle_epoch = pd.to_datetime(t.get("epoch_utc"), utc=True, errors="coerce")
+            if not _tle_is_fresh(at_time_utc, tle_epoch):
+                continue
             lat, lon, alt_km = compute_subpoint_at(t["tle_line1"], t["tle_line2"], at_time_utc.to_pydatetime())
             dist_km = _haversine_km(alert_lat, alert_lon, lat, lon)
             r = pd.DataFrame([{"sat_name": t.get("name"),
                                "norad_id": nid,
                                "at_time_utc": at_time_utc,
                                "lat_dd": lat, "lon_dd": lon, "alt_km": alt_km,
-                               "tle_epoch_utc": pd.to_datetime(t.get("epoch_utc"), utc=True, errors="coerce"),
+                               "tle_epoch_utc": tle_epoch,
                                "source": "celestrak:catnr"}])
             r["altitude_km"] = r["alt_km"]
             r = annotate_footprint_radius(r).drop(columns=["altitude_km"])
@@ -436,7 +477,9 @@ def _visible_candidates(alert_lat: float, alert_lon: float, at_time_utc: pd.Time
     if not rows:
         return pd.DataFrame()
     df = pd.DataFrame(rows)
-    df["tle_age_hours"] = (df["at_time_utc"] - df["tle_epoch_utc"]).dt.total_seconds()/3600.0
+    df["tle_age_hours"] = (
+        df["at_time_utc"] - df["tle_epoch_utc"]
+    ).dt.total_seconds().abs() / 3600.0
     df = df[pd.notna(df["footprint_radius_km"]) & pd.notna(df["distance_km"])]
     df = df[df["distance_km"] <= df["footprint_radius_km"]].copy()
     df["role"] = "nearby_not_detected"
@@ -463,6 +506,9 @@ def _upcoming_passes(alert_lat: float, alert_lon: float, at_time_utc: pd.Timesta
         if pd.notna(nid) and int(nid) in exclude_norad:
             continue
         try:
+            tle_epoch = pd.to_datetime(t.get("epoch_utc"), utc=True, errors="coerce")
+            if not _tle_is_fresh(at_time_utc, tle_epoch):
+                continue
             # --- [fixed] upcoming pass search — must be inside the same try:
             marker = find_next_pass_marker(t["tle_line1"], t["tle_line2"],
                                            target_point=(float(alert_lat), float(alert_lon)),
@@ -479,7 +525,7 @@ def _upcoming_passes(alert_lat: float, alert_lon: float, at_time_utc: pd.Timesta
                                "norad_id": nid,
                                "at_time_utc": when,
                                "lat_dd": plat, "lon_dd": plon, "alt_km": alt_km,
-                               "tle_epoch_utc": pd.to_datetime(t.get("epoch_utc"), utc=True, errors="coerce"),
+                               "tle_epoch_utc": tle_epoch,
                                "source": "celestrak:catnr",
                                "next_pass_marker": marker}])
             r["altitude_km"] = r["alt_km"]
