@@ -537,28 +537,73 @@ def _sat_role_style(role: str) -> str:
     # Style is applied downstream; this is a hint for clarity/tests
     return {"reported": "solid", "nearby_not_detected": "outline", "upcoming": "dashed"}.get(role, "solid")
 
+
+def _popup_scalar(value, default="") -> str:
+    """Return display text for a scalar provider value without truth-testing ``pd.NA``."""
+    if value is None or not pd.api.types.is_scalar(value):
+        return default
+    try:
+        if pd.isna(value):
+            return default
+    except (TypeError, ValueError):
+        return default
+    return str(value)
+
+
+def _popup_norad_id(value) -> Optional[str]:
+    """Return a whole-number NORAD identifier, or omit malformed provider data."""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(numeric) or not numeric.is_integer() or numeric < 0:
+        return None
+    return str(int(numeric))
+
+
+def _popup_timestamp(value) -> Optional[pd.Timestamp]:
+    """Normalize a nullable timestamp for popup formatting."""
+    if value is None or not pd.api.types.is_scalar(value):
+        return None
+    try:
+        parsed = pd.to_datetime(value, utc=True, errors="coerce")
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return None if pd.isna(parsed) else parsed
+
+
 def _build_sat_popup(row: dict) -> str:
     # Satellite names originate in provider/reference data. Escape display
     # values while retaining the small amount of markup created here.
-    nm = html_escape(str(row.get("sat_name") or "Unknown"), quote=True)
-    nid = row.get("norad_id")
-    role = html_escape(str(row.get("role") or ""), quote=True)
-    tle_epoch = row.get("tle_epoch_utc")
-    tle_age = row.get("tle_age_hours")
-    nxt = row.get("next_pass_marker") or {}
-    nxt_when = nxt.get("when_utc")
-    nxt_elev = nxt.get("max_elev_deg")
-    parts = [f"<b>{nm}</b>{' ('+str(int(nid))+')' if pd.notna(nid) else ''}",
+    nm = html_escape(_popup_scalar(row.get("sat_name"), "Unknown"), quote=True)
+    nid = _popup_norad_id(row.get("norad_id"))
+    role = html_escape(_popup_scalar(row.get("role")), quote=True)
+    tle_epoch = _popup_timestamp(row.get("tle_epoch_utc"))
+    try:
+        tle_age = float(row.get("tle_age_hours"))
+    except (TypeError, ValueError):
+        tle_age = float("nan")
+    nxt = row.get("next_pass_marker")
+    if not isinstance(nxt, dict):
+        nxt = {}
+    nxt_when = _popup_timestamp(nxt.get("when_utc"))
+    try:
+        nxt_elev = float(nxt.get("max_elev_deg"))
+    except (TypeError, ValueError):
+        nxt_elev = float("nan")
+    parts = [f"<b>{nm}</b>{' ('+nid+')' if nid is not None else ''}",
              f"Role: <b>{role}</b>"]
-    if pd.notna(tle_epoch):
-        parts.append(f"TLE epoch: {pd.to_datetime(tle_epoch).strftime('%Y-%m-%d %H:%MZ')}")
-    if pd.notna(tle_age):
-        parts.append(f"TLE age: {round(float(tle_age),1)} h")
-    parts.append(f"Time@alert: {pd.to_datetime(row.get('at_time_utc')).strftime('%Y-%m-%d %H:%MZ')}")
-    if nxt_when:
-        np_txt = f"Next pass: {pd.to_datetime(nxt_when).strftime('%Y-%m-%d %H:%MZ')}"
-        if nxt_elev is not None:
-            np_txt += f" • max elev {round(float(nxt_elev),1)}°"
+    if tle_epoch is not None:
+        parts.append(f"TLE epoch: {tle_epoch.strftime('%Y-%m-%d %H:%MZ')}")
+    if math.isfinite(tle_age):
+        parts.append(f"TLE age: {round(tle_age,1)} h")
+    alert_time = _popup_timestamp(row.get("at_time_utc"))
+    if alert_time is not None:
+        parts.append(f"Time@alert: {alert_time.strftime('%Y-%m-%d %H:%MZ')}")
+    if nxt_when is not None:
+        np_txt = f"Next pass: {nxt_when.strftime('%Y-%m-%d %H:%MZ')}"
+        if math.isfinite(nxt_elev):
+            np_txt += f" • max elev {round(nxt_elev,1)}°"
         parts.append(np_txt)
     return "<br/>".join(parts)
 
