@@ -39,6 +39,7 @@ import geopandas as gpd
 from folium import DivIcon
 import traceback
 import matplotlib.pyplot as plt
+from PIL import Image
 from app.utils_coordinates import is_valid_overlay_bounds, to_latlon_polyline
 
 
@@ -849,9 +850,19 @@ def generate_gis_map_html_from_dfs(
                     try:
                         candidate = Path(image_path)
                         if candidate.is_file():
+                            # Satellite overlays are PNG artifacts. Verify the
+                            # file before Folium blindly embeds its raw bytes.
+                            with Image.open(candidate) as image:
+                                if image.format != "PNG":
+                                    raise ValueError("overlay is not a PNG image")
+                                image.verify()
                             image_file = candidate
-                    except (OSError, ValueError):
-                        pass
+                    except Exception as exc:
+                        logging.warning(
+                            "Skipping unreadable satellite image overlay %s: %s",
+                            image_path,
+                            exc,
+                        )
                 if (
                     is_valid_overlay_bounds(bounds)
                     and image_file is not None
@@ -867,12 +878,22 @@ def generate_gis_map_html_from_dfs(
                             name_missing = True
                     if name_missing:
                         overlay_name = sat.get("label")
-                    folium.raster_layers.ImageOverlay(
-                        image=str(image_file),
-                        bounds=bounds,
-                        opacity=opacity,
-                        name=_safe_display_text(overlay_name, default="Satellite overlay"),
-                    ).add_to(fg_image)
+                    try:
+                        folium.raster_layers.ImageOverlay(
+                            image=str(image_file),
+                            bounds=bounds,
+                            opacity=opacity,
+                            name=_safe_display_text(
+                                overlay_name, default="Satellite overlay"
+                            ),
+                        ).add_to(fg_image)
+                    except Exception as exc:
+                        # A corrupt local image must not discard valid map layers.
+                        logging.warning(
+                            "Skipping unreadable satellite image overlay %s: %s",
+                            image_file,
+                            exc,
+                        )
 
             # Circle (footprint)
             elif gtype == "Circle":
