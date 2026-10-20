@@ -270,6 +270,31 @@ def test_renderer_omits_empty_satellite_layer_controls(tmp_path):
     assert "Next-pass markers" not in html
 
 
+def test_renderer_includes_layer_control_without_satellite_rows(tmp_path):
+    output_path = tmp_path / "weather-layers.html"
+    inputs = pd.DataFrame(
+        [
+            {
+                "layer": "weather",
+                "geom_type": "Point",
+                "geometry": {"type": "Point", "coordinates": [-75.0, 37.5]},
+                "label": "Weather",
+            }
+        ]
+    )
+
+    result = generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row={"site_id": "TEST", "latitude_a": 37.5, "longitude_a": -75.0},
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["layers"] == ["Weather"]
+    assert '"Weather"' in html
+    assert "L.control.layers" in html
+
+
 def test_renderer_preserves_zero_coordinates_for_map_center(tmp_path):
     output_path = tmp_path / "zero-center.html"
 

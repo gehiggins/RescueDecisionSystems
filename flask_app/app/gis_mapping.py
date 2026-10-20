@@ -940,8 +940,9 @@ def generate_gis_map_html_from_dfs(
 
         fg_image.add_to(m)
 
-        from folium import LayerControl
-        LayerControl(collapsed=True).add_to(m)
+    # Weather and station feature groups also need a layer control when no
+    # satellite data is available, which is a normal degraded-data map.
+    LayerControl(collapsed=True).add_to(m)
 
     # --- Title & Save ---
     title_html = (
