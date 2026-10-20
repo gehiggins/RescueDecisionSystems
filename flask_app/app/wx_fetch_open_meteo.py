@@ -57,6 +57,20 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
     ]
     out = pd.DataFrame(columns=cols)
 
+    try:
+        lat, lon = float(lat), float(lon)
+    except (TypeError, ValueError):
+        LOG.warning("Open-Meteo fetch skipped because coordinates are invalid")
+        return out
+    if (
+        not np.isfinite(lat)
+        or not np.isfinite(lon)
+        or not -90.0 <= lat <= 90.0
+        or not -180.0 <= lon <= 180.0
+    ):
+        LOG.warning("Open-Meteo fetch skipped because coordinates are invalid")
+        return out
+
     if start_utc is None or end_utc is None:
         LOG.warning("Open-Meteo fetch skipped because the UTC window is invalid")
         return out
