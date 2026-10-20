@@ -69,6 +69,29 @@ def test_structured_alert_fetch_uses_active_zone_endpoint(monkeypatch):
     assert result.iloc[0]["headline"] == "Coastal Flood Advisory"
 
 
+@pytest.mark.parametrize(
+    "invalid_timeout", [True, float("nan"), float("inf"), 0, -1, "bad"]
+)
+def test_alert_fetch_replaces_invalid_request_timeout(
+    monkeypatch, invalid_timeout
+):
+    calls = []
+    monkeypatch.setattr(
+        fetcher_noaa_weather_alerts.requests,
+        "get",
+        _mock_noaa_get(calls),
+    )
+
+    fetcher_noaa_weather_alerts.fetch_weather_alerts_zone(
+        37.76, -75.503333, request_timeout=invalid_timeout
+    )
+
+    assert all(
+        timeout == fetcher_noaa_weather_alerts.NOAA_ALERT_TIMEOUT_SECONDS
+        for _url, timeout, _headers in calls
+    )
+
+
 def test_compatibility_alert_fetch_preserves_tuple_contract(monkeypatch):
     monkeypatch.setattr(
         noaa_weather_alerts_fetch,

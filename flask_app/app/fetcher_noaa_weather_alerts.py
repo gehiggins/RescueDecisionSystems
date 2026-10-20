@@ -2,7 +2,11 @@
 # 2025-03-06 Initial Draft
 
 from app.setup_imports import *
-from flask_app.app.utils import log_error_and_continue, get_current_utc_timestamp
+from flask_app.app.utils import (
+    get_current_utc_timestamp,
+    log_error_and_continue,
+    normalize_request_timeout,
+)
 
 NOAA_ALERT_TIMEOUT_SECONDS = 10
 NOAA_ALERT_HEADERS = {"User-Agent": "RDS-WEATHER/1.0"}
@@ -22,6 +26,9 @@ def fetch_weather_alert_features(
         or not -180 <= lon <= 180
     ):
         return None, None, []
+    request_timeout = normalize_request_timeout(
+        request_timeout, NOAA_ALERT_TIMEOUT_SECONDS
+    )
 
     grid_url = f"https://api.weather.gov/points/{lat},{lon}"
     response = requests.get(

@@ -61,6 +61,27 @@ def test_ndbc_parsers_use_field_header_and_bounded_request(
     assert result["wave_height"] == pytest.approx(1.2)
 
 
+@pytest.mark.parametrize(
+    "invalid_timeout", [True, float("nan"), float("inf"), 0, -1, "bad"]
+)
+@pytest.mark.parametrize(
+    "parser", [utils.parse_realtime2_data, utils.parse_5day2_data]
+)
+def test_ndbc_parsers_replace_invalid_request_timeout(
+    monkeypatch, parser, invalid_timeout
+):
+    captured = {}
+
+    def get(_url, timeout, headers):
+        captured.update(timeout=timeout, headers=headers)
+        return _Response(_current_ndbc_response())
+
+    monkeypatch.setattr(utils.requests, "get", get)
+
+    assert parser("44009", request_timeout=invalid_timeout) is not None
+    assert captured["timeout"] == utils.NDBC_REQUEST_TIMEOUT_SECONDS
+
+
 def _ndbc_row(observation_time, wind_speed):
     return [
         str(observation_time.year),

@@ -7,7 +7,11 @@
 import math
 
 from app.setup_imports import *
-from flask_app.app.utils import log_error_and_continue, get_current_utc_timestamp
+from flask_app.app.utils import (
+    get_current_utc_timestamp,
+    log_error_and_continue,
+    normalize_request_timeout,
+)
 from flask_app.app.utils_geo import haversine_nm
 from flask_app.app.utils_weather import calculate_timelate
 
@@ -131,6 +135,9 @@ def query_nearest_noaa_stations(
     max_stations = _station_limit(max_stations)
     if max_stations is None:
         return pd.DataFrame()
+    request_timeout = normalize_request_timeout(
+        request_timeout, NOAA_REQUEST_TIMEOUT_SECONDS
+    )
     try:
         lat, lon = float(lat), float(lon)
     except (TypeError, ValueError, OverflowError):
@@ -201,6 +208,9 @@ def query_nearest_noaa_stations(
 def fetch_single_noaa_station(
     station_id, request_timeout=NOAA_REQUEST_TIMEOUT_SECONDS
 ):
+    request_timeout = normalize_request_timeout(
+        request_timeout, NOAA_REQUEST_TIMEOUT_SECONDS
+    )
     url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
     try:
         response = requests.get(
