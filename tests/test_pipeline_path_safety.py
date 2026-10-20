@@ -90,3 +90,82 @@ def test_pipeline_uses_safe_site_id_for_final_map_path(monkeypatch, tmp_path):
     assert rendered_paths == [expected]
     assert expected.parent.is_dir()
     assert not (tmp_path / "outside").exists()
+
+
+def test_pipeline_handles_nullable_identifiers_and_uses_legacy_position(
+    monkeypatch, tmp_path
+):
+    parsed = {
+        "site_id": None,
+        "beacon_id": None,
+        "expected_error_nm": None,
+        "range_ring_meters_a": None,
+        "range_ring_meters_b": None,
+        "position_method": None,
+        "format_type_a": None,
+        "format_type_b": None,
+        "latitude_a": 37.5,
+        "longitude_a": -75.5,
+        "latitude_b": None,
+        "longitude_b": None,
+        "position_status_a": "valid",
+        "position_status_b": None,
+    }
+    finalized = pd.DataFrame(
+        [
+            {
+                **parsed,
+                "site_id": pd.NA,
+                "beacon_id": pd.NA,
+                "alert_sequence_number": 7,
+                "position_lat_dd_a": pd.NA,
+                "position_lon_dd_a": pd.NA,
+                "position_method": pd.NA,
+                "position_method_a": "GNSS",
+                "range_ring_meters_a": "bad",
+                "detect_time": pd.NaT,
+            }
+        ]
+    )
+    captured = {}
+
+    monkeypatch.setattr(pipeline_controller, "pre_scan_for_coordinates", lambda _m: [])
+    monkeypatch.setattr(
+        pipeline_controller,
+        "parse_sarsat_message",
+        lambda _m, pre_scan_results: parsed,
+    )
+    monkeypatch.setattr(
+        pipeline_controller, "finalize_alert_df", lambda _df, _existing: finalized
+    )
+    monkeypatch.setattr(
+        pipeline_controller, "run_wx_pipeline", lambda **_kwargs: pd.DataFrame()
+    )
+
+    def capture_inputs(positions_df, **_kwargs):
+        captured["positions"] = positions_df.copy()
+        return pd.DataFrame([{"layer": "alert_position"}])
+
+    monkeypatch.setattr(
+        pipeline_controller, "build_gis_map_inputs_df", capture_inputs
+    )
+    monkeypatch.setattr(
+        pipeline_controller,
+        "generate_gis_map_html_from_dfs",
+        lambda _inputs, _alert, output_path: {
+            "map_html_path": output_path,
+            "layers": ["Alert Positions"],
+        },
+    )
+
+    result = pipeline_controller.process_sarsat_alert(
+        "alert", maps_root=tmp_path / "maps"
+    )
+
+    assert result["status"] == "ok"
+    assert Path(result["map_html_path"]).parent.name == "ALERT_7"
+    position = captured["positions"].iloc[0]
+    assert position["lat_dd"] == 37.5
+    assert position["lon_dd"] == -75.5
+    assert position["method"] == "GNSS"
+    assert position["range_ring_meters"] == 0.0
