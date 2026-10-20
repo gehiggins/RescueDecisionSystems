@@ -66,6 +66,19 @@ def test_invalid_station_reference_skips_provider_request(
     ).empty
 
 
+@pytest.mark.parametrize("invalid_limit", [True, pd.Series([True]).iloc[0]])
+def test_boolean_station_limit_skips_provider_request(monkeypatch, invalid_limit):
+    monkeypatch.setattr(
+        fetcher_noaa_shore.requests,
+        "get",
+        lambda *_args, **_kwargs: pytest.fail("provider called"),
+    )
+
+    assert fetcher_noaa_shore.query_nearest_noaa_stations(
+        37.5, -74.5, max_stations=invalid_limit
+    ).empty
+
+
 def test_latest_observation_preserves_shared_metric_units(monkeypatch):
     payload = {
         "properties": {

@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 from flask_app.app import health_wx, pipeline_health_entrypoint
@@ -79,6 +80,31 @@ def test_health_check_rejects_boolean_runtime_parameters(monkeypatch, caplog):
         "max_stations": 5,
     }
     assert "Invalid weather health" in caplog.text
+
+
+def test_health_check_rejects_numpy_boolean_runtime_parameters(monkeypatch):
+    monkeypatch.setattr(
+        health_wx,
+        "fetch_open_meteo_obs",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(health_wx, "HAS_METEOSTAT", False)
+
+    summary = health_wx.run_wx_health_check(
+        lat=np.bool_(True),
+        lon=np.bool_(False),
+        hours=np.bool_(True),
+        radius_km=np.bool_(False),
+        max_stations=np.bool_(True),
+    )
+
+    assert summary["params"] == {
+        "lat": 47.6062,
+        "lon": -122.3321,
+        "hours": 6.0,
+        "radius_km": 75.0,
+        "max_stations": 5,
+    }
 
 
 def test_health_entrypoint_leaves_values_for_safe_normalization(monkeypatch):

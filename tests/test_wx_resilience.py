@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -447,7 +448,8 @@ def test_weather_pipeline_skips_providers_when_all_targets_invalid(
 
 
 @pytest.mark.parametrize(
-    "hours_back", [None, "bad", float("nan"), float("inf"), -1, 0, True]
+    "hours_back",
+    [None, "bad", float("nan"), float("inf"), -1, 0, True, np.bool_(True)],
 )
 def test_weather_pipeline_defaults_invalid_time_window(
     monkeypatch, caplog, hours_back
@@ -501,6 +503,7 @@ def test_weather_pipeline_centers_window_on_alert_time(monkeypatch):
         (50, 0),
         (50, 2.5),
         (True, True),
+        (np.bool_(True), np.bool_(True)),
     ],
 )
 def test_weather_pipeline_defaults_invalid_station_search_parameters(
@@ -527,7 +530,8 @@ def test_weather_pipeline_defaults_invalid_station_search_parameters(
 
 
 @pytest.mark.parametrize(
-    ("radius_km", "max_stations"), [(-1, 2.5), (True, True)]
+    ("radius_km", "max_stations"),
+    [(-1, 2.5), (True, True), (np.bool_(True), np.bool_(True))],
 )
 def test_weather_aggregator_normalizes_direct_search_parameters(
     monkeypatch, radius_km, max_stations

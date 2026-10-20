@@ -80,6 +80,7 @@ def test_meteostat_wind_conversion_rejects_nonfinite_values():
         ("bad", 2, (50.0, 2)),
         (0, 2.5, (50.0, 5)),
         (True, False, (50.0, 5)),
+        (np.bool_(True), np.bool_(False), (50.0, 5)),
         (float("inf"), float("nan"), (50.0, 5)),
     ],
 )
