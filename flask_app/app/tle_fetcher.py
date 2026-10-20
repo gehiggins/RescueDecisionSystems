@@ -71,12 +71,15 @@ def _write_tle_atomically(file_path, text):
 
 def fetch_tle(sources=None, timeout=DEFAULT_TIMEOUT_SECONDS):
     """Download configured TLE groups and return the files successfully written."""
+    selected_sources = TLE_SOURCES if sources is None else sources
+    if not selected_sources:
+        return []
     output_dir = _tle_dir().expanduser().resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     written = []
     timeout = _request_timeout(timeout)
 
-    for group, url in (sources or TLE_SOURCES).items():
+    for group, url in selected_sources.items():
         group = str(group)
         if not re.fullmatch(r"[A-Za-z0-9_-]{1,40}", group):
             LOG.warning("Skipping unsafe TLE group name: %r", group)
