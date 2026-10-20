@@ -36,6 +36,7 @@ import logging
 import time
 import math
 import os
+import re
 
 from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -180,31 +181,47 @@ def _valid_tle_pair(line1: str, line2: str, expected_norad_id=None) -> bool:
     except (TypeError, ValueError):
         return False
 
+
+def _normalize_tle_requests(values) -> tuple[list[int], set[str]]:
+    """Return unique positive catalog IDs and recognized constellation groups."""
+    ids = []
+    seen_ids = set()
+    groups = set()
+    if values is None:
+        return ids, groups
+    for value in values:
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, int):
+            text = str(value)
+        elif isinstance(value, str):
+            text = value.strip()
+        else:
+            continue
+        if re.fullmatch(r"\d+", text):
+            catalog_id = int(text)
+            if catalog_id > 0 and catalog_id not in seen_ids:
+                seen_ids.add(catalog_id)
+                ids.append(catalog_id)
+            continue
+        value_upper = text.upper()
+        if value_upper in {"GALILEO", "GLONASS", "BEIDOU"}:
+            groups.add(value_upper.lower())
+        elif re.fullmatch(r"E\d+", value_upper):
+            groups.add("galileo")
+        elif re.fullmatch(r"R\d+", value_upper):
+            groups.add("glonass")
+        elif re.fullmatch(r"[BC]\d+", value_upper):
+            groups.add("beidou")
+    return ids, groups
+
 def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
     """
     Fetch TLEs for a list of satellites by norad_id or by group (constellation).
     Returns DataFrame with columns: ['name','norad_id','tle_line1','tle_line2','epoch_utc','provider','lookup_method','cache_hit']
     """
     rows = []
-    # Try to parse norad_ids
-    ids = []
-    groups = set()
-    for s in sat_names_or_ids:
-        try:
-            i = int(s)
-            ids.append(i)
-        except Exception:
-            # Try to infer group from designator
-            if isinstance(s, str):
-                s_up = s.upper()
-                if s_up in {"GALILEO", "GLONASS", "BEIDOU"}:
-                    groups.add(s_up.lower())
-                elif s_up.startswith("E"):
-                    groups.add("galileo")
-                elif s_up.startswith("R"):
-                    groups.add("glonass")
-                elif s_up.startswith("B") or s_up.startswith("C"):
-                    groups.add("beidou")
+    ids, groups = _normalize_tle_requests(sat_names_or_ids)
     # E1. LEO/GEO by NORAD (preferred)
     for norad_id in ids:
         if norad_id in _TLE_CACHE_CATNR:
