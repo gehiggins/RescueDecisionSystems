@@ -1,10 +1,12 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
 import requests
 
 from flask_app.app import sat_fetch_tle
+from flask_app.app import sat_compute_groundtrack
 from flask_app.app import sat_pipeline
 
 
@@ -207,3 +209,111 @@ def test_tle_resolver_accepts_explicit_group_names(monkeypatch, group_name):
     assert len(snapshot) == 1
     assert snapshot.iloc[0]["lookup_method"] == "group"
     assert f"GROUP={group_name.upper()}" in calls[0]
+
+
+def test_next_pass_marker_exposes_map_and_legacy_fields(monkeypatch):
+    class FakeGeo:
+        def __sub__(self, _observer):
+            return self
+
+        @staticmethod
+        def altaz():
+            elevation = SimpleNamespace(
+                degrees=sat_compute_groundtrack.np.array([-1.0, 5.0, 10.0, -1.0])
+            )
+            return elevation, None, None
+
+    class FakeSatellite:
+        @staticmethod
+        def at(_when):
+            return FakeGeo()
+
+    class FakeTimescale:
+        @staticmethod
+        def from_datetimes(values):
+            return values
+
+        @staticmethod
+        def from_datetime(value):
+            return value
+
+    fake_subpoint = SimpleNamespace(
+        latitude=SimpleNamespace(degrees=12.5),
+        longitude=SimpleNamespace(degrees=181.0),
+    )
+    monkeypatch.setattr(sat_compute_groundtrack, "_make_sat", lambda *_a: FakeSatellite())
+    monkeypatch.setattr(
+        sat_compute_groundtrack,
+        "load",
+        SimpleNamespace(timescale=lambda: FakeTimescale()),
+    )
+    monkeypatch.setattr(
+        sat_compute_groundtrack,
+        "wgs84",
+        SimpleNamespace(
+            latlon=lambda *_a, **_k: object(),
+            subpoint=lambda _geo: fake_subpoint,
+        ),
+    )
+
+    marker = sat_compute_groundtrack.find_next_pass_marker(
+        "line 1",
+        "line 2",
+        alert_latlon=(37.5, -75.0),
+        start_utc=pd.Timestamp("2026-10-20T12:00:00Z").to_pydatetime(),
+        max_hours=1,
+    )
+
+    assert marker["coordinates"] == [-179.0, 12.5]
+    assert marker["when_utc"] == marker["time_utc"]
+    assert marker["max_elev_deg"] == marker["elevation_max_deg"] == 10.0
+    assert marker["lat_dd"] == 12.5
+    assert marker["lon_dd"] == -179.0
+
+
+def test_upcoming_passes_use_groundtrack_contract(monkeypatch):
+    reference = pd.DataFrame([{"type": "LEO", "norad_id": 25338}])
+    tles = pd.DataFrame(
+        [
+            {
+                "name": "NOAA 15",
+                "norad_id": 25338,
+                "tle_line1": "line 1",
+                "tle_line2": "line 2",
+                "epoch_utc": "2026-10-20T11:00:00Z",
+            }
+        ]
+    )
+    captured = {}
+
+    def next_pass(_line1, _line2, alert_latlon, start_utc, max_hours):
+        captured.update(
+            alert_latlon=alert_latlon,
+            start_utc=start_utc,
+            max_hours=max_hours,
+        )
+        return {
+            "when_utc": "2026-10-20T12:30:00Z",
+            "coordinates": [-74.0, 38.0],
+            "max_elev_deg": 35.0,
+        }
+
+    monkeypatch.setattr(sat_pipeline, "load_sat_reference", lambda: reference)
+    monkeypatch.setattr(sat_pipeline, "load_tle_snapshot", lambda _ids: tles)
+    monkeypatch.setattr(sat_pipeline, "_tle_is_fresh", lambda *_args: True)
+    monkeypatch.setattr(sat_pipeline, "find_next_pass_marker", next_pass)
+    monkeypatch.setattr(
+        sat_pipeline, "compute_subpoint_at", lambda *_args: (38.0, -74.0, 850.0)
+    )
+    at_time = pd.Timestamp("2026-10-20T12:00:00Z")
+
+    upcoming = sat_pipeline._upcoming_passes(
+        37.5, -75.0, at_time, exclude_norad=set(), max_hours=6
+    )
+
+    assert len(upcoming) == 1
+    assert upcoming.iloc[0]["role"] == "upcoming"
+    assert upcoming.iloc[0]["next_pass_marker"]["coordinates"] == [-74.0, 38.0]
+    assert captured["alert_latlon"] == (37.5, -75.0)
+    assert captured["start_utc"] == at_time.to_pydatetime()
+    assert captured["max_hours"] == 6.0
