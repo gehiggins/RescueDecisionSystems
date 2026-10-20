@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `7bc295b663c06d51840a194403f5aab917a2b65e`
+Baseline: `main` commit `83bb3110cd0fceeb7cb244d869bd6749b618c936`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -231,6 +231,13 @@ outside the active production path. NOAA discovery and observation lookups
 likewise accept only normalized station-code identifiers and discard malformed
 provider entries independently.
 
+NOAA active-alert coordinates are checked for malformed, non-finite, and
+out-of-range values before any provider request. Point and alert response
+objects are validated at their boundaries; a non-list `features` value is
+treated as no alerts. Structured no-alert results retain the same eight-column
+schema as populated results, while compatibility headlines skip nullable or
+non-text entries independently.
+
 The central empty DataFrame schemas now initialize successfully with current
 pandas. Timestamp columns are UTC-aware, while list and coordinate-container
 fields use pandas object columns. An isolation audit imported every active
@@ -339,7 +346,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 707 passed; 2 live tests deselected.
+- Default offline suite: 722 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
