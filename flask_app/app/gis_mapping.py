@@ -158,6 +158,26 @@ def _positive_finite(value):
     return normalized if math.isfinite(normalized) and normalized > 0 else None
 
 
+def _style_number(value, default, minimum=None, maximum=None):
+    """Return a finite style number, clamped to optional renderer bounds."""
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(normalized):
+        return default
+    if minimum is not None:
+        normalized = max(normalized, minimum)
+    if maximum is not None:
+        normalized = min(normalized, maximum)
+    return normalized
+
+
+def _style_color(value, default="#0b84f3"):
+    """Keep a non-empty scalar color string or use the renderer default."""
+    return value if isinstance(value, str) and value.strip() else default
+
+
 def _safe_display_text(value, default=""):
     """Escape plain display text before giving it to Folium HTML widgets."""
     if value is None:
@@ -813,13 +833,17 @@ def generate_gis_map_html_from_dfs(
                 point = _coerce_lon_lat(center)
                 if point is not None and rad_m is not None:
                     lon, lat = point
-                    sty = (geom.get("style") or {})
+                    sty = geom.get("style")
+                    if not isinstance(sty, dict):
+                        sty = {}
                     folium.Circle(location=[lat, lon],
                           radius=rad_m,
-                          color=sty.get("color", "#0b84f3"),
-                          weight=int(sty.get("weight", 1)),
+                          color=_style_color(sty.get("color")),
+                          weight=_style_number(sty.get("weight"), 1.0, minimum=0.0),
                           fill=bool(sty.get("fill", True)),
-                          fill_opacity=float(sty.get("fillOpacity", 0.15)),
+                          fill_opacity=_style_number(
+                              sty.get("fillOpacity"), 0.15, minimum=0.0, maximum=1.0
+                          ),
                           dash_array=sty.get("dashArray"),
                           tooltip=_safe_display_text(sat.get("label")),
                           popup=sat.get("popup_html")).add_to(
@@ -837,11 +861,15 @@ def generate_gis_map_html_from_dfs(
                         lon, lat = point
                         clean.append([lat, lon])  # folium = [lat, lon]
                 if len(clean) > 1:
-                    sty = (geom.get("style") or {})
+                    sty = geom.get("style")
+                    if not isinstance(sty, dict):
+                        sty = {}
                     PolyLine(locations=clean,
-                     weight=int(sty.get("weight", 1)),
-                     opacity=float(sty.get("opacity", 0.6)),
-                     color=sty.get("color", "#0b84f3"),
+                     weight=_style_number(sty.get("weight"), 1.0, minimum=0.0),
+                     opacity=_style_number(
+                         sty.get("opacity"), 0.6, minimum=0.0, maximum=1.0
+                     ),
+                     color=_style_color(sty.get("color")),
                      dash_array=sty.get("dashArray", "4,6"),
                      tooltip=_safe_display_text(sat.get("label")),
                      popup=sat.get("popup_html")).add_to(
