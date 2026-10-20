@@ -29,6 +29,11 @@ def test_to_dual_time_str_and_datetime():
     utc_iso2, local_iso2 = to_dual_time(ts_dt, "UTC")
     assert utc_iso2 == local_iso2
 
+
+@pytest.mark.parametrize("invalid_time", [None, pd.NA, pd.NaT, "not-a-time"])
+def test_to_dual_time_omits_missing_or_invalid_values(invalid_time):
+    assert to_dual_time(invalid_time, "UTC") == (None, None)
+
 def test_m_to_ft_ms_to_kt_c_to_f():
     assert m_to_ft(1.0) == pytest.approx(3.28084)
     assert m_to_ft(None) is None
