@@ -139,6 +139,33 @@ def test_weather_reducer_discards_malformed_timestamps():
     assert result["valid_utc"].tolist() == [pd.Timestamp("2026-10-19T18:00:00Z")]
 
 
+def test_weather_reducer_normalizes_ids_and_discards_unhashable_shapes():
+    observations = pd.DataFrame(
+        [
+            {
+                "source_id": ["array-shaped"],
+                "valid_utc": "2026-10-19T18:00:00Z",
+            },
+            {
+                "source_id": {"station": "mapping-shaped"},
+                "valid_utc": "2026-10-19T18:00:00Z",
+            },
+            {"source_id": " ", "valid_utc": "2026-10-19T18:00:00Z"},
+            {
+                "source_id": "  VALID-STATION  ",
+                "valid_utc": "2026-10-19T18:00:00Z",
+            },
+        ]
+    )
+
+    result = wx_obs.reduce_to_nearest_or_latest(
+        observations,
+        target_utc="2026-10-19T18:00:00Z",
+    )
+
+    assert result["source_id"].tolist() == ["VALID-STATION"]
+
+
 @pytest.mark.parametrize("max_age_hours", [-1, float("inf"), "bad"])
 def test_weather_reducer_rejects_invalid_age_window(max_age_hours):
     with pytest.raises(ValueError, match="max_age_hours"):
