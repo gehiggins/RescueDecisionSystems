@@ -83,6 +83,7 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
         parsed_data = {
             'beacon_id': None,
             'site_id': None,
+            'satellite_name': None,
             'latitude_a': None,
             'longitude_a': None,
             'latitude_b': None,
@@ -106,6 +107,16 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
             parsed_data["site_id"] = str(site_id_match.group(1)).strip()
         if beacon_id_match:
             parsed_data["beacon_id"] = beacon_id_match.group(1).strip()
+
+        # Preserve the reporting satellite asserted by the source alert so
+        # downstream TLE resolution does not substitute an unrelated vehicle.
+        satellite_match = re.search(
+            r"^\s*SATELLITE\s+ID\s*:\s*([^\r\n]+?)\s*$",
+            message_text,
+            re.IGNORECASE | re.MULTILINE,
+        )
+        if satellite_match:
+            parsed_data["satellite_name"] = satellite_match.group(1).strip()
 
         # --- Parse EE from message_text ---
         ee_msg_match = re.search(r"EXPECTED\s+HORIZONTAL\s+ERROR\s*\(EE\)\s*:\s*([0-9]*\.?[0-9]+)\s*NM", message_text, re.IGNORECASE)

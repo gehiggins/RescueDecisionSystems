@@ -23,6 +23,22 @@ def test_satellite_reference_falls_back_without_local_csv(monkeypatch, tmp_path)
     assert reference["norad_id"].notna().all()
 
 
+def test_satellite_reference_resolves_sample_alert_goes_16(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        sat_fetch_tle,
+        "BASELINE_CSV_PATH",
+        tmp_path / "missing-satellite-reference.csv",
+    )
+
+    satellite = sat_fetch_tle.resolve_reporting_sat(
+        pd.DataFrame([{"satellite_name": "GOES-16"}])
+    )
+
+    assert satellite["type"] == "GEO"
+    assert satellite["norad_id"] == 41866
+    assert satellite["intl_designator"] == "2016-071A"
+
+
 def test_satellite_reference_path_is_repository_relative():
     expected = (
         Path(sat_fetch_tle.__file__).resolve().parents[2]
