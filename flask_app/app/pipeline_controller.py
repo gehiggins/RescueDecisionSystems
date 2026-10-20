@@ -42,6 +42,7 @@ import sys
 import os
 import logging
 import json
+import math
 import re
 from pathlib import Path
 LOG = logging.getLogger(__name__)
@@ -105,11 +106,15 @@ def load_sat_overlays_for_site(site_id: str):
     overlays = []
     for png in base.glob("*.png"):
         j = png.with_suffix(".bounds.json")
-        if not j.exists():
+        if not j.exists() or png.is_symlink() or j.is_symlink():
             continue
         try:
             bounds = json.loads(j.read_text(encoding="utf-8"))
+            if not _valid_overlay_bounds(bounds):
+                LOG.warning("Skipping satellite overlay with invalid bounds: %s", j)
+                continue
             overlays.append({
+                "type": "ImageOverlay",
                 "image_path": str(png).replace("\\", "/"),
                 "bounds": bounds,
                 "opacity": 0.6,
@@ -118,6 +123,22 @@ def load_sat_overlays_for_site(site_id: str):
         except Exception:
             continue
     return overlays
+
+
+def _valid_overlay_bounds(bounds):
+    """Validate ``[[south, west], [north, east]]`` image bounds."""
+    try:
+        if len(bounds) != 2 or any(len(point) != 2 for point in bounds):
+            return False
+        south, west = (float(value) for value in bounds[0])
+        north, east = (float(value) for value in bounds[1])
+    except (TypeError, ValueError):
+        return False
+    return (
+        all(math.isfinite(value) for value in (south, west, north, east))
+        and -90 <= south < north <= 90
+        and -180 <= west < east <= 180
+    )
 
 
 def _append_model_spot_predictions(df_wx_obs, wx_df):
