@@ -204,6 +204,21 @@ def _safe_display_text(value, default=""):
         value = default
     return escape(str(value), quote=True)
 
+
+def _satellite_orbit_class(sat_type, label=None):
+    """Return the renderer layer for satellite metadata, defaulting to LEO."""
+    value = sat_type
+    try:
+        missing = value is None or pd.isna(value) or not str(value).strip()
+    except (TypeError, ValueError):
+        missing = True
+    text = str(label if missing else value).lower()
+    if "meo" in text:
+        return "meo"
+    if "geo" in text:
+        return "geo"
+    return "leo"
+
 def _fmt_num(v, prec=5, dash="—"):
     """Safe float formatting for UI: returns '—' if v is None/NaN; else formats to given precision."""
     try:
@@ -805,17 +820,17 @@ def generate_gis_map_html_from_dfs(
 
         from folium import Marker, Icon
         from folium.features import CustomIcon
+        satellite_groups = {
+            "leo": fg_sat_leo,
+            "meo": fg_sat_meo,
+            "geo": fg_sat_geo,
+        }
+
         def _sat_fg_for(sat):
-            sat_type = sat.get("sat_type")
-            try:
-                type_missing = sat_type is None or pd.isna(sat_type)
-            except (TypeError, ValueError):
-                type_missing = True
-            st = str(sat.get("label") if type_missing else sat_type).lower()
-            if "leo" in st:  return fg_sat_leo
-            if "meo" in st:  return fg_sat_meo
-            if "geo" in st:  return fg_sat_geo
-            return fg_sat_leo  # default
+            orbit_class = _satellite_orbit_class(
+                sat.get("sat_type"), sat.get("label")
+            )
+            return satellite_groups[orbit_class]
 
         for _, sat in sat_rows.iterrows():
             geom = sat.get("geometry", {})
@@ -870,10 +885,7 @@ def generate_gis_map_html_from_dfs(
                           ),
                           dash_array=sty.get("dashArray"),
                           tooltip=_safe_display_text(sat.get("label")),
-                          popup=sat.get("popup_html")).add_to(
-                        fg_sat_leo if "leo" in str(sat.get("sat_type") or sat.get("label") or "").lower()
-                        else (fg_sat_meo if "meo" in str(sat.get("sat_type") or "").lower() else fg_sat_geo)
-                    )  # [updated]
+                          popup=sat.get("popup_html")).add_to(_sat_fg_for(sat))
 
             # LineString (track)
             elif gtype == "LineString":
@@ -896,10 +908,7 @@ def generate_gis_map_html_from_dfs(
                      color=_style_color(sty.get("color")),
                      dash_array=sty.get("dashArray", "4,6"),
                      tooltip=_safe_display_text(sat.get("label")),
-                     popup=sat.get("popup_html")).add_to(
-                        fg_sat_leo if "leo" in str(sat.get("sat_type") or sat.get("label") or "").lower()
-                        else (fg_sat_meo if "meo" in str(sat.get("sat_type") or "").lower() else fg_sat_geo)
-                    )  # [updated]
+                     popup=sat.get("popup_html")).add_to(_sat_fg_for(sat))
 
             # Point (next-pass)
             elif gtype == "Point":
@@ -917,10 +926,7 @@ def generate_gis_map_html_from_dfs(
                             ),
                             popup=sat.get("popup_html"),
                             icon=CustomIcon(icon_image=icon_path, icon_size=(28, 28))
-                        ).add_to(
-                            fg_sat_leo if "leo" in str(sat.get("sat_type") or sat.get("label") or "").lower()
-                            else (fg_sat_meo if "meo" in str(sat.get("sat_type") or "").lower() else fg_sat_geo)
-                        )  # [updated]
+                        ).add_to(_sat_fg_for(sat))
                     else:
                         folium.CircleMarker(
                             location=[lat, lon],
@@ -933,10 +939,7 @@ def generate_gis_map_html_from_dfs(
                                 sat.get("label"), default="Next pass"
                             ),
                             popup=sat.get("popup_html"),
-                        ).add_to(
-                            fg_sat_leo if "leo" in str(sat.get("sat_type") or sat.get("label") or "").lower()
-                            else (fg_sat_meo if "meo" in str(sat.get("sat_type") or "").lower() else fg_sat_geo)
-                        )  # [updated]
+                        ).add_to(_sat_fg_for(sat))
 
         fg_foot.add_to(m); fg_track.add_to(m); fg_next.add_to(m); fg_image.add_to(m)
 
