@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `4e9b127c3a949b51f45b894c964a93ed6675c1fb`
+Baseline: `main` commit `fcb5d037f2af53c0a6fe240121e412c0a761ea0a`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -76,9 +76,20 @@ bounded path components when a numeric site ID is unavailable. The normalized
 identifier is retained through the final map write, so raw alert text cannot
 escape the configured map directory.
 
-Validated local satellite PNG overlays are loaded only with finite geographic
-bounds and non-symlinked image/sidecar files. They are embedded into the
-generated HTML map as georeferenced satellite imagery. Equator and
+Validated local satellite PNG overlays are loaded only with ordered, finite,
+in-range geographic bounds and non-symlinked image/sidecar files. The loader,
+map-input builder, and renderer apply the same boundary rule, so reversed or
+malformed coverage cannot reach the displayed map. Valid images are embedded
+into the generated HTML map as georeferenced satellite imagery. Satellite
+footprints, tracks, and pass markers share one orbit-layer classifier; explicit
+LEO, MEO, and GEO metadata is preserved, while missing or unknown types use the
+documented LEO default instead of being mislabeled as GEO.
+
+The map renderer recognizes both normalized coordinate fields and the
+`latitude_a`/`longitude_a` names emitted by the active parser. It keeps each
+latitude/longitude candidate paired, then falls back to position B or the
+first valid alert geometry. Valid alerts therefore open centered on their
+plotted location rather than the coordinate-less default. Equator and
 prime-meridian coordinates remain valid map centers, and untrusted site IDs
 are HTML-escaped in the map title.
 
@@ -119,6 +130,12 @@ continue through the weather pipeline. Empty, null, or unsupported weather
 target inputs return the canonical empty observation schema without contacting
 a provider.
 
+Weather policy is evaluated independently for every valid alert position.
+When A and B have identical coordinates, RDS performs one provider lookup but
+retains the most conservative combined metadata: the largest available error
+radius and the smallest available coast distance. Invalid optional policy
+metadata is omitted rather than passed downstream.
+
 Open-Meteo keeps usable timestamp rows when individual provider arrays are
 short or malformed. Meteostat's documented km/h wind and gust values are
 converted to the shared m/s schema, invalid station metadata is filtered per
@@ -151,8 +168,9 @@ The map renderer independently validates point, ring, track, and satellite
 geometry, so malformed rows cannot abort otherwise valid layers. External
 station and provider display values are escaped before entering map popup and
 tooltip HTML. Alert finalization normalizes site identifiers, ignores invalid
-historical sequence values, and assigns distinct increasing sequence numbers
-to repeated sites in the same batch. Shared UTC slicing accepts naive, aware,
+historical sequence values, parses exact integer sequence text without
+floating-point rounding, and assigns distinct increasing sequence numbers to
+repeated sites in the same batch. Shared UTC slicing accepts naive, aware,
 and mixed-offset timestamps without comparing incompatible indexes. Shared
 coordinate utilities enforce pole and antimeridian bounds even when called
 outside the primary alert validator.
@@ -165,7 +183,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 384 passed; 2 live tests deselected.
+- Default offline suite: 410 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
