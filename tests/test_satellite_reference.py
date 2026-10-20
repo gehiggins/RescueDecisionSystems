@@ -363,6 +363,58 @@ def test_stale_tle_is_not_used_for_historical_alert(monkeypatch):
     assert overlay.empty
 
 
+@pytest.mark.parametrize(
+    ("alert_lat", "alert_lon"),
+    [([], -75.5), (37.5, {}), (True, -75.5), (37.5, 181.0)],
+)
+def test_malformed_next_pass_coordinates_preserve_valid_satellite_overlay(
+    monkeypatch, alert_lat, alert_lon
+):
+    tle = pd.DataFrame(
+        [
+            {
+                "name": "NOAA 15",
+                "norad_id": 25338,
+                "tle_line1": "line 1",
+                "tle_line2": "line 2",
+                "epoch_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+            }
+        ]
+    )
+    monkeypatch.setattr(sat_pipeline, "load_tle_snapshot", lambda _ids: tle)
+    monkeypatch.setattr(
+        sat_pipeline, "compute_subpoint_at", lambda *_args: (38.0, -74.0, 850.0)
+    )
+    monkeypatch.setattr(
+        sat_pipeline,
+        "compute_short_track",
+        lambda *_args, **_kwargs: (None, None, None),
+    )
+    monkeypatch.setattr(
+        sat_pipeline,
+        "find_next_pass_marker",
+        lambda *_args, **_kwargs: pytest.fail(
+            "malformed alert coordinates reached next-pass calculation"
+        ),
+    )
+    alert = pd.DataFrame(
+        [
+            {
+                "alert_time_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+                "norad_id": 25338,
+                "alert_lat_dd": alert_lat,
+                "alert_lon_dd": alert_lon,
+            }
+        ]
+    )
+
+    overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=True)
+
+    assert len(overlay) == 1
+    assert overlay.iloc[0]["lat_dd"] == 38.0
+    assert overlay.iloc[0]["next_pass_marker"] is None
+
+
 @pytest.mark.parametrize("configured", ["not-a-number", "nan", "inf", "-1", "0"])
 def test_invalid_tle_age_configuration_uses_safe_default(
     monkeypatch, configured
