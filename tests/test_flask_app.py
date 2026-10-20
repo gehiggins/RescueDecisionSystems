@@ -274,6 +274,48 @@ def test_map_generation_rejects_site_id_path_traversal(tmp_path):
     assert not (tmp_path / "outside").exists()
 
 
+def test_direct_map_generation_returns_json_when_renderer_raises(
+    monkeypatch, caplog, tmp_path
+):
+    application = create_app(
+        {"TESTING": True, "RDS_MAPS_DIR": str(tmp_path / "maps")}
+    )
+
+    def raise_render_error(_alert_row, _output_path):
+        raise RuntimeError("private renderer detail")
+
+    monkeypatch.setattr(
+        "flask_app.app.routes.generate_gis_map", raise_render_error
+    )
+
+    response = application.test_client().get(
+        "/generate_gis_map/37.5/-75.5/98372"
+    )
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Map generation failed"}
+    assert b"private renderer detail" not in response.data
+    assert "private renderer detail" in caplog.text
+
+
+def test_direct_map_generation_rejects_missing_output(monkeypatch, caplog, tmp_path):
+    application = create_app(
+        {"TESTING": True, "RDS_MAPS_DIR": str(tmp_path / "maps")}
+    )
+    monkeypatch.setattr(
+        "flask_app.app.routes.generate_gis_map",
+        lambda _alert_row, _output_path: None,
+    )
+
+    response = application.test_client().get(
+        "/generate_gis_map/37.5/-75.5/98372"
+    )
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Map generation failed"}
+    assert "did not create output" in caplog.text
+
+
 def test_generated_map_response_is_not_cached(tmp_path):
     maps_dir = tmp_path / "maps"
     map_path = maps_dir / "98372" / "gis_map_98372.html"
