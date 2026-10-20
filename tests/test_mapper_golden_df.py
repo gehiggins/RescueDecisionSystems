@@ -3,6 +3,7 @@ try:
     from app.gis_mapping import (
         _satellite_orbit_class,
         _style_bool,
+        first_notna,
         generate_gis_map_html_from_dfs,
     )
 except ModuleNotFoundError:
@@ -15,6 +16,7 @@ except ModuleNotFoundError:
     from app.gis_mapping import (
         _satellite_orbit_class,
         _style_bool,
+        first_notna,
         generate_gis_map_html_from_dfs,
     )
 
@@ -31,6 +33,13 @@ def test_satellite_style_boolean_normalization():
     assert _style_bool(0) is False
     assert _style_bool(1) is True
     assert _style_bool("unexpected", default=True) is True
+
+
+@pytest.mark.parametrize("malformed", [[], {}, [1, 2]])
+def test_first_notna_skips_non_scalar_values(malformed):
+    row = {"preferred": malformed, "fallback": "usable"}
+
+    assert first_notna(row, ["preferred", "fallback"]) == "usable"
 
 
 @pytest.mark.parametrize(
