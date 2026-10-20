@@ -145,7 +145,13 @@ def test_meteostat_rejects_invalid_time_window_without_station_lookup(monkeypatc
 
 @pytest.mark.parametrize(
     ("latitude", "longitude"),
-    [("bad", -75.5), (91.0, -75.5), (37.5, -181.0), (float("nan"), 0.0)],
+    [
+        ("bad", -75.5),
+        (91.0, -75.5),
+        (37.5, -181.0),
+        (float("nan"), 0.0),
+        (True, False),
+    ],
 )
 def test_meteostat_rejects_invalid_coordinates_without_station_lookup(
     monkeypatch, latitude, longitude
