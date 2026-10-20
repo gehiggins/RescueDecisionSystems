@@ -393,6 +393,41 @@ def test_next_pass_marker_exposes_map_and_legacy_fields(monkeypatch):
     assert marker["lon_dd"] == -179.0
 
 
+@pytest.mark.parametrize("step_s", [0, -1, float("nan"), "bad", True])
+def test_short_track_rejects_invalid_sampling_step(monkeypatch, step_s):
+    monkeypatch.setattr(
+        sat_compute_groundtrack,
+        "_make_sat",
+        lambda *_a: pytest.fail("invalid sampling must be rejected before propagation"),
+    )
+
+    with pytest.raises(ValueError, match="step_s"):
+        sat_compute_groundtrack.compute_short_track(
+            "line 1",
+            "line 2",
+            pd.Timestamp("2026-10-20T12:00:00Z").to_pydatetime(),
+            step_s=step_s,
+        )
+
+
+@pytest.mark.parametrize("max_hours", [0, -1, float("inf"), "bad", False])
+def test_next_pass_rejects_invalid_search_window(monkeypatch, max_hours):
+    monkeypatch.setattr(
+        sat_compute_groundtrack,
+        "_make_sat",
+        lambda *_a: pytest.fail("invalid sampling must be rejected before propagation"),
+    )
+
+    with pytest.raises(ValueError, match="max_hours"):
+        sat_compute_groundtrack.find_next_pass_marker(
+            "line 1",
+            "line 2",
+            alert_latlon=(37.5, -75.0),
+            start_utc=pd.Timestamp("2026-10-20T12:00:00Z").to_pydatetime(),
+            max_hours=max_hours,
+        )
+
+
 def test_upcoming_passes_use_groundtrack_contract(monkeypatch):
     reference = pd.DataFrame([{"type": "LEO", "norad_id": 25338}])
     tles = pd.DataFrame(
