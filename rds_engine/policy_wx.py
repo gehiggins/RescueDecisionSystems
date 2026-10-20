@@ -22,9 +22,13 @@ def make_wx_data_plan(
           * else conservative default → include_marine=False
     """
     rationale: list[str] = []
+    normalized_mode = str(mode).strip().lower() if mode is not None else "auto"
+    if normalized_mode not in {"auto", "force", "off"}:
+        rationale.append(f"unrecognized mode={mode!r} → mode=auto")
+        normalized_mode = "auto"
 
     # 1) Explicit modes
-    if mode == "force":
+    if normalized_mode == "force":
         rationale.append("mode=force → include_marine=True")
         return DataPlan(
             include_marine=True,
@@ -34,7 +38,7 @@ def make_wx_data_plan(
             rationale=rationale,
         )
 
-    if mode == "off":
+    if normalized_mode == "off":
         rationale.append("mode=off → include_marine=False")
         return DataPlan(
             include_marine=False,
