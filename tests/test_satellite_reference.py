@@ -235,15 +235,14 @@ def test_stale_tle_is_not_used_for_historical_alert(monkeypatch):
         ]
     )
     monkeypatch.setattr(sat_pipeline, "load_tle_snapshot", lambda _ids: stale_tle)
+    def reject_stale_propagation(*_args, **_kwargs):
+        pytest.fail("stale TLE reached orbital propagation")
+
+    monkeypatch.setattr(sat_pipeline, "compute_subpoint_at", reject_stale_propagation)
+    monkeypatch.setattr(sat_pipeline, "compute_short_track", reject_stale_propagation)
     monkeypatch.setattr(
-        sat_pipeline, "compute_subpoint_at", lambda *_args: (10.0, 20.0, 850.0)
+        sat_pipeline, "find_next_pass_marker", reject_stale_propagation
     )
-    monkeypatch.setattr(
-        sat_pipeline,
-        "compute_short_track",
-        lambda *_args, **_kwargs: ([], None, None),
-    )
-    monkeypatch.setattr(sat_pipeline, "find_next_pass_marker", lambda *_a, **_k: None)
     alert = pd.DataFrame(
         [
             {
