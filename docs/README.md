@@ -19,6 +19,15 @@ that every described feature is complete or operational.
 | [`current/INSTALLATION_REQUIREMENTS.md`](current/INSTALLATION_REQUIREMENTS.md) | Verified current inventory, reviewed 2026-10-19 | Dependency declarations and unresolved packaging gaps |
 | [`../README.md`](../README.md) | Verified current pointer, reviewed 2026-10-19 | Repository introduction and documentation entry point |
 
+## Future capabilities
+
+Documents under [`future/`](future/) describe planned capabilities, not current
+RDS behavior.
+
+| Document | Status | Scope |
+|---|---|---|
+| [`future/OPERATIONAL_VISUALIZATION_AND_SRR_COORDINATION.md`](future/OPERATIONAL_VISUALIZATION_AND_SRR_COORDINATION.md) | Proposed; implementation deferred until the core system is stable | Map-to-globe visualization, satellite intelligence, timeline, SRR-boundary detection, and inter-command-center chat/sharing |
+
 ## Archived project documentation
 
 Superseded, draft, and unverified project documents are preserved in
@@ -44,6 +53,7 @@ publisher should be checked before operational use.
   `_undated` when the source has no reliable date.
 - `docs/reference/`: third-party source material, named with its published
   version where known.
+- `docs/future/`: planned capabilities that are not yet implemented.
 - Every current document must state its status, review date, and baseline
   commit. Preserve any earlier creation/revision dates; the review date is an
   additional field, not a replacement.
