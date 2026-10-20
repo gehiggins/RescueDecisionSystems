@@ -50,6 +50,30 @@ LOG = logging.getLogger(__name__)
 DEFAULT_MAX_TLE_AGE_HOURS = 168.0
 
 
+def _positive_env_int(name: str, default: int) -> int:
+    """Read a positive integer setting, falling back on invalid input."""
+    try:
+        value = int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    if value <= 0:
+        LOG.warning("Invalid %s; using %s", name, default)
+        return default
+    return value
+
+
+def _positive_env_float(name: str, default: float) -> float:
+    """Read a finite positive float setting, falling back on invalid input."""
+    try:
+        value = float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        value = default
+    if not math.isfinite(value) or value <= 0:
+        LOG.warning("Invalid %s; using %s", name, default)
+        return default
+    return value
+
+
 def _max_tle_age_hours() -> float:
     """Maximum event-to-TLE epoch difference allowed for map propagation."""
     try:
@@ -251,23 +275,47 @@ def build_sat_overlay_df(
     try:
         la = float(alert_df.iloc[0].get("alert_lat_dd"))
         lo = float(alert_df.iloc[0].get("alert_lon_dd"))
-        exclude = set([int(x) for x in overlay["norad_id"].dropna().astype(int).tolist()])
-        import os as _os  # [updated]
-        nearby_top_n = int(_os.getenv("RDS_SAT_TOPN_NEARBY","6"))  # [updated]
-        show_all = _os.getenv("RDS_SAT_SHOW_ALL_VISIBLE","0") == "1"  # [updated]
-        max_cand = int(_os.getenv("RDS_SAT_MAX_CANDIDATES","256"))  # [updated]
-        extra.append(_visible_candidates(la, lo, at_time_utc, exclude_norad=exclude,
-                                         max_candidates=max_cand,
-                                         top_n=(10**9 if show_all else nearby_top_n)))
+    except (TypeError, ValueError):
+        la = lo = float("nan")
 
-        # [fixed] upcoming pass search — must be inside the same try:
-        max_hours = float(_os.getenv("RDS_SAT_MAX_HOURS", "12"))
-        upcoming_top_n = int(_os.getenv("RDS_SAT_TOPN_UPCOMING", "4"))
-        extra.append(_upcoming_passes(la, lo, at_time_utc, exclude_norad=exclude,
-                                      max_candidates=max_cand,
-                                      top_n=upcoming_top_n))
-    except Exception as _e:
-        pass
+    if use_tle and math.isfinite(la) and math.isfinite(lo):
+        exclude = set(
+            int(value)
+            for value in overlay["norad_id"].dropna().astype(int).tolist()
+        )
+        nearby_top_n = _positive_env_int("RDS_SAT_TOPN_NEARBY", 6)
+        show_all = os.getenv("RDS_SAT_SHOW_ALL_VISIBLE", "0") == "1"
+        max_cand = _positive_env_int("RDS_SAT_MAX_CANDIDATES", 256)
+        try:
+            extra.append(
+                _visible_candidates(
+                    la,
+                    lo,
+                    at_time_utc,
+                    exclude_norad=exclude,
+                    max_candidates=max_cand,
+                    top_n=(10**9 if show_all else nearby_top_n),
+                )
+            )
+        except Exception as exc:
+            LOG.warning("Visible-satellite enrichment skipped: %s", exc)
+
+        max_hours = _positive_env_float("RDS_SAT_MAX_HOURS", 12.0)
+        upcoming_top_n = _positive_env_int("RDS_SAT_TOPN_UPCOMING", 4)
+        try:
+            extra.append(
+                _upcoming_passes(
+                    la,
+                    lo,
+                    at_time_utc,
+                    exclude_norad=exclude,
+                    max_hours=max_hours,
+                    max_candidates=max_cand,
+                    top_n=upcoming_top_n,
+                )
+            )
+        except Exception as exc:
+            LOG.warning("Upcoming-pass enrichment skipped: %s", exc)
 
     if extra:
         extra_frames = [
@@ -281,10 +329,18 @@ def build_sat_overlay_df(
             else pd.DataFrame()
         )
         if not extra_df.empty:
-            # Ensure same columns exist
-            for c in set(overlay.columns) - set(extra_df.columns):
-                extra_df[c] = np.nan
-            overlay = pd.concat([overlay, extra_df[overlay.columns]], ignore_index=True)
+            # Preserve contextual fields such as role and satellite type even
+            # when the primary/reporting overlay is empty.
+            combined_columns = list(
+                dict.fromkeys([*overlay.columns, *extra_df.columns])
+            )
+            overlay = pd.concat(
+                [
+                    overlay.reindex(columns=combined_columns),
+                    extra_df.reindex(columns=combined_columns),
+                ],
+                ignore_index=True,
+            )
 
     from pathlib import Path
 
