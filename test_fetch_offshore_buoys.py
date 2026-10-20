@@ -1,38 +1,61 @@
-import sys
-import os
+"""Smoke-test the active offshore weather and wave-data contract."""
 
-# Ensure flask_app is on the path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "flask_app", "app")))
+import argparse
 
-#from fetch_NOAA_offshore_buoys import fetch_offshore_buoys
+import pandas as pd
 
-
+from flask_app.app.wx_fetch_open_meteo import fetch_open_meteo_obs
 
 
+MARINE_COLUMNS = {"wave_height_m", "wave_period_s", "wave_dir_deg", "sst_c"}
 
-def main():
-    # Test location: Chesapeake offshore example
-    test_lat = 37.5
-    test_lon = -74.5
 
-    print(f"🌊 Testing offshore buoy fetch for ({test_lat}, {test_lon}) using NDBC JSON API + realtime2 + station metadata fallback...")
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Smoke-test offshore weather data")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="contact Open-Meteo for current offshore weather and wave data",
+    )
+    parser.add_argument("--latitude", type=float, default=37.5)
+    parser.add_argument("--longitude", type=float, default=-74.5)
+    args = parser.parse_args(argv)
 
-    buoy_df = fetch_offshore_buoys(test_lat, test_lon, max_buoys=10)
+    end_utc = pd.Timestamp.now(tz="UTC").floor("h")
+    start_utc = end_utc - pd.Timedelta(hours=6)
+    if args.live:
+        observations = fetch_open_meteo_obs(
+            args.latitude,
+            args.longitude,
+            start_utc,
+            end_utc,
+            include_marine=True,
+        )
+        if observations.empty:
+            raise SystemExit("Offshore weather smoke failed: no observations returned")
+        if observations[list(MARINE_COLUMNS)].notna().sum().sum() == 0:
+            raise SystemExit("Offshore weather smoke failed: no marine values returned")
+        print(f"Offshore weather live smoke passed: {len(observations)} row(s)")
+        return 0
 
-    if buoy_df.empty:
-        print("❌ No buoys found or no valid data available.")
-    else:
-        print("✅ Retrieved offshore buoy data:")
+    # Invalid coordinates are rejected before any provider request, while the
+    # empty result still exposes the full shared weather-and-marine schema.
+    observations = fetch_open_meteo_obs(
+        91.0,
+        args.longitude,
+        start_utc,
+        end_utc,
+        include_marine=True,
+    )
+    missing = MARINE_COLUMNS - set(observations.columns)
+    if not observations.empty or missing:
+        raise SystemExit(
+            "Offshore weather smoke failed; missing columns: "
+            + ", ".join(sorted(missing))
+        )
+    print("Offshore weather offline contract smoke passed")
+    return 0
 
-        # Expanded columns to display metadata alongside observations
-        display_cols = [
-            "station_id", "name", "latitude", "longitude", 
-            "owner", "pgm", "deployment_notes",
-            "source", "observation_time", "timelate",
-            "temperature", "wind_speed", "wind_direction", "wave_height"
-        ]
-
-        print(buoy_df[display_cols].to_string(index=False))
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
