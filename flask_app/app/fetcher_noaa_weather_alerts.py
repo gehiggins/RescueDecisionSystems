@@ -12,6 +12,8 @@ def fetch_weather_alert_features(
     lat, lon, request_timeout=NOAA_ALERT_TIMEOUT_SECONDS
 ):
     """Return a forecast-zone URL, zone ID, and active alert features."""
+    if isinstance(lat, (bool, np.bool_)) or isinstance(lon, (bool, np.bool_)):
+        return None, None, []
     lat, lon = float(lat), float(lon)
     if (
         not np.isfinite(lat)

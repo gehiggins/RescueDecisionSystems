@@ -78,6 +78,11 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
     ]
     out = pd.DataFrame(columns=cols)
 
+    if isinstance(lat, (bool, np.bool_)) or isinstance(
+        lon, (bool, np.bool_)
+    ):
+        LOG.warning("Open-Meteo fetch skipped because coordinates are invalid")
+        return out
     try:
         lat, lon = float(lat), float(lon)
     except (TypeError, ValueError):

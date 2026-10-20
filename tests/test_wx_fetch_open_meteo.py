@@ -168,7 +168,13 @@ def test_open_meteo_rejects_invalid_time_window_without_request(monkeypatch):
 
 @pytest.mark.parametrize(
     ("latitude", "longitude"),
-    [("bad", -75.5), (91.0, -75.5), (37.5, -181.0), (float("inf"), 0.0)],
+    [
+        ("bad", -75.5),
+        (91.0, -75.5),
+        (37.5, -181.0),
+        (float("inf"), 0.0),
+        (True, False),
+    ],
 )
 def test_open_meteo_rejects_invalid_coordinates_without_request(
     monkeypatch, latitude, longitude

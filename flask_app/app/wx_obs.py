@@ -197,12 +197,16 @@ def build_wx_obs_for_area(ref_points: list[tuple[float,float]],
     for ref_point in ref_points:
         try:
             if isinstance(ref_point, dict):
-                lat = float(ref_point.get("lat"))
-                lon = float(ref_point.get("lon"))
+                raw_lat = ref_point.get("lat")
+                raw_lon = ref_point.get("lon")
             else:
-                lat, lon = ref_point
-                lat = float(lat)
-                lon = float(lon)
+                raw_lat, raw_lon = ref_point
+            if isinstance(raw_lat, (bool, np.bool_)) or isinstance(
+                raw_lon, (bool, np.bool_)
+            ):
+                raise ValueError("boolean coordinates are invalid")
+            lat = float(raw_lat)
+            lon = float(raw_lon)
         except (TypeError, ValueError):
             rejected_points += 1
             continue

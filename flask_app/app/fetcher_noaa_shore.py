@@ -108,6 +108,8 @@ def query_nearest_noaa_stations(
     lat, lon, max_stations=5, request_timeout=NOAA_REQUEST_TIMEOUT_SECONDS
 ):
     """Return the nearest NWS observation stations for one valid point."""
+    if isinstance(lat, (bool, np.bool_)) or isinstance(lon, (bool, np.bool_)):
+        return pd.DataFrame()
     try:
         lat, lon = float(lat), float(lon)
         max_stations = int(max_stations)

@@ -91,7 +91,10 @@ def test_compatibility_alert_fetch_preserves_tuple_contract(monkeypatch):
     assert headlines == ["Coastal Flood Advisory"]
 
 
-@pytest.mark.parametrize(("latitude", "longitude"), [(91, 0), (0, 181), ("bad", 0)])
+@pytest.mark.parametrize(
+    ("latitude", "longitude"),
+    [(91, 0), (0, 181), ("bad", 0), (True, False)],
+)
 def test_invalid_alert_coordinates_skip_provider(monkeypatch, latitude, longitude):
     monkeypatch.setattr(
         fetcher_noaa_weather_alerts.requests,

@@ -83,9 +83,16 @@ def run_wx_pipeline(alert_targets_df: pd.DataFrame,
     points_by_coordinates = {}
     rejected_points = 0
     for _, r in alert_targets_df.iterrows():
+        raw_lat = r.get("lat")
+        raw_lon = r.get("lon")
+        if isinstance(raw_lat, (bool, np.bool_)) or isinstance(
+            raw_lon, (bool, np.bool_)
+        ):
+            rejected_points += 1
+            continue
         try:
-            lat = float(r.get("lat"))
-            lon = float(r.get("lon"))
+            lat = float(raw_lat)
+            lon = float(raw_lon)
         except (TypeError, ValueError):
             rejected_points += 1
             continue

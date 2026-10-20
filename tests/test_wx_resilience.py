@@ -435,6 +435,7 @@ def test_weather_pipeline_skips_providers_when_all_targets_invalid(
             {"lat": pd.NA, "lon": -75.0},
             {"lat": float("inf"), "lon": -75.0},
             {"lat": 37.5, "lon": -181.0},
+            {"lat": True, "lon": False},
         ]
     )
 
@@ -734,7 +735,14 @@ def test_weather_aggregator_filters_invalid_reference_points(
     monkeypatch.setattr(wx_obs, "fetch_meteostat_obs_near", meteostat)
 
     result = wx_obs.build_wx_obs_for_area(
-        [("bad", -75.0), (91.0, 0.0), (37.5,), None, (37.5, -75.5)],
+        [
+            ("bad", -75.0),
+            (91.0, 0.0),
+            (37.5,),
+            None,
+            (True, False),
+            (37.5, -75.5),
+        ],
         pd.Timestamp("2026-10-19T12:00:00Z"),
         pd.Timestamp("2026-10-19T18:00:00Z"),
     )
@@ -744,7 +752,7 @@ def test_weather_aggregator_filters_invalid_reference_points(
         ("open-meteo", 37.5, -75.5),
         ("meteostat", 37.5, -75.5),
     ]
-    assert "Discarded 4 invalid weather provider reference point" in caplog.text
+    assert "Discarded 5 invalid weather provider reference point" in caplog.text
 
 
 def test_weather_aggregator_skips_providers_when_all_references_invalid(
@@ -766,11 +774,15 @@ def test_weather_aggregator_skips_providers_when_all_references_invalid(
     )
 
     result = wx_obs.build_wx_obs_for_area(
-        [{"lat": pd.NA, "lon": -75.0}, (float("inf"), 0.0)],
+        [
+            {"lat": pd.NA, "lon": -75.0},
+            (float("inf"), 0.0),
+            (True, False),
+        ],
         pd.Timestamp("2026-10-19T12:00:00Z"),
         pd.Timestamp("2026-10-19T18:00:00Z"),
     )
 
     assert result.empty
     assert list(result.columns) == wx_obs._WX_OBS_COLS
-    assert "Discarded 2 invalid weather provider reference point" in caplog.text
+    assert "Discarded 3 invalid weather provider reference point" in caplog.text
