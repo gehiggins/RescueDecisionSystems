@@ -157,6 +157,18 @@ def _positive_finite(value):
         return None
     return normalized if math.isfinite(normalized) and normalized > 0 else None
 
+
+def _safe_display_text(value, default=""):
+    """Escape plain display text before giving it to Folium HTML widgets."""
+    if value is None:
+        value = default
+    try:
+        if pd.isna(value):
+            value = default
+    except (TypeError, ValueError):
+        value = default
+    return escape(str(value), quote=True)
+
 def _fmt_num(v, prec=5, dash="—"):
     """Safe float formatting for UI: returns '—' if v is None/NaN; else formats to given precision."""
     try:
@@ -675,7 +687,7 @@ def generate_gis_map_html_from_dfs(
             if icon_path:
                 Marker(
                     location=[float(lat), float(lon)],
-                    tooltip=str(row.get("label","")),
+                    tooltip=_safe_display_text(row.get("label")),
                     popup=row.get("popup_html"),
                     icon=CustomIcon(icon_image=icon_path, icon_size=(28, 28))
                 ).add_to(wx_group)
@@ -687,7 +699,7 @@ def generate_gis_map_html_from_dfs(
                     fill=True,
                     fill_opacity=0.9,
                     color="#22aa22" if (icon_key == "wx_spot") else "#0b84f3",
-                    tooltip=str(row.get("label","")),  # [updated]
+                    tooltip=_safe_display_text(row.get("label")),  # [updated]
                     popup=row.get("popup_html"),       # [updated]
                 ).add_to(wx_group)
         wx_group.add_to(m)
@@ -711,7 +723,7 @@ def generate_gis_map_html_from_dfs(
             if icon_path:
                 Marker(
                     location=[float(lat), float(lon)],
-                    tooltip=str(row.get("label","")),
+                    tooltip=_safe_display_text(row.get("label")),
                     popup=row.get("popup_html"),
                     icon=CustomIcon(icon_image=icon_path, icon_size=(28, 28))
                 ).add_to(st_group)
@@ -723,7 +735,7 @@ def generate_gis_map_html_from_dfs(
                     fill=True,
                     fill_opacity=0.9,
                     color="#0b84f3",
-                    tooltip=str(row.get("label","")),
+                    tooltip=_safe_display_text(row.get("label")),
                     popup=row.get("popup_html"),
                 ).add_to(st_group)
         st_group.add_to(m)
@@ -744,7 +756,12 @@ def generate_gis_map_html_from_dfs(
         from folium import Marker, Icon
         from folium.features import CustomIcon
         def _sat_fg_for(sat):
-            st = str(sat.get("sat_type") or sat.get("label") or "").lower()
+            sat_type = sat.get("sat_type")
+            try:
+                type_missing = sat_type is None or pd.isna(sat_type)
+            except (TypeError, ValueError):
+                type_missing = True
+            st = str(sat.get("label") if type_missing else sat_type).lower()
             if "leo" in st:  return fg_sat_leo
             if "meo" in st:  return fg_sat_meo
             if "geo" in st:  return fg_sat_geo
@@ -775,11 +792,18 @@ def generate_gis_map_html_from_dfs(
                     valid_bounds = False
                     opacity = 0.6
                 if valid_bounds and image_path and Path(image_path).is_file():
+                    overlay_name = geom.get("name")
+                    try:
+                        name_missing = overlay_name is None or pd.isna(overlay_name)
+                    except (TypeError, ValueError):
+                        name_missing = True
+                    if name_missing:
+                        overlay_name = sat.get("label")
                     folium.raster_layers.ImageOverlay(
                         image=str(image_path),
                         bounds=bounds,
                         opacity=min(max(opacity, 0.0), 1.0),
-                        name=str(geom.get("name") or sat.get("label") or "Satellite overlay"),
+                        name=_safe_display_text(overlay_name, default="Satellite overlay"),
                     ).add_to(fg_image)
 
             # Circle (footprint)
@@ -797,7 +821,7 @@ def generate_gis_map_html_from_dfs(
                           fill=bool(sty.get("fill", True)),
                           fill_opacity=float(sty.get("fillOpacity", 0.15)),
                           dash_array=sty.get("dashArray"),
-                          tooltip=sat.get("label",""),
+                          tooltip=_safe_display_text(sat.get("label")),
                           popup=sat.get("popup_html")).add_to(
                         fg_sat_leo if "leo" in str(sat.get("sat_type") or sat.get("label") or "").lower()
                         else (fg_sat_meo if "meo" in str(sat.get("sat_type") or "").lower() else fg_sat_geo)
@@ -819,7 +843,7 @@ def generate_gis_map_html_from_dfs(
                      opacity=float(sty.get("opacity", 0.6)),
                      color=sty.get("color", "#0b84f3"),
                      dash_array=sty.get("dashArray", "4,6"),
-                     tooltip=sat.get("label",""),
+                     tooltip=_safe_display_text(sat.get("label")),
                      popup=sat.get("popup_html")).add_to(
                         fg_sat_leo if "leo" in str(sat.get("sat_type") or sat.get("label") or "").lower()
                         else (fg_sat_meo if "meo" in str(sat.get("sat_type") or "").lower() else fg_sat_geo)
@@ -836,7 +860,9 @@ def generate_gis_map_html_from_dfs(
                     if icon_path:
                         Marker(
                             location=[lat, lon],
-                            tooltip=str(sat.get("label","Next pass")),
+                            tooltip=_safe_display_text(
+                                sat.get("label"), default="Next pass"
+                            ),
                             popup=sat.get("popup_html"),
                             icon=CustomIcon(icon_image=icon_path, icon_size=(28, 28))
                         ).add_to(
@@ -851,7 +877,9 @@ def generate_gis_map_html_from_dfs(
                             fill=True,
                             fill_opacity=0.9,
                             color="#0b84f3",
-                            tooltip=str(sat.get("label","Next pass")),
+                            tooltip=_safe_display_text(
+                                sat.get("label"), default="Next pass"
+                            ),
                             popup=sat.get("popup_html"),
                         ).add_to(
                             fg_sat_leo if "leo" in str(sat.get("sat_type") or sat.get("label") or "").lower()
