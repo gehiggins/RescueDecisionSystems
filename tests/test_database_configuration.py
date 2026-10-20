@@ -29,7 +29,10 @@ def test_database_can_be_configured_explicitly(monkeypatch):
     engine = sql_models.configure_database("sqlite+pysqlite:///:memory:")
     session = sql_models.SessionLocal()
     try:
-        assert str(engine.url) == "sqlite+pysqlite:///:memory:"
+        # SQLAlchemy versions differ in how they render reserved characters in
+        # URL strings; inspect the parsed URL fields that drive the connection.
+        assert engine.url.drivername == "sqlite+pysqlite"
+        assert engine.url.database == ":memory:"
     finally:
         session.close()
         engine.dispose()

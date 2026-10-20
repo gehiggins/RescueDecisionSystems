@@ -85,7 +85,8 @@ The default and live test commands are documented in `pytest.ini` and
 - Weather and TLE enrichment depend on their external services. If data is
   unavailable, RDS continues with the alert positions and range rings it can
   verify.
-- Python 3.9 is the installation environment verified during this review.
+- Python 3.9 is the local installation environment verified during this review;
+  continuous verification also covers Python 3.11.
 - That macOS Python 3.9 environment emits third-party compatibility warnings
   for LibreSSL/urllib3 and the installed Matplotlib/pyparsing versions. They do
   not currently fail the offline or live suites, but a newer Python runtime and

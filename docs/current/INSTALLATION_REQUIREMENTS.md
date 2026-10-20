@@ -47,7 +47,7 @@ database; alert sequence numbering then starts from an empty local history.
 ## Verification performed
 
 - Installed the editable project with the `test` extra in a Python 3.9 virtual
-  environment.
+  environment. Continuous verification also exercises Python 3.11.
 - Installed `flask_app/requirements.txt` from the repository root and confirmed
   that the Gunicorn server dependency was included.
 - Imported and exercised the Flask application, GIS renderer, live weather
@@ -59,7 +59,8 @@ deployment configuration is intentionally outside this installation check.
 
 ## Continuous verification
 
-GitHub Actions runs the supported Python 3.9 installation, dependency check,
-offline test suite, and Gunicorn configuration check for every pull request and
-every update to `main`. Live external-service tests remain deliberately
-separate so temporary provider outages do not block unrelated code changes.
+GitHub Actions runs the supported Python 3.9 and Python 3.11 installations,
+dependency checks, offline test suites, and Gunicorn configuration checks for
+every pull request and every update to `main`. Live external-service tests
+remain deliberately separate so temporary provider outages do not block
+unrelated code changes.
