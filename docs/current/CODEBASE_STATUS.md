@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `c4278eb0990d0dabd70bcd4773f37cb35594a187`
+Baseline: `main` commit `33fb325133cff4f10f5ecef3bdec98a2b309f80f`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -294,10 +294,12 @@ Satellite context enrichment isolates visible-satellite, upcoming-pass, and
 nearest-satellite failures. Empty provider results preserve the overlay schema;
 incomplete satellite metadata does not discard valid geometry. Satellite
 subpoints can render without a footprint radius, and malformed track vertices
-or next-pass coordinates are removed individually. Missing, array-like, or
-malformed alert timestamps return an empty satellite overlay before reference
-or TLE-provider work begins. Satellite propagation boundaries normalize valid
-times to UTC and reject malformed timestamps or out-of-range alert coordinates
+or next-pass coordinates are removed individually. Malformed alert coordinates
+skip only the optional next-pass calculation while preserving valid subpoint
+and footprint output. Missing, array-like, or malformed alert timestamps return
+an empty satellite overlay before reference or TLE-provider work begins.
+Satellite propagation boundaries normalize scalar times to UTC and reject
+malformed or array-like provider epochs and out-of-range alert coordinates
 before invoking Skyfield. Malformed or empty constellation responses are not
 cached as successful TLE lookups, allowing a later provider recovery to be
 retried.
@@ -333,7 +335,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 692 passed; 2 live tests deselected.
+- Default offline suite: 699 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
