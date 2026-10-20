@@ -50,6 +50,9 @@ def fetch_meteostat_obs_near(lat: float, lon: float, start_utc, end_utc,
 
     # Optional input hygiene
     start_utc, end_utc = coerce_utc_range(start_utc, end_utc)
+    if start_utc is None or end_utc is None:
+        LOG.warning("Meteostat fetch skipped because the UTC window is invalid")
+        return out
 
     try:
         stations_df = Stations().nearby(lat, lon).fetch(max_stations * 3)
@@ -154,8 +157,8 @@ def fetch_meteostat_obs_near(lat: float, lon: float, start_utc, end_utc,
 
     if rows:
         out = pd.DataFrame(rows)
-        # Unify index normalization
-        out.index = ensure_utc_index(out.index)
+        # Observation time belongs in the shared valid_utc column. Preserve a
+        # normal row index instead of interpreting row numbers as Unix times.
         out["valid_utc"] = pd.to_datetime(out["valid_utc"], utc=True).dt.tz_convert("UTC")
     else:
         out = pd.DataFrame(columns=cols)
