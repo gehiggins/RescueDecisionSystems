@@ -187,7 +187,16 @@ def gis_map(latitude, longitude, site_id):
         "range_ring_meters_b": 0.0,
     }
     output_path = _map_path(site_id)
-    generate_gis_map(alert_row, str(output_path))
+    try:
+        generate_gis_map(alert_row, str(output_path))
+    except Exception:
+        current_app.logger.exception("Direct GIS map generation failed")
+        return jsonify({"error": "Map generation failed"}), 500
+    if not output_path.is_file():
+        current_app.logger.error(
+            "Direct GIS map generation did not create output: %s", output_path
+        )
+        return jsonify({"error": "Map generation failed"}), 500
     return redirect(url_for("main.serve_map", filename=output_path.name))
 
 
