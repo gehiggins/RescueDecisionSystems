@@ -25,6 +25,7 @@ from .pipeline_controller import process_sarsat_alert as run_alert_pipeline
 main_bp = Blueprint("main", __name__)
 
 _MAX_MAP_SITE_ID_CHARS = 80
+_DEFAULT_MAX_ALERT_CHARS = 100_000
 
 
 def _json_compatible(value):
@@ -85,6 +86,26 @@ def _coordinates_are_valid(latitude, longitude):
     )
 
 
+def _alert_character_limit():
+    """Return a usable configured request limit without crashing the route."""
+    configured = current_app.config.get(
+        "RDS_MAX_ALERT_CHARS", _DEFAULT_MAX_ALERT_CHARS
+    )
+    if not isinstance(configured, bool):
+        try:
+            numeric = float(configured)
+        except (TypeError, ValueError, OverflowError):
+            numeric = float("nan")
+        if math.isfinite(numeric) and numeric >= 1 and numeric.is_integer():
+            return int(numeric)
+    current_app.logger.warning(
+        "Invalid RDS_MAX_ALERT_CHARS=%r; using %s",
+        configured,
+        _DEFAULT_MAX_ALERT_CHARS,
+    )
+    return _DEFAULT_MAX_ALERT_CHARS
+
+
 @main_bp.route("/")
 def index():
     return render_template("index.html")
@@ -123,7 +144,7 @@ def process_alert():
     raw_message = payload.get("message")
     if not isinstance(raw_message, str) or not raw_message.strip():
         return jsonify({"error": "No message provided"}), 400
-    max_alert_chars = current_app.config["RDS_MAX_ALERT_CHARS"]
+    max_alert_chars = _alert_character_limit()
     if len(raw_message) > max_alert_chars:
         return jsonify(
             {
