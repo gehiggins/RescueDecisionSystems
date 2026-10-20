@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `fd0af9614a8918df9270500bc29c2a3e9a8530e8`
+Baseline: `main` commit `f2cf44682f7b9772af8c90755e3d2759d23fae28`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -206,8 +206,9 @@ check of station 44009 on 2026-10-20 returned a current observation and
 populated temperature, wind speed, and wind direction through the repaired
 parser. Negative wind speeds and wave heights, and directions outside 0–360
 degrees, are also excluded from the shared weather schema. NDBC metadata and
-direct lookups accept only normalized station-code identifiers; empty,
-path-like, and query-like identifiers do not reach provider requests.
+direct lookups accept only normalized station-code identifiers. Validation is
+enforced by the shared realtime2 and 5day2 parsers, so empty, path-like, and
+query-like identifiers do not reach provider requests through direct callers.
 
 The optional NOAA shore adapter no longer returns Seattle's KSEA station for
 every alert. It discovers NWS observation stations around the requested point,
@@ -267,7 +268,9 @@ wave-height, and wave-period values are omitted, as are percentages and
 directions outside their physical ranges. Invalid humidity cannot produce a
 derived dew point. Meteostat now applies matching finite and physical range
 checks to its temperature, dew-point, humidity, wind, direction, pressure, and
-precipitation fields before creating shared weather rows.
+precipitation fields before creating shared weather rows. Malformed Meteostat
+station identifiers are skipped independently so valid neighboring stations
+can still be queried.
 
 Satellite context enrichment isolates visible-satellite, upcoming-pass, and
 nearest-satellite failures. Empty provider results preserve the overlay schema;
@@ -310,7 +313,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 627 passed; 2 live tests deselected.
+- Default offline suite: 652 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
