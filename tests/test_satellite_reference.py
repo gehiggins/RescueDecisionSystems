@@ -34,6 +34,43 @@ def test_satellite_reference_path_is_repository_relative():
     assert sat_fetch_tle.BASELINE_CSV_PATH == expected
 
 
+@pytest.mark.parametrize("alert", [None, pd.DataFrame(), "not-a-dataframe"])
+def test_reporting_satellite_resolver_rejects_invalid_alert_input(
+    monkeypatch, alert
+):
+    monkeypatch.setattr(
+        sat_fetch_tle,
+        "load_sat_reference",
+        lambda: pytest.fail("reference loaded for invalid alert input"),
+    )
+
+    assert sat_fetch_tle.resolve_reporting_sat(alert) is None
+
+
+@pytest.mark.parametrize("name", [None, pd.NA, "", "   ", "["])
+def test_reporting_satellite_resolver_ignores_missing_or_regex_like_names(name):
+    alert = pd.DataFrame([{"satellite_name": name}])
+
+    assert sat_fetch_tle.resolve_reporting_sat(alert) is None
+
+
+def test_reporting_satellite_resolver_uses_literal_partial_name_match(caplog):
+    alert = pd.DataFrame([{"satellite_name": "NOAA"}])
+
+    satellite = sat_fetch_tle.resolve_reporting_sat(alert)
+
+    assert satellite["common_name"] == "NOAA 15"
+    assert "Multiple satellite matches" in caplog.text
+
+
+def test_reporting_satellite_resolver_skips_blank_name_and_uses_designator():
+    alert = pd.DataFrame([{"satellite_name": pd.NA, "sat_designator": "NOAA-18"}])
+
+    satellite = sat_fetch_tle.resolve_reporting_sat(alert)
+
+    assert satellite["norad_id"] == 28654
+
+
 def test_satellite_pipeline_handles_alert_without_reporting_satellite(monkeypatch):
     monkeypatch.setattr(
         sat_pipeline,
