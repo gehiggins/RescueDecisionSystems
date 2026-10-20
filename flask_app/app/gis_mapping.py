@@ -510,12 +510,15 @@ def _rds_ensure_proj_ready() -> Optional[str]:
                 pass
             return cur
         candidates = []
+        for env_name in ("PROJ_DATA", "PROJ_LIB"):
+            if os.environ.get(env_name):
+                candidates.append(os.environ[env_name])
         conda_prefix = os.environ.get("CONDA_PREFIX")
         if conda_prefix:
             candidates.append(os.path.join(conda_prefix, "Library", "share", "proj"))
         candidates.extend([
-            r"C:\Users\gehig\anaconda3\envs\unified_env\Library\share\proj",
-            r"C:\Users\gehig\anaconda3\Library\share\proj",
+            os.path.join(sys.prefix, "Library", "share", "proj"),
+            os.path.join(sys.prefix, "share", "proj"),
             r"C:\ProgramData\Anaconda3\Library\share\proj",
         ])
         for c in candidates:

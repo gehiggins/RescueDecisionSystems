@@ -1,20 +1,29 @@
 ﻿# fetcher_ndbc_buoy.py - Offshore Buoy Fetcher (2025-03-07 - Updated)
 
 from app.setup_imports import *
+from pathlib import Path
+
 from flask_app.app.utils import log_error_and_continue, get_current_utc_timestamp
 from flask_app.app.utils_geo import haversine_nm
 from flask_app.app.utils_weather import calculate_timelate
 
-METADATA_PATH = os.path.join(
-    os.getenv('RDS_DATA_FOLDER', 'C:/Users/gehig/Projects/RescueDecisionSystems/data'),
-    'reference',
-    'ndbc_station_metadata_full.csv'
-)
+DEFAULT_DATA_FOLDER = Path(__file__).resolve().parents[2] / "data"
+
+
+def _metadata_path():
+    """Resolve buoy metadata from configuration or the repository data folder."""
+    data_folder = Path(os.getenv("RDS_DATA_FOLDER", str(DEFAULT_DATA_FOLDER)))
+    return data_folder / "reference" / "ndbc_station_metadata_full.csv"
 
 def load_buoy_metadata():
+    metadata_path = _metadata_path()
     try:
-        logging.info(f"{get_current_utc_timestamp()} ðŸ“„ Loading buoy metadata from: {METADATA_PATH}")
-        return pd.read_csv(METADATA_PATH)
+        logging.info(
+            "%s Loading buoy metadata from: %s",
+            get_current_utc_timestamp(),
+            metadata_path,
+        )
+        return pd.read_csv(metadata_path)
     except Exception as e:
         log_error_and_continue(f"{get_current_utc_timestamp()} âŒ Failed to load buoy metadata: {e}")
         return pd.DataFrame()
