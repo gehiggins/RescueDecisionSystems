@@ -398,6 +398,19 @@ def validate_and_extract_coordinate_token(field_name: str, raw_text: str, config
     std = clean_and_standardize_coordinate(text)
     checks_passed, checks_failed, notes = [], [], []
 
+    expected_hemispheres = "NS" if field_name == "latitude" else "EW"
+    if std and std[-1:].upper() in "NSEW" and std[-1:].upper() not in expected_hemispheres:
+        return {
+            "value": None,
+            "raw_span": (context or {}).get("span"),
+            "valid": False,
+            "confidence": 0.0,
+            "checks_passed": [],
+            "checks_failed": ["hemisphere"],
+            "fallback_used": False,
+            "notes": [f"hemisphere: expected {expected_hemispheres}"],
+        }
+
     # Decimal-minutes regex (robust, preserves leading zeros)
     dec_min_lat = r"^(?P<deg>\d{1,2})\s+(?P<min>[0-5]?\d(?:\.\d+)?)\s*[NS]$"
     dec_min_lon = r"^(?P<deg>\d{1,3})\s+(?P<min>[0-5]?\d(?:\.\d+)?)\s*[EW]$"
@@ -447,7 +460,9 @@ def validate_and_extract_coordinate_token(field_name: str, raw_text: str, config
         # Try DMS or DD fallback
         # DMS: 37°45.600'N or 075°30.200'W
         dms_pat = r"^(?P<deg>\d{1,3})[°\s]+(?P<min>\d{1,2}(?:\.\d+)?)[\'\s]*(?P<sec>\d{1,2}(?:\.\d+)?)?[\"\s]*[NSEW]$"
-        dd_pat = r"^(?P<dd>[+-]?\d{1,3}\.\d+)[NSEW]$"
+        # A cardinal suffix already supplies the sign. Reject an additional
+        # numeric sign so S/W values cannot be accidentally double-negated.
+        dd_pat = r"^(?P<dd>\d{1,3}\.\d+)[NSEW]$"
         m = re.match(dms_pat, std)
         if m:
             structure_ok = True
@@ -631,14 +646,14 @@ def validate_and_extract_coordinate_pair(field_name: str, raw_text: str, config:
                     }
 
     # Fallback: try to find two tokens (DMS or DD)
-    token_pat = r"\d{1,3}[°\s]+\d{1,2}(?:\.\d+)?[\'\s]*(?:\d{1,2}(?:\.\d+)?)?[\"\s]*[NSEW]|[+-]?\d{1,3}\.\d+[NSEW]"
+    token_pat = r"\d{1,3}[°\s]+\d{1,2}(?:\.\d+)?[\'\s]*(?:\d{1,2}(?:\.\d+)?)?[\"\s]*[NSEW]|\d{1,3}\.\d+[NSEW]"
     tokens = re.findall(token_pat, std)
     if len(tokens) >= 2:
         lat_token = next((t for t in tokens if t.strip().upper().endswith(("N","S"))), None)
         lon_token = next((t for t in tokens if t.strip().upper().endswith(("E","W"))), None)
         # Determine format type for each token
         dms_pat = r"^\d{1,3}[°\s]+\d{1,2}(?:\.\d+)?[\'\s]*(?:\d{1,2}(?:\.\d+)?)?[\"\s]*[NSEW]$"
-        dd_pat = r"^[+-]?\d{1,3}\.\d+[NSEW]$"
+        dd_pat = r"^\d{1,3}\.\d+[NSEW]$"
         lat_is_dms = bool(lat_token and re.match(dms_pat, lat_token))
         lon_is_dms = bool(lon_token and re.match(dms_pat, lon_token))
         lat_is_dd = bool(lat_token and re.match(dd_pat, lat_token))

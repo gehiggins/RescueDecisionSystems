@@ -83,3 +83,38 @@ def test_coordinate_prescan_excludes_invalid_component_pair():
     result = pre_scan_for_coordinates("POSITION: 37 99.000N 075 30.000W")
 
     assert result.empty
+
+
+@pytest.mark.parametrize(
+    ("field_name", "token"),
+    [
+        ("latitude", "-37.500S"),
+        ("latitude", "-37.500N"),
+        ("longitude", "-075.500W"),
+        ("longitude", "-075.500E"),
+    ],
+)
+def test_signed_decimal_degree_with_cardinal_is_rejected(field_name, token):
+    res = validate_and_extract_coordinate_token(field_name, token, {}, None)
+
+    assert res["valid"] is False
+
+
+@pytest.mark.parametrize(
+    ("field_name", "token"),
+    [
+        ("latitude", "37.500E"),
+        ("longitude", "075.500N"),
+    ],
+)
+def test_coordinate_token_requires_matching_hemisphere(field_name, token):
+    res = validate_and_extract_coordinate_token(field_name, token, {}, None)
+
+    assert res["valid"] is False
+    assert "hemisphere" in res["checks_failed"]
+
+
+def test_coordinate_prescan_excludes_signed_cardinal_pair():
+    result = pre_scan_for_coordinates("POSITION: -37.500S -075.500W")
+
+    assert result.empty
