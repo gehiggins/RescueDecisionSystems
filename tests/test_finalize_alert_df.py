@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 from flask_app.app.finalize_alert_df import finalize_alert_df
 
@@ -24,6 +25,29 @@ def test_sequence_numbers_normalize_site_ids_and_advance_within_batch(caplog):
 
     assert result["alert_sequence_number"].tolist() == [3, 4, 1]
     assert str(result["alert_sequence_number"].dtype) == "Int64"
+    assert "Ignored 2 invalid historical alert sequence value" in caplog.text
+
+
+def test_historical_sequence_values_reject_booleans_and_preserve_large_integers(
+    caplog,
+):
+    incoming = pd.DataFrame(
+        [
+            {"site_id": "BOOL", "detect_time": "2026-10-20T10:00:00Z"},
+            {"site_id": "LARGE", "detect_time": "2026-10-20T11:00:00Z"},
+        ]
+    )
+    history = pd.DataFrame(
+        [
+            {"site_id": "BOOL", "alert_sequence_number": True},
+            {"site_id": "BOOL", "alert_sequence_number": np.bool_(True)},
+            {"site_id": "LARGE", "alert_sequence_number": "9007199254740993"},
+        ]
+    )
+
+    result = finalize_alert_df(incoming, history)
+
+    assert result["alert_sequence_number"].tolist() == [1, 9007199254740994]
     assert "Ignored 2 invalid historical alert sequence value" in caplog.text
 
 

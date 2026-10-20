@@ -31,6 +31,7 @@
 #
 
 from app.setup_imports import *
+from decimal import Decimal, InvalidOperation
 
 
 def _site_key(value):
@@ -57,12 +58,24 @@ def _existing_sequence_maxima(existing_alerts_db):
     rejected = 0
     for _, row in existing_alerts_db.iterrows():
         key = _site_key(row.get("site_id"))
-        try:
-            sequence = float(row.get("alert_sequence_number"))
-        except (TypeError, ValueError):
+        raw_sequence = row.get("alert_sequence_number")
+        if isinstance(raw_sequence, (bool, np.bool_)) or not pd.api.types.is_scalar(
+            raw_sequence
+        ):
             rejected += 1
             continue
-        if not np.isfinite(sequence) or sequence < 1 or not sequence.is_integer():
+        try:
+            # Parse through Decimal so integer text beyond float's exact range
+            # is not rounded before the next sequence number is assigned.
+            sequence = Decimal(str(raw_sequence).strip())
+        except (InvalidOperation, ValueError):
+            rejected += 1
+            continue
+        if (
+            not sequence.is_finite()
+            or sequence < 1
+            or sequence != sequence.to_integral_value()
+        ):
             rejected += 1
             continue
         maxima[key] = max(maxima.get(key, 0), int(sequence))
