@@ -25,7 +25,6 @@ def test_map_site_id_length_is_bounded():
     assert len(_safe_map_site_id("A" * 200)) == 80
 
 
-
 def test_pipeline_uses_safe_site_id_for_final_map_path(monkeypatch, tmp_path):
     parsed = {
         "site_id": "../../outside",
