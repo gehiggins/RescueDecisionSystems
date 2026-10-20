@@ -213,8 +213,17 @@ def process_alert():
         return jsonify({"error": "Alert processing failed"}), 500
     parsed_data = _serialize_parsed_alert(result["parsed_data"])
     map_url = None
-    if result.get("map_html_path"):
-        map_path = Path(result["map_html_path"]).resolve()
+    reported_map_path = result.get("map_html_path")
+    if reported_map_path is not None:
+        valid_path_type = isinstance(
+            reported_map_path, (str, os.PathLike)
+        ) and not isinstance(reported_map_path, bool)
+        if not valid_path_type or not str(reported_map_path).strip():
+            current_app.logger.error(
+                "Alert pipeline returned an invalid map path: %r", reported_map_path
+            )
+            return jsonify({"error": "Alert processing failed"}), 500
+        map_path = Path(reported_map_path).resolve()
         try:
             relative_map_path = map_path.relative_to(maps_dir)
         except ValueError:
