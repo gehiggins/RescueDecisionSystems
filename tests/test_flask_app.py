@@ -2,6 +2,7 @@ from pathlib import Path
 import re
 from urllib.parse import unquote
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -214,6 +215,42 @@ def test_process_alert_serializes_non_finite_numbers_as_null(
 
     assert response.status_code == 200
     assert response.get_json()["parsed_data"][0]["latitude_b"] is None
+    assert b"NaN" not in response.data
+    assert b"Infinity" not in response.data
+
+
+def test_process_alert_recursively_serializes_numpy_and_missing_values(
+    monkeypatch,
+):
+    application = create_app({"TESTING": True})
+    monkeypatch.setattr(
+        "flask_app.app.routes.run_alert_pipeline",
+        lambda _message, maps_root: {
+            "status": "ok",
+            "parsed_data": {
+                "site_id": "123",
+                "nested": {"value": np.float64(float("nan"))},
+                "values": [np.int64(2), pd.NA],
+                "array": np.array([1.0, float("inf")]),
+            },
+            "layers": ("Alert Positions", np.str_("Weather")),
+            "weather_rows": np.int64(2),
+            "satellite_rows": np.int64(1),
+        },
+    )
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["parsed_data"][0]["nested"]["value"] is None
+    assert body["parsed_data"][0]["values"] == [2, None]
+    assert body["parsed_data"][0]["array"] == [1.0, None]
+    assert body["layers"] == ["Alert Positions", "Weather"]
+    assert body["weather_rows"] == 2
+    assert body["satellite_rows"] == 1
     assert b"NaN" not in response.data
     assert b"Infinity" not in response.data
 

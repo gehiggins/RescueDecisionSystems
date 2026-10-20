@@ -28,11 +28,27 @@ _MAX_MAP_SITE_ID_CHARS = 80
 
 
 def _json_compatible(value):
-    """Convert pandas/NumPy scalar values returned by the parser to JSON types."""
+    """Recursively convert pandas/NumPy values to strict JSON-compatible types."""
     if value is None or value is pd.NA or value is pd.NaT:
         return None
+    if isinstance(value, dict):
+        return {key: _json_compatible(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_compatible(item) for item in value]
+    # NumPy arrays and pandas containers expose ``tolist``; convert them before
+    # scalar ``item`` handling so a multi-element array cannot raise here.
+    if not pd.api.types.is_scalar(value) and hasattr(value, "tolist"):
+        try:
+            return _json_compatible(value.tolist())
+        except (TypeError, ValueError):
+            pass
     if hasattr(value, "item"):
-        value = value.item()
+        try:
+            value = value.item()
+        except (TypeError, ValueError):
+            pass
+        else:
+            return _json_compatible(value)
     if isinstance(value, float) and not math.isfinite(value):
         return None
     if hasattr(value, "isoformat"):
@@ -167,9 +183,11 @@ def process_alert():
             "success": True,
             "parsed_data": [parsed_data],
             "map_url": map_url,
-            "layers": result.get("layers", []),
-            "weather_rows": result.get("weather_rows", 0),
-            "satellite_rows": result.get("satellite_rows", 0),
+            "layers": _json_compatible(result.get("layers", [])),
+            "weather_rows": _json_compatible(result.get("weather_rows", 0)),
+            "satellite_rows": _json_compatible(
+                result.get("satellite_rows", 0)
+            ),
         }
     )
 
