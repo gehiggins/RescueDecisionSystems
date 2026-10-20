@@ -90,6 +90,48 @@ def test_station_discovery_skips_invalid_provider_identifier(monkeypatch):
     assert result["station_id"].tolist() == ["KVALID"]
 
 
+@pytest.mark.parametrize("features", [None, {}, "bad"])
+def test_station_discovery_treats_non_list_features_as_empty(
+    monkeypatch, features
+):
+    monkeypatch.setattr(
+        fetcher_noaa_shore.requests,
+        "get",
+        lambda *_args, **_kwargs: _Response({"features": features}),
+    )
+
+    assert fetcher_noaa_shore.query_nearest_noaa_stations(37.5, -74.5).empty
+
+
+@pytest.mark.parametrize(
+    "feature",
+    [
+        {"properties": [], "geometry": {"coordinates": [-74.5, 37.5]}},
+        {"properties": {"stationIdentifier": "KTEST"}, "geometry": []},
+        {
+            "properties": {"stationIdentifier": "KTEST"},
+            "geometry": {"coordinates": "-74.5,37.5"},
+        },
+        {
+            "properties": {"stationIdentifier": "KTEST"},
+            "geometry": {"coordinates": [True, 37.5]},
+        },
+        {
+            "properties": {"stationIdentifier": "KTEST"},
+            "geometry": {"coordinates": [-74.5, float("nan")]},
+        },
+    ],
+)
+def test_station_discovery_skips_malformed_provider_entries(monkeypatch, feature):
+    monkeypatch.setattr(
+        fetcher_noaa_shore.requests,
+        "get",
+        lambda *_args, **_kwargs: _Response({"features": [feature]}),
+    )
+
+    assert fetcher_noaa_shore.query_nearest_noaa_stations(37.5, -74.5).empty
+
+
 @pytest.mark.parametrize(
     "invalid_limit",
     [True, pd.Series([True]).iloc[0], 2.5, 0, "bad", float("inf")],
