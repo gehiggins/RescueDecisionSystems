@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `a09d99454e55999b755d876c489225fca296510f`
+Baseline: `main` commit `a80021d2bc5dea22f34d4bd802d5c4380fe3829a`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -167,6 +167,18 @@ helper excludes archives and notebook checkpoints, ignores comments and string
 literals, and uses atomic permission-preserving file replacement. The broader
 application namespace migration has not been performed.
 
+The standalone coastline-distance utility now resolves the committed Natural
+Earth data relative to the repository, validates its inputs, and calculates in
+a local metre-based projection. A representative 37.5, -74.5 check returned
+84.87 km. This utility is not connected to maritime policy decisions in the
+active alert pipeline.
+
+The explicit TLE downloader constrains output names, identifies and bounds its
+requests, validates provider payloads, and uses atomic file replacement without
+following output-file symbolic links. An explicitly empty source selection is
+a no-op. These safeguards were verified offline; no current provider download
+is claimed for this baseline.
+
 The optional NDBC buoy adapter now normalizes usable coordinates from the
 committed station metadata, retrieves preferred observations with fallback,
 and preserves nearby-station context when observations are unavailable. The
@@ -214,6 +226,11 @@ When A and B have identical coordinates, RDS performs one provider lookup but
 retains the most conservative combined metadata: the largest available error
 radius and the smallest available coast distance. Invalid optional policy
 metadata is omitted rather than passed downstream.
+The reusable context boundary also rejects malformed, non-finite, boolean, and
+out-of-range coordinates before classification. The standalone observation
+reducer applies the same provider-ID validation as the full aggregator. Weather
+health summaries normalize mixed-offset observation times to UTC and report an
+unknown span when no valid timestamp remains.
 
 Open-Meteo keeps usable timestamp rows when individual provider arrays are
 short or malformed. Meteostat's documented km/h wind and gust values are
@@ -264,7 +281,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 477 passed; 2 live tests deselected.
+- Default offline suite: 500 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
