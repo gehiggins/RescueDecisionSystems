@@ -576,6 +576,37 @@ def test_short_track_rejects_invalid_sampling_step(monkeypatch, step_s):
         )
 
 
+@pytest.mark.parametrize(
+    "invalid_time", [None, "not-a-time", 12345, True, ["2026-10-20T12:00:00Z"]]
+)
+def test_short_track_rejects_invalid_center_time_before_propagation(
+    monkeypatch, invalid_time
+):
+    monkeypatch.setattr(
+        sat_compute_groundtrack,
+        "_make_sat",
+        lambda *_a: pytest.fail("invalid time must be rejected before propagation"),
+    )
+
+    with pytest.raises(ValueError, match="center_utc"):
+        sat_compute_groundtrack.compute_short_track(
+            "line 1", "line 2", invalid_time
+        )
+
+
+def test_subpoint_rejects_invalid_time_before_propagation(monkeypatch):
+    monkeypatch.setattr(
+        sat_compute_groundtrack,
+        "_make_sat",
+        lambda *_a: pytest.fail("invalid time must be rejected before propagation"),
+    )
+
+    with pytest.raises(ValueError, match="at_time_utc"):
+        sat_compute_groundtrack.compute_subpoint_at(
+            "line 1", "line 2", "not-a-time"
+        )
+
+
 @pytest.mark.parametrize("max_hours", [0, -1, float("inf"), "bad", False])
 def test_next_pass_rejects_invalid_search_window(monkeypatch, max_hours):
     monkeypatch.setattr(
@@ -591,6 +622,31 @@ def test_next_pass_rejects_invalid_search_window(monkeypatch, max_hours):
             alert_latlon=(37.5, -75.0),
             start_utc=pd.Timestamp("2026-10-20T12:00:00Z").to_pydatetime(),
             max_hours=max_hours,
+        )
+
+
+@pytest.mark.parametrize(
+    "alert_latlon",
+    [("bad", -75.0), (91.0, -75.0), (37.5, -181.0), (True, -75.0), [37.5]],
+)
+def test_next_pass_rejects_invalid_alert_position_before_propagation(
+    monkeypatch, alert_latlon
+):
+    monkeypatch.setattr(
+        sat_compute_groundtrack,
+        "_make_sat",
+        lambda *_a: pytest.fail(
+            "invalid alert position must be rejected before propagation"
+        ),
+    )
+
+    with pytest.raises(ValueError, match="alert_latlon"):
+        sat_compute_groundtrack.find_next_pass_marker(
+            "line 1",
+            "line 2",
+            alert_latlon=alert_latlon,
+            start_utc="2026-10-20T12:00:00Z",
+            max_hours=1,
         )
 
 

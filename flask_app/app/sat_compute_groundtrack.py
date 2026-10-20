@@ -47,6 +47,40 @@ def _sampling_number(value, name: str, *, allow_zero: bool = False) -> float:
         raise ValueError(f"{name} must be a finite {qualifier} number")
     return normalized
 
+
+def _utc_datetime(value, name: str) -> datetime:
+    """Normalize a scalar timestamp for Skyfield propagation."""
+    if not pd.api.types.is_scalar(value) or isinstance(
+        value, (bool, int, float, np.number)
+    ):
+        raise ValueError(f"{name} must be a valid timestamp")
+    parsed = pd.to_datetime(value, utc=True, errors="coerce")
+    if pd.isna(parsed):
+        raise ValueError(f"{name} must be a valid timestamp")
+    return parsed.to_pydatetime()
+
+
+def _alert_position(value) -> Tuple[float, float]:
+    """Return a finite in-range alert latitude/longitude pair."""
+    try:
+        lat, lon = value
+    except (TypeError, ValueError) as exc:
+        raise ValueError("alert_latlon must contain latitude and longitude") from exc
+    if isinstance(lat, bool) or isinstance(lon, bool):
+        raise ValueError("alert_latlon must contain valid coordinates")
+    try:
+        lat, lon = float(lat), float(lon)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("alert_latlon must contain valid coordinates") from exc
+    if (
+        not math.isfinite(lat)
+        or not math.isfinite(lon)
+        or not -90.0 <= lat <= 90.0
+        or not -180.0 <= lon <= 180.0
+    ):
+        raise ValueError("alert_latlon must contain valid coordinates")
+    return lat, lon
+
 def _make_sat(tle_line1: str, tle_line2: str) -> EarthSatellite:
     try:
         return EarthSatellite(tle_line1, tle_line2, "SAT", load.timescale())
@@ -55,6 +89,7 @@ def _make_sat(tle_line1: str, tle_line2: str) -> EarthSatellite:
 
 def compute_subpoint_at(tle_line1: str, tle_line2: str, at_time_utc: datetime) -> Tuple[float, float, float]:
     """Return (lat_dd, lon_dd, alt_km) at at_time_utc. lon ∈ [-180,180]."""
+    at_time_utc = _utc_datetime(at_time_utc, "at_time_utc")
     sat = _make_sat(tle_line1, tle_line2)
     ts = load.timescale()
     t = ts.from_datetime(at_time_utc)
@@ -85,6 +120,7 @@ def compute_short_track(
     """
     forward_min = _sampling_number(forward_min, "forward_min", allow_zero=True)
     step_s = _sampling_number(step_s, "step_s")
+    center_utc = _utc_datetime(center_utc, "center_utc")
     sat = _make_sat(tle_line1, tle_line2)
     ts = load.timescale()
     n_steps = int(forward_min * 60 // step_s) + 1
@@ -124,6 +160,8 @@ def find_next_pass_marker(
 ) -> Optional[Dict[str, object]]:
     """Return map-ready and legacy fields for the first pass above 0° LOS."""
     max_hours = _sampling_number(max_hours, "max_hours")
+    alert_latlon = _alert_position(alert_latlon)
+    start_utc = _utc_datetime(start_utc, "start_utc")
     sat = _make_sat(tle_line1, tle_line2)
     ts = load.timescale()
     step_s = 60
