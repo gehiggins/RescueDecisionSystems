@@ -69,6 +69,22 @@ class _InvalidHourlyQuery:
         )
 
 
+class _MixedStationIdentifiersQuery:
+    def nearby(self, lat, lon):
+        assert (lat, lon) == (37.5, -75.5)
+        return self
+
+    def fetch(self, limit):
+        assert limit == 6
+        return pd.DataFrame(
+            [
+                {"latitude": 37.5, "longitude": -75.5, "name": "Bad"},
+                {"latitude": 37.6, "longitude": -75.6, "name": "Valid"},
+            ],
+            index=pd.Index(["../BAD", " KTEST "], name="id"),
+        )
+
+
 def test_meteostat_converts_metric_wind_and_gust_to_metres_per_second(monkeypatch):
     monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
     monkeypatch.setattr(wx_fetch_meteostat, "Stations", _StationsQuery, raising=False)
@@ -137,6 +153,40 @@ def test_meteostat_measurement_range_preserves_boundaries(
     assert wx_fetch_meteostat._measurement(
         value, minimum=minimum, maximum=maximum
     ) == float(value)
+
+
+@pytest.mark.parametrize(
+    "invalid_station_id",
+    [None, "", "   ", True, pd.NA, "../KTEST", "KTEST?x=1", "KTEST/extra"],
+)
+def test_meteostat_station_identifier_rejects_unsafe_values(
+    invalid_station_id,
+):
+    assert wx_fetch_meteostat._station_id(invalid_station_id) is None
+
+
+def test_meteostat_skips_invalid_station_identifier(monkeypatch):
+    monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
+    monkeypatch.setattr(
+        wx_fetch_meteostat,
+        "Stations",
+        _MixedStationIdentifiersQuery,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        wx_fetch_meteostat, "Hourly", _HourlyQuery, raising=False
+    )
+
+    result = wx_fetch_meteostat.fetch_meteostat_obs_near(
+        37.5,
+        -75.5,
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T12:00:00Z",
+        radius_km=50.0,
+        max_stations=2,
+    )
+
+    assert result["source_id"].tolist() == ["KTEST"]
 
 
 @pytest.mark.parametrize(

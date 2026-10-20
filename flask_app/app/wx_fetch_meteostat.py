@@ -8,6 +8,7 @@
 # Produced DataFrames: weather_data_df (columns: station_id, observation_time, temp_c, dewpoint_c, rh_pct, wind_ms, wind_dir_deg, wind_gust_ms, pressure_hpa).
 # Data Handling Notes: Always returns DataFrame (empty if failure), timestamps tz-aware UTC, NaN for missing values.
 import pandas as pd
+import re
 
 from app.setup_imports import *
 from app.utils_geo import haversine_km
@@ -17,6 +18,20 @@ LOG = logging.getLogger(__name__)
 
 _DEFAULT_RADIUS_KM = 50.0
 _DEFAULT_MAX_STATIONS = 5
+_STATION_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,20}\Z")
+
+
+def _station_id(value):
+    """Return one provider-safe Meteostat station identifier, or ``None``."""
+    if value is None or isinstance(value, (bool, np.bool_)):
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return None
+    normalized = str(value).strip()
+    return normalized if _STATION_ID_PATTERN.fullmatch(normalized) else None
 
 
 def _measurement(value, minimum=None, maximum=None):
@@ -169,6 +184,10 @@ def fetch_meteostat_obs_near(lat: float, lon: float, start_utc, end_utc,
         except Exception as e:
             LOG.debug("Meteostat station row keys=%s", list(getattr(s, "index", [])))
             LOG.warning("Skipping station; unable to determine id: %s", e)
+            continue
+        sid = _station_id(sid)
+        if sid is None:
+            LOG.warning("Skipping station with invalid Meteostat identifier")
             continue
         slat, slon = float(s["latitude"]), float(s["longitude"])
         sname = s.get("name") if "name" in s else None
