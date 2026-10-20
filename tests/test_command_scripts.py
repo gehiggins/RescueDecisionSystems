@@ -92,3 +92,22 @@ def test_meteostat_timezone_probe_runs_without_optional_dependency():
     assert "Meteostat timezone probe passed" in result.stdout
     assert "Naive index" in result.stdout
     assert "UTC-aware index" in result.stdout
+
+
+def test_golden_gis_utility_writes_requested_csv_and_map(tmp_path):
+    csv_path = tmp_path / "golden.csv"
+    map_path = tmp_path / "golden.html"
+
+    result = _run_script(
+        "dev/make_golden_gis_df.py",
+        "--csv",
+        str(csv_path),
+        "--map",
+        str(map_path),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert csv_path.is_file()
+    assert map_path.is_file()
+    assert "alert_position" in csv_path.read_text(encoding="utf-8")
+    assert "leaflet" in map_path.read_text(encoding="utf-8").lower()
