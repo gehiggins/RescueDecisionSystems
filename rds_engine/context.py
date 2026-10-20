@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+
 from .types import Context
 
 
 def _coordinate(value, *, name: str, minimum: float, maximum: float) -> float:
     """Return one finite Earth coordinate or reject the context input."""
-    if isinstance(value, bool):
+    if isinstance(value, (bool, np.bool_)):
         raise ValueError(f"{name} must be a finite number")
     try:
         normalized = float(value)
@@ -20,11 +22,11 @@ def _coordinate(value, *, name: str, minimum: float, maximum: float) -> float:
 
 def _optional_distance_km(value) -> float | None:
     """Normalize optional context distances; invalid or negative means unknown."""
-    if value is None or isinstance(value, bool):
+    if value is None or isinstance(value, (bool, np.bool_)):
         return None
     try:
         normalized = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     if not math.isfinite(normalized) or normalized < 0:
         return None

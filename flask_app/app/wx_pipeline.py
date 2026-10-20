@@ -58,11 +58,11 @@ def _weather_window_end(target_utc):
 
 def _optional_distance_km(value):
     """Return finite non-negative point metadata, or ``None`` when unusable."""
-    if value is None or isinstance(value, bool):
+    if value is None or isinstance(value, (bool, np.bool_)):
         return None
     try:
         normalized = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return normalized if math.isfinite(normalized) and normalized >= 0 else None
 
