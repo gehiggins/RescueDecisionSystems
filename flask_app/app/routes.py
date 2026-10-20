@@ -106,7 +106,13 @@ def process_alert():
         ), 413
 
     maps_dir = Path(current_app.config["RDS_MAPS_DIR"]).resolve()
-    result = run_alert_pipeline(raw_message, maps_root=maps_dir)
+    try:
+        result = run_alert_pipeline(raw_message, maps_root=maps_dir)
+    except Exception:
+        # Keep the traceback in server logs while preserving the JSON contract
+        # expected by the browser and avoiding disclosure of internal details.
+        current_app.logger.exception("Alert pipeline raised an exception")
+        return jsonify({"error": "Alert processing failed"}), 500
     if not result or result.get("status") != "ok":
         error = (result or {}).get("error", "Alert processing failed")
         if error == "Message parsing failed":
