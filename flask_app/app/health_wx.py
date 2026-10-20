@@ -121,7 +121,18 @@ def run_wx_health_check(lat: float, lon: float, hours: int = 6,
         max_stations, default=_DEFAULT_MAX_STATIONS, name="max_stations"
     )
     end_utc = now_utc().replace(minute=0, second=0, microsecond=0)
-    start_utc = end_utc - pd.Timedelta(hours=hours)
+    try:
+        start_utc = end_utc - pd.Timedelta(hours=hours)
+    except (OverflowError, ValueError):
+        # A finite value can still exceed pandas' supported timedelta range.
+        LOG.warning(
+            "Weather health hours=%r exceeds the supported datetime range; "
+            "using default %s",
+            hours,
+            _DEFAULT_HOURS,
+        )
+        hours = _DEFAULT_HOURS
+        start_utc = end_utc - pd.Timedelta(hours=hours)
 
     LOG.info("WX Health window: %s â†’ %s @ (%.4f, %.4f)", start_utc, end_utc, lat, lon)
 
