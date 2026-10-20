@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `61fea367dbc1e2c0c12d57328b8a5a24c6440a09`
+Baseline: `main` commit `b27103abb116792a842c96ec1bcc8ceb3de9b009`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -30,6 +30,9 @@ pipeline:
 
 The map URL returned by the API is served by the Flask application. Database
 configuration is not required for parsing, enrichment, or map generation.
+The final pipeline boundary rejects Boolean alert coordinates rather than
+interpreting them as 0° or 1°, and rejects Boolean uncertainty values rather
+than drawing a one-metre range ring.
 
 An installed development checkout provides the `run_rds` command. It binds to
 the loopback interface and disables Flask debug mode by default; a developer
@@ -349,7 +352,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 730 passed; 2 live tests deselected.
+- Default offline suite: 736 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
