@@ -171,6 +171,8 @@ def fetch_ndbc_buoy_data(lat, lon, position_label, max_buoys=10):
             logging.warning("Invalid NDBC reference coordinates; returning no data")
             return pd.DataFrame()
         try:
+            if isinstance(max_buoys, (bool, np.bool_)):
+                raise ValueError("boolean limit")
             max_buoys = int(max_buoys)
         except (TypeError, ValueError, OverflowError):
             max_buoys = 10
