@@ -14,6 +14,55 @@ from flask_app.app.utils_weather import calculate_timelate
 NOAA_REQUEST_TIMEOUT_SECONDS = 15
 NOAA_REQUEST_HEADERS = {"User-Agent": "RDS-WEATHER/1.0"}
 
+
+def _measurement(measurement):
+    """Return one finite NWS value and its short unit code."""
+    if not isinstance(measurement, dict):
+        return None, None
+    try:
+        value = float(measurement.get("value"))
+    except (TypeError, ValueError, OverflowError):
+        return None, None
+    if not math.isfinite(value):
+        return None, None
+    unit_code = measurement.get("unitCode")
+    if not isinstance(unit_code, str):
+        return None, None
+    return value, unit_code.rsplit(":", 1)[-1]
+
+
+def _temperature_c(measurement):
+    value, unit = _measurement(measurement)
+    if value is None:
+        return np.nan
+    if unit == "degC":
+        return value
+    if unit == "degF":
+        return (value - 32.0) * 5.0 / 9.0
+    if unit in {"K", "kelvin"}:
+        return value - 273.15
+    return np.nan
+
+
+def _wind_speed_ms(measurement):
+    value, unit = _measurement(measurement)
+    if value is None:
+        return np.nan
+    if unit == "m_s-1":
+        return value
+    if unit == "km_h-1":
+        return value / 3.6
+    if unit in {"kn", "kt"}:
+        return value * 0.514444
+    return np.nan
+
+
+def _direction_degrees(measurement):
+    value, unit = _measurement(measurement)
+    if value is None or unit not in {"degree_(angle)", "degree"}:
+        return np.nan
+    return value if 0 <= value <= 360 else np.nan
+
 def fetch_noaa_shore_data(lat, lon, position_label):
     try:
         logging.info(f"{get_current_utc_timestamp()} ðŸŒ Fetching NOAA shore data for Position {position_label}")
@@ -140,16 +189,17 @@ def fetch_single_noaa_station(
         )
         response.raise_for_status()
         data = response.json()
+        properties = data.get("properties", {}) if isinstance(data, dict) else {}
 
-        obs_time = pd.to_datetime(data['properties']['timestamp'])
-        temp_c = data['properties']['temperature']['value']
-        wind_speed_mps = data['properties']['windSpeed']['value']
-        wind_dir = data['properties']['windDirection']['value']
+        obs_time = pd.to_datetime(properties.get('timestamp'), utc=True, errors='coerce')
+        temp_c = _temperature_c(properties.get('temperature'))
+        wind_speed_mps = _wind_speed_ms(properties.get('windSpeed'))
+        wind_dir = _direction_degrees(properties.get('windDirection'))
 
         return pd.DataFrame([{
             'observation_time': obs_time,
-            # NWS values are already Celsius and metres/second, matching the
-            # shared RDS weather schema used by the active map pipeline.
+            # NWS values have been normalized from their explicit unitCode to
+            # the Celsius/metres-per-second shared RDS weather schema.
             'temperature': temp_c,
             'wind_speed': wind_speed_mps,
             'wind_direction': wind_dir,
