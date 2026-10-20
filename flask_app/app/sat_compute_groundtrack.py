@@ -104,7 +104,7 @@ def find_next_pass_marker(
     start_utc: datetime,
     max_hours: int = 12
 ) -> Optional[Dict[str, object]]:
-    """Return {'time_utc': dt, 'lat_dd': lat, 'lon_dd': lon, 'elevation_max_deg': elev} for first LOS > 0° (within max_hours), else None."""
+    """Return map-ready and legacy fields for the first pass above 0° LOS."""
     sat = _make_sat(tle_line1, tle_line2)
     ts = load.timescale()
     step_s = 60
@@ -135,10 +135,18 @@ def find_next_pass_marker(
     t_max = times[max_idx]
     geoc_max = sat.at(ts.from_datetime(t_max))
     subpoint = wgs84.subpoint(geoc_max)
+    lat_dd = float(subpoint.latitude.degrees)
+    lon_dd = float(((subpoint.longitude.degrees + 180) % 360) - 180)
+    max_elev_deg = float(elevations[max_idx])
     return {
+        # Map pipeline contract.
+        "when_utc": t_max,
+        "coordinates": [lon_dd, lat_dd],
+        "max_elev_deg": max_elev_deg,
+        # Preserve the original names for callers outside the map pipeline.
         "time_utc": t_max,
-        "lat_dd": float(subpoint.latitude.degrees),
-        "lon_dd": float(((subpoint.longitude.degrees + 180) % 360) - 180),
-        "elevation_max_deg": float(elevations[max_idx])
+        "lat_dd": lat_dd,
+        "lon_dd": lon_dd,
+        "elevation_max_deg": max_elev_deg,
     }
 
