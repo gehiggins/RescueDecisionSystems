@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `a80021d2bc5dea22f34d4bd802d5c4380fe3829a`
+Baseline: `main` commit `d136fd6e122756735967a876d64b51ef4ee312e8`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -102,6 +102,12 @@ excessive alert requests are rejected before pipeline work starts, and the
 direct map endpoint rejects non-finite or out-of-range coordinates. Generated
 map serving is confined to the configured map directory, including when a
 requested file is a symbolic link.
+The public map route serves only generated HTML maps. Invalid, empty, or
+overly broad map-directory settings fall back to the repository's dedicated
+`data/maps` directory. Alert-character and HTTP request-body limits accept
+positive whole-number configuration values and fall back to their safe
+defaults when a setting is malformed, non-finite, fractional, boolean, zero,
+or negative.
 Pipeline-generated map and satellite-overlay directories also use normalized,
 bounded path components when a numeric site ID is unavailable. The normalized
 identifier is retained through the final map write, so raw alert text cannot
@@ -192,9 +198,11 @@ this maintenance batch, so the committed reference dataset was not replaced.
 The NDBC realtime2 and 5day2 parsers now read field names from the provider's
 header row rather than the units row, so valid temperature, wind, and wave
 measurements are retained. Their requests are bounded and identify the RDS
-weather client. A read-only live check of station 44009 on 2026-10-20 returned
-a current observation and populated temperature, wind speed, and wind
-direction through the repaired parser.
+weather client. Parser selection is limited to observations from the preceding
+60 minutes; stale multi-hour rows and future-dated rows are rejected. A
+read-only live check of station 44009 on 2026-10-20 returned a current
+observation and populated temperature, wind speed, and wind direction through
+the repaired parser.
 
 The optional NOAA shore adapter no longer returns Seattle's KSEA station for
 every alert. It discovers NWS observation stations around the requested point,
@@ -281,7 +289,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 500 passed; 2 live tests deselected.
+- Default offline suite: 530 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
