@@ -2,86 +2,86 @@
 
 Status: verified current
 
-Reviewed against code: 2026-10-19
+Reviewed against code and runtime: 2026-10-19
 
-Baseline: `main` commit `10e41ddb54e85ab17543f339137f7f1da2d78f26`
+Baseline: `main` commit `01444a3c9bb777f62e37785175f9f82bdee3269d`
 
-Historical document dates preserved in: `docs/archive/2025/README.md`
+Historical document dates are preserved in: `docs/archive/2025/README.md`
 
-## What is implemented
+## Current working product path
 
-The active processing path is centered on
-`flask_app/app/pipeline_controller.py::process_sarsat_alert`. By direct source
-inspection, it currently:
+The active browser workflow is the Flask application created by
+`flask_app.app.create_app`.
 
-1. pre-scans coordinates with `pre_scan_for_coordinates`;
-2. parses the SARSAT message with `parse_sarsat_message`;
-3. constructs and finalizes an `alert_df`;
-4. derives A/B position rows and invokes the weather sub-pipeline;
-5. assembles one `gis_map_inputs_df`; and
-6. renders a Folium HTML map under `data/maps/<site_id>/`.
+Submitting a message to `POST /process_alert` now runs the integrated alert
+pipeline:
 
-The repository also contains implemented components for:
+1. pre-scan and validate A/B coordinates;
+2. parse beacon, site, detection time, error radius, and position fields;
+3. finalize the alert sequence data;
+4. retrieve and normalize available weather observations;
+5. build satellite overlays only when suitable TLE data is available;
+6. assemble one `gis_map_inputs_df`;
+7. render an HTML map under the configured map directory; and
+8. return parsed fields, map URL, layer names, and weather/satellite row counts.
 
-- coordinate validation and parsing (`field_validator.py`,
-  `preparse_coordinate_mapper.py`, `parser_sarsat_msg.py`);
-- weather policy and aggregation (`rds_engine/`, `wx_pipeline.py`, `wx_obs.py`,
-  Open-Meteo and optional Meteostat fetchers);
-- unified GIS input assembly and rendering (`gis_map_inputs_builder.py`,
-  `gis_mapping.py`); and
-- TLE lookup, Skyfield propagation, footprint calculation, and satellite
-  overlay construction (`sat_fetch_tle.py`, `sat_compute_groundtrack.py`,
-  `sat_compute_footprint.py`, `sat_pipeline.py`).
+The map URL returned by the API is served by the Flask application. Database
+configuration is not required for parsing, enrichment, or map generation.
 
-All 63 Python files in the active source/test paths parse successfully when
-read with their committed UTF-8 BOMs. That is a syntax-only check, not a runtime
-or integration test.
+## Verified behavior
+
+Using the committed `sample_sarsat_message.txt`, the web workflow correctly
+returns:
+
+- beacon ID `2DCE6 12345 ABCFF`;
+- site ID `98372`;
+- detection time `2025-03-02T13:32:17Z`;
+- both A and B positions;
+- 2 NM / 3,704 metre error rings; and
+- a served HTML map.
+
+Live Open-Meteo retrieval was exercised for both sample positions. A
+current-time NOAA-15 test exercised CelesTrak TLE retrieval, Skyfield
+propagation, satellite footprints, and map overlays.
+
+Satellite propagation uses the alert detection time. TLE data more than 168
+hours from the alert time is rejected by default rather than used to draw a
+potentially misleading position. The limit is configurable through
+`RDS_SAT_MAX_TLE_AGE_HOURS`.
+
+## Automated verification
+
+- Default offline suite: 37 passed; 2 live tests deselected.
+- Explicit external-service suite: 2 passed.
+- Editable development installation succeeded.
+- The deployment requirements wrapper installed successfully.
+- `pip check` reported no broken requirements.
+- Gunicorn application configuration validation passed.
+
+The default and live test commands are documented in `pytest.ini` and
+`INSTALLATION_REQUIREMENTS.md`.
 
 ## Important current limitations
 
-- The database-save and legacy NOAA fetch block in `process_sarsat_alert` is
-  enclosed in a triple-quoted block and is not executed.
-- If no saved satellite image overlay exists, the controller injects a
-  hard-coded `TEST Overlay` line. Therefore, seeing a satellite layer on a map
-  does not by itself prove live satellite integration.
-- `gis_map_inputs_builder.py` can call `sat_pipeline.py`, but it constructs a
-  minimal alert using the current time. The audited code does not demonstrate
-  an end-to-end guarantee that a reporting satellite is propagated at the
-  original alert timestamp.
-- The canonical map-frame name in code is `gis_map_inputs_df`, not
-  `map_feature_df`.
-- `sat_routes.py`, `gis_feature_builder.py`, `weather_data_selection.py`, and
-  `realtime_analysis.py` do not exist in the active source tree. Earlier guides
-  that describe them as active are superseded.
-- `flask_app/run.py` imports `create_app` from the `app` package, but
-  `flask_app/app/__init__.py` is empty. `routes.py` also imports missing modules
-  named `parser`, `gis_plot`, and `weather_fetch`. The web entry point is
-  therefore not certified as runnable.
-- The root script path in `pipeline_controller.py` is a developer-specific
-  Windows path. Running that file directly without supplying another input is
-  not portable.
-- Dependency declarations are inconsistent and incomplete; see
-  `INSTALLATION_REQUIREMENTS.md`.
+- Database saving remains disabled in the legacy triple-quoted block in
+  `process_sarsat_alert`; current web processing is not persistent.
+- When `DATABASE_URL` is absent or unavailable, sequence assignment starts from
+  an empty local history for each processing run.
+- Historical satellite overlays require TLE data close enough to the alert
+  time. The current CelesTrak fetch path supplies current TLEs, not an archive
+  of historical element sets.
+- Meteostat station observations and coordinate-derived timezone lookup remain
+  optional extras. The core Open-Meteo path does not require them.
+- Weather and TLE enrichment depend on their external services. If data is
+  unavailable, RDS continues with the alert positions and range rings it can
+  verify.
+- Python 3.9 is the installation environment verified during this review.
+- No production deployment was performed as part of this verification.
 
-## Verification performed
+## Deferred capabilities
 
-- Compared every document previously stored in `docs/` with the active source
-  tree and module names.
-- Inspected the current orchestration, weather, satellite, GIS, Flask, database,
-  packaging, and test files.
-- Parsed 63 active Python files with Python's AST parser; no active-source syntax
-  errors were found.
-- Confirmed the historical `flask_app/app/local archive/satellite_tracker.py`
-  has a syntax error. It is not part of the active source assessment.
-
-Runtime tests were not executed because the audit environment contains neither
-`pytest` nor the project runtime dependencies. No claim of runtime correctness,
-external API availability, database connectivity, or deployment readiness is
-made.
-
-## Documentation disposition
-
-The v0/v0.2 documents were superseded by later drafts. The v0.5 documents are
-useful design records but mix implemented behavior with proposed contracts and
-missing modules. They were archived without content edits rather than receiving
-a 2026 review stamp that could be mistaken for technical certification.
+The proposed operational visualization, globe, and SRR coordination/chat
+capabilities are recorded in
+`docs/future/OPERATIONAL_VISUALIZATION_AND_SRR_COORDINATION.md`. They remain
+deferred until the existing processing product is sufficiently complete and
+stable.
