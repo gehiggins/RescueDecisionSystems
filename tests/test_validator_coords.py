@@ -166,3 +166,33 @@ def test_coordinate_prescan_preserves_offsets_after_crlf_lines():
     assert len(result) == 1
     row = result.iloc[0]
     assert message[int(row["start_pos"]) : int(row["end_pos"])] == expected
+
+
+def test_coordinate_prescan_preserves_raw_span_with_irregular_whitespace():
+    expected = "37 45.600N   075 30.200W"
+    message = f"HEADER\nPOSITION:   {expected} TRAILER"
+
+    result = pre_scan_for_coordinates(message)
+
+    assert len(result) == 1
+    row = result.iloc[0]
+    assert message[int(row["start_pos"]) : int(row["end_pos"])] == expected
+
+
+def test_coordinate_prescan_collects_multiple_pairs_from_one_line():
+    first = "37 45.600N 075 30.200W"
+    second = "38 15.300N 070 12.500W"
+    message = f"POSITIONS: A {first} B {second}"
+
+    result = pre_scan_for_coordinates(message)
+
+    assert len(result) == 2
+    spans = [
+        message[int(row.start_pos) : int(row.end_pos)]
+        for row in result.itertuples()
+    ]
+    assert spans == [first, second]
+    assert result["lat_dd"].tolist() == pytest.approx([37.76, 38.255])
+    assert result["lon_dd"].tolist() == pytest.approx(
+        [-75.50333333333333, -70.20833333333333]
+    )
