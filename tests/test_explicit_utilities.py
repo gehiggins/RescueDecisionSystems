@@ -66,6 +66,21 @@ def test_tle_fetcher_rejects_unsafe_group_without_request(monkeypatch, tmp_path)
     assert not (tmp_path / "outside.tle").exists()
 
 
+def test_tle_fetcher_explicit_empty_sources_do_nothing(monkeypatch, tmp_path):
+    from flask_app.app import tle_fetcher
+
+    output_dir = tmp_path / "tle"
+    monkeypatch.setenv("RDS_TLE_DIR", str(output_dir))
+    monkeypatch.setattr(
+        tle_fetcher.requests,
+        "get",
+        lambda *_args, **_kwargs: pytest.fail("empty sources should not be fetched"),
+    )
+
+    assert tle_fetcher.fetch_tle({}) == []
+    assert not output_dir.exists()
+
+
 def test_tle_fetcher_does_not_replace_cache_with_invalid_response(
     monkeypatch, tmp_path
 ):
