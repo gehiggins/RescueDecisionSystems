@@ -47,6 +47,28 @@ class _PartiallyMalformedStationsQuery:
         )
 
 
+class _InvalidHourlyQuery:
+    def __init__(self, station_id, start, end):
+        assert station_id == "KTEST"
+
+    def fetch(self):
+        return pd.DataFrame(
+            [
+                {
+                    "temp": 20.0,
+                    "dwpt": float("inf"),
+                    "rhum": 101.0,
+                    "wspd": -1.0,
+                    "wdir": 361.0,
+                    "wpgt": -2.0,
+                    "pres": -1.0,
+                    "prcp": -1.0,
+                }
+            ],
+            index=pd.DatetimeIndex(["2026-10-20T12:00:00"]),
+        )
+
+
 def test_meteostat_converts_metric_wind_and_gust_to_metres_per_second(monkeypatch):
     monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
     monkeypatch.setattr(wx_fetch_meteostat, "Stations", _StationsQuery, raising=False)
@@ -71,6 +93,50 @@ def test_meteostat_wind_conversion_rejects_nonfinite_values():
     assert np.isnan(wx_fetch_meteostat._kmh_to_ms(None))
     assert np.isnan(wx_fetch_meteostat._kmh_to_ms("bad"))
     assert np.isnan(wx_fetch_meteostat._kmh_to_ms(np.inf))
+    assert np.isnan(wx_fetch_meteostat._kmh_to_ms(-1))
+
+
+def test_meteostat_rejects_physically_invalid_measurements(monkeypatch):
+    monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
+    monkeypatch.setattr(
+        wx_fetch_meteostat, "Stations", _StationsQuery, raising=False
+    )
+    monkeypatch.setattr(
+        wx_fetch_meteostat, "Hourly", _InvalidHourlyQuery, raising=False
+    )
+
+    result = wx_fetch_meteostat.fetch_meteostat_obs_near(
+        37.5,
+        -75.5,
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T12:00:00Z",
+        radius_km=50.0,
+        max_stations=1,
+    )
+
+    invalid_fields = [
+        "dewpoint_c",
+        "rh_pct",
+        "wind_ms",
+        "wind_dir_deg",
+        "wind_gust_ms",
+        "pressure_hpa",
+        "precip_mmhr",
+    ]
+    assert result.iloc[0][invalid_fields].isna().all()
+    assert result.iloc[0]["temp_c"] == 20.0
+
+
+@pytest.mark.parametrize(
+    ("minimum", "maximum", "value"),
+    [(0, 100, 0), (0, 100, 100), (0, 360, 0), (0, 360, 360)],
+)
+def test_meteostat_measurement_range_preserves_boundaries(
+    minimum, maximum, value
+):
+    assert wx_fetch_meteostat._measurement(
+        value, minimum=minimum, maximum=maximum
+    ) == float(value)
 
 
 @pytest.mark.parametrize(
