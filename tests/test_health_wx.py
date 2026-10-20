@@ -111,6 +111,32 @@ def test_health_check_defaults_time_window_that_overflows_datetime(
     assert "exceeds the supported datetime range" in caplog.text
 
 
+def test_health_check_caps_station_count_at_provider_limit(monkeypatch, caplog):
+    calls = {}
+
+    def capture_meteostat(*_args, **kwargs):
+        calls.update(kwargs)
+        return pd.DataFrame()
+
+    monkeypatch.setattr(
+        health_wx,
+        "fetch_open_meteo_obs",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
+    monkeypatch.setattr(health_wx, "fetch_meteostat_obs_near", capture_meteostat)
+    monkeypatch.setattr(health_wx, "HAS_METEOSTAT", True)
+
+    summary = health_wx.run_wx_health_check(
+        lat=47.6062,
+        lon=-122.3321,
+        max_stations=1_000_000,
+    )
+
+    assert calls["max_stations"] == 100
+    assert summary["params"]["max_stations"] == 100
+    assert "exceeds provider limit" in caplog.text
+
+
 def test_health_check_rejects_numpy_boolean_runtime_parameters(monkeypatch):
     monkeypatch.setattr(
         health_wx,
