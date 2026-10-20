@@ -278,6 +278,25 @@ def test_weather_pipeline_discards_invalid_targets_and_keeps_valid_target(
     assert "Discarded 2 invalid weather target coordinate" in caplog.text
 
 
+@pytest.mark.parametrize("targets", [None, pd.DataFrame(), [], "not-a-table"])
+def test_weather_pipeline_returns_canonical_empty_schema_without_targets(
+    monkeypatch, caplog, targets
+):
+    monkeypatch.setattr(
+        wx_pipeline,
+        "build_wx_obs_for_area",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("weather provider called without target rows")
+        ),
+    )
+
+    result = wx_pipeline.run_wx_pipeline(targets)
+
+    assert result.empty
+    assert list(result.columns) == wx_obs._WX_OBS_COLS
+    assert "No alert targets provided" in caplog.text
+
+
 def test_weather_pipeline_skips_providers_when_all_targets_invalid(
     monkeypatch, caplog
 ):
