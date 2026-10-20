@@ -154,7 +154,7 @@ def enrich_observation_with_metadata(station, observation, position_label):
         "deployment_notes": station.get("deployment_notes", ""),
     }
 
-def fetch_ndbc_buoy_data(lat, lon, position_label):
+def fetch_ndbc_buoy_data(lat, lon, position_label, max_buoys=10):
     try:
         lat, lon = float(lat), float(lon)
         if (
@@ -165,6 +165,13 @@ def fetch_ndbc_buoy_data(lat, lon, position_label):
         ):
             logging.warning("Invalid NDBC reference coordinates; returning no data")
             return pd.DataFrame()
+        try:
+            max_buoys = int(max_buoys)
+        except (TypeError, ValueError, OverflowError):
+            max_buoys = 10
+        if max_buoys < 1:
+            max_buoys = 10
+        max_buoys = min(max_buoys, 100)
 
         metadata_df = _metadata_with_coordinates(load_buoy_metadata())
         if metadata_df.empty:
@@ -178,7 +185,7 @@ def fetch_ndbc_buoy_data(lat, lon, position_label):
             lambda row: haversine_nm(lat, lon, row['latitude'], row['longitude']),
             axis=1
         )
-        nearby_buoys = metadata_df.nsmallest(10, 'distance_nm').copy()
+        nearby_buoys = metadata_df.nsmallest(max_buoys, 'distance_nm').copy()
 
         if nearby_buoys.empty:
             logging.warning(f"{get_current_utc_timestamp()} âš ï¸ No nearby buoys found â€” returning empty DataFrame.")
