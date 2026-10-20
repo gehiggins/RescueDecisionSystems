@@ -104,6 +104,33 @@ def test_satellite_pipeline_handles_alert_without_reporting_satellite(monkeypatc
     assert overlay.empty
 
 
+def test_satellite_pipeline_applies_norad_override_to_resolved_reference(
+    monkeypatch,
+):
+    requested = []
+
+    def capture_tle_request(identifiers):
+        requested.append(identifiers)
+        return pd.DataFrame()
+
+    monkeypatch.setattr(sat_pipeline, "load_tle_snapshot", capture_tle_request)
+    alert = pd.DataFrame(
+        [
+            {
+                "alert_id": "98372",
+                "alert_time_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+                "satellite_name": "NOAA 15",
+                "norad_id": 28654,
+            }
+        ]
+    )
+
+    overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=True)
+
+    assert overlay.empty
+    assert requested == [["28654"]]
+
+
 @pytest.mark.parametrize("alert_time", [None, "invalid", ["2026-10-20T12:00:00Z"]])
 def test_satellite_pipeline_rejects_invalid_alert_time_without_provider_lookup(
     monkeypatch, alert_time

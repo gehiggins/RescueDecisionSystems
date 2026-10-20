@@ -169,7 +169,10 @@ def build_sat_overlay_df(
 
     # Prefer a NORAD provided in the alert row (test/ingest convenience)
     if pd.notna(alert_df.iloc[0].get("norad_id", np.nan)):
-        row = (row or {})
+        # A resolved reference is a pandas Series, whose truth value is
+        # intentionally ambiguous and which does not support ``setdefault``.
+        # Convert it before applying the explicit alert override.
+        row = {} if row is None else dict(row)
         row["norad_id"] = int(alert_df.iloc[0]["norad_id"])
         row.setdefault("common_name", str(alert_df.iloc[0].get("sat_name") or alert_df.iloc[0].get("reporting_sat") or "SAT"))
 
