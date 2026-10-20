@@ -19,6 +19,8 @@ def test_sample_alert_parses_exact_beacon_and_detection_time():
     assert parsed["site_id"] == "98372"
     assert parsed["detect_time"] == pd.Timestamp("2025-03-02T13:32:17Z")
     assert parsed["satellite_name"] == "GOES-16"
+    assert parsed["position_device"] == "INTERNAL"
+    assert parsed["position_resolution"] == "4 SECONDS"
 
 
 def test_satellite_id_requires_its_own_labeled_line():
@@ -32,6 +34,21 @@ def test_satellite_id_requires_its_own_labeled_line():
     parsed = parse_sarsat_message(message, pre_scan_for_coordinates(message))
 
     assert parsed["satellite_name"] == "GOES-16"
+
+
+def test_position_metadata_requires_its_own_labeled_lines():
+    message = (
+        "BEACON ID: ABC123 SITE ID: 42\n"
+        "NOTE: POSITION DEVICE: EXTERNAL\n"
+        "POSITION DEVICE: INTERNAL\n"
+        "POSITION RESOLUTION: 4 SECONDS\n"
+        "A 37 45.600N 075 30.200W"
+    )
+
+    parsed = parse_sarsat_message(message, pre_scan_for_coordinates(message))
+
+    assert parsed["position_device"] == "INTERNAL"
+    assert parsed["position_resolution"] == "4 SECONDS"
 
 
 def test_parser_retains_two_positions_when_they_share_one_line():
