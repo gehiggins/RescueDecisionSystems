@@ -135,7 +135,17 @@ def run_wx_pipeline(alert_targets_df: pd.DataFrame,
         radius_km, max_stations
     )
     end_ts = _weather_window_end(target_utc)
-    start_ts = end_ts - timedelta(hours=hours_back)
+    try:
+        start_ts = end_ts - timedelta(hours=hours_back)
+    except (OverflowError, ValueError):
+        # A finite lookback can still exceed Python's supported datetime range.
+        LOG.warning(
+            "Weather hours_back=%r exceeds the supported datetime range; "
+            "using default %.1f",
+            hours_back,
+            _DEFAULT_HOURS_BACK,
+        )
+        start_ts = end_ts - timedelta(hours=_DEFAULT_HOURS_BACK)
 
     # Preserve ``None`` so the aggregator can apply the existing policy to
     # each A/B point using its own uncertainty and coast-distance metadata.
