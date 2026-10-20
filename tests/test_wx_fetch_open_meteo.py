@@ -49,6 +49,49 @@ def test_open_meteo_requests_and_preserves_metres_per_second(monkeypatch):
     assert result.loc[0, "wind_gust_ms"] == 18.0
 
 
+def test_open_meteo_uses_historical_forecast_service_for_old_alert(monkeypatch):
+    calls = []
+    target = pd.Timestamp.now(tz="UTC").floor("h") - pd.Timedelta(days=93)
+
+    def fake_get(url, params, timeout):
+        calls.append((url, params, timeout))
+        return _Response({"hourly": {"time": [target.strftime("%Y-%m-%dT%H:%M")]}})
+
+    monkeypatch.setattr(wx_fetch_open_meteo.requests, "get", fake_get)
+
+    result = wx_fetch_open_meteo.fetch_open_meteo_obs(
+        37.5,
+        -75.5,
+        target,
+        target,
+        include_marine=False,
+    )
+
+    assert calls[0][0] == wx_fetch_open_meteo._HISTORICAL_FORECAST_URL
+    assert result["valid_utc"].tolist() == [target]
+
+
+def test_open_meteo_keeps_live_forecast_service_for_recent_alert(monkeypatch):
+    calls = []
+    target = pd.Timestamp.now(tz="UTC").floor("h") - pd.Timedelta(days=1)
+
+    def fake_get(url, params, timeout):
+        calls.append((url, params, timeout))
+        return _Response({"hourly": {"time": [target.strftime("%Y-%m-%dT%H:%M")]}})
+
+    monkeypatch.setattr(wx_fetch_open_meteo.requests, "get", fake_get)
+
+    wx_fetch_open_meteo.fetch_open_meteo_obs(
+        37.5,
+        -75.5,
+        target,
+        target,
+        include_marine=False,
+    )
+
+    assert calls[0][0] == wx_fetch_open_meteo._FORECAST_URL
+
+
 def test_open_meteo_keeps_usable_rows_from_partial_hourly_arrays(monkeypatch):
     def fake_get(_url, params, timeout):
         assert params["wind_speed_unit"] == "ms"
