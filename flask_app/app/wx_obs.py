@@ -52,16 +52,17 @@ def reduce_to_nearest_or_latest(df: pd.DataFrame, *, target_utc, max_age_hours: 
     age = (df["valid_utc"] - target).abs()
     df["_age_hours"] = age.dt.total_seconds() / 3600.0
 
-    def _pick(g: pd.DataFrame) -> pd.Series:
-        near = g[g["_age_hours"] <= max_age_hours]
+    selected_indices = []
+    for _, group in df.groupby("source_id", dropna=False, sort=False):
+        near = group[group["_age_hours"] <= max_age_hours]
         if len(near) > 0:
-            idx = near["_age_hours"].idxmin()
-            return g.loc[idx]
-        # fall back: latest by valid_utc
-        return g.loc[g["valid_utc"].idxmax()]
+            selected_indices.append(near["_age_hours"].idxmin())
+        else:
+            selected_indices.append(group["valid_utc"].idxmax())
 
-    # Updated to avoid groupby.apply warning
-    out = df.groupby("source_id", group_keys=False).apply(_pick, include_groups=False)
+    # Selecting original rows keeps the source_id column; groupby.apply with
+    # include_groups=False silently removed it from downstream station data.
+    out = df.loc[selected_indices].copy()
     out = out.drop(columns=["_age_hours"], errors="ignore").reset_index(drop=True)
     return out
 
@@ -109,13 +110,30 @@ def build_wx_obs_for_area(ref_points: list[tuple[float,float]],
         LOG.info("wx policy per-point: include_marine=%s radius_km=%.1f stations=%s rationale=%s",
                  _include_marine, _radius_km, _max_stations, getattr(_plan, "rationale", None))
 
-        # Open-Meteo at point
-        df_om = fetch_open_meteo_obs(lat, lon, start_utc, end_utc, include_marine=_include_marine)
-        if not df_om.empty: frames.append(df_om)
+        # Keep providers isolated: one unexpected provider failure must not
+        # discard observations already available from the other provider.
+        try:
+            df_om = fetch_open_meteo_obs(
+                lat, lon, start_utc, end_utc, include_marine=_include_marine
+            )
+            if isinstance(df_om, pd.DataFrame) and not df_om.empty:
+                frames.append(df_om)
+        except Exception:
+            LOG.exception("Open-Meteo weather retrieval failed")
 
-        # Meteostat nearby
-        df_ms = fetch_meteostat_obs_near(lat, lon, start_utc, end_utc, radius_km=_radius_km, max_stations=_max_stations)
-        if not df_ms.empty: frames.append(df_ms)
+        try:
+            df_ms = fetch_meteostat_obs_near(
+                lat,
+                lon,
+                start_utc,
+                end_utc,
+                radius_km=_radius_km,
+                max_stations=_max_stations,
+            )
+            if isinstance(df_ms, pd.DataFrame) and not df_ms.empty:
+                frames.append(df_ms)
+        except Exception:
+            LOG.exception("Meteostat weather retrieval failed")
 
     if not frames:
         return _empty_wx_obs()
