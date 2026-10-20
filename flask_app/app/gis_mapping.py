@@ -25,6 +25,7 @@ Next step: Add generate_gis_map_html_from_dfs(positions_df, ...) (DF inputs, lay
 
 
 import os, math, logging, base64
+from html import escape
 from pathlib import Path
 
 import numpy as np
@@ -822,7 +823,11 @@ def generate_gis_map_html_from_dfs(
         LayerControl(collapsed=True).add_to(m)
 
     # --- Title & Save ---
-    title_html = f'''<h3 align="center" style="font-size:18px"><b>RDS Alert Map: {site_id}</b></h3>'''
+    title_html = (
+        '<h3 align="center" style="font-size:18px"><b>'
+        f"RDS Alert Map: {escape(site_id)}"
+        "</b></h3>"
+    )
     m.get_root().html.add_child(folium.Element(title_html))
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     m.save(out_path)
