@@ -34,7 +34,8 @@
                 <form id="sarsat-form" method="POST">   
                   <textarea name="alert_text" rows="6" placeholder="Paste the SARSAT alert here..." required></textarea>
                   <button type="submit" class="cta-button">Submit Alert</button>
-              </form>
+                </form>
+                <p id="processing-status" role="status" aria-live="polite"></p>
             </div>
          </div>
        </section>
@@ -52,7 +53,7 @@
 
             <!-- ✅ Default GIS Image Before Processing -->
             <div id="gis-placeholder">
-                <img src="{{ url_for('static', filename='images/sample_map.png') }}" alt="GIS Output" style="width: 100%; max-width: 600px;">
+                <img src="{{ url_for('static', filename='images/alerts_map.webp') }}" alt="Example GIS alert map" style="width: 100%; max-width: 600px;">
             </div>
 
             <!-- ✅ Embedded Live GIS Map (Hidden by Default) -->
@@ -108,6 +109,10 @@ document.getElementById("sarsat-form").addEventListener("submit", function (even
     event.preventDefault();
     
     let alertText = document.querySelector("textarea[name='alert_text']").value;
+    const submitButton = event.currentTarget.querySelector("button[type='submit']");
+    const status = document.getElementById("processing-status");
+    submitButton.disabled = true;
+    status.textContent = "Processing alert and building the operational map...";
 
     fetch("/process_alert", {
         method: "POST",
@@ -116,7 +121,13 @@ document.getElementById("sarsat-form").addEventListener("submit", function (even
         },
         body: JSON.stringify({ message: alertText })
     })
-    .then(response => response.json())
+    .then(async response => {
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || "Alert processing failed.");
+        }
+        return data;
+    })
     .then(data => {
         console.log("✅ Flask Response:", data);  // ✅ Debugging: See full Flask response
 
@@ -138,15 +149,24 @@ document.getElementById("sarsat-form").addEventListener("submit", function (even
                 // ✅ Hide the placeholder image and show the GIS map
                 document.getElementById("gis-placeholder").style.display = "none";
                 document.getElementById("gis-container").style.display = "block";
+                const layers = (data.layers || []).join(", ") || "Alert Positions";
+                status.textContent = `Map ready. Layers: ${layers}. Weather rows: ${data.weather_rows || 0}. Satellite rows: ${data.satellite_rows || 0}.`;
             } else {
                 console.error("❌ ERROR: Missing required values! Latitude, Longitude, or Site ID is undefined.");
-                alert("Failed to load GIS map: Missing required values.");
+                status.textContent = "The alert was parsed, but no map location was available.";
             }
         } else {
             console.error("❌ ERROR from Flask:", data.error);
+            status.textContent = data.error || "Alert processing failed.";
         }
     })
-    .catch(error => console.error("❌ Fetch error:", error));
+    .catch(error => {
+        console.error("❌ Fetch error:", error);
+        status.textContent = error.message || "Alert processing failed.";
+    })
+    .finally(() => {
+        submitButton.disabled = false;
+    });
 });
 
 
