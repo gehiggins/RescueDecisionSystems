@@ -15,6 +15,21 @@ from flask_app.app.utils_geo import haversine_nm
 from flask_app.app.utils_weather import calculate_timelate
 
 DEFAULT_DATA_FOLDER = Path(__file__).resolve().parents[2] / "data"
+DEFAULT_MAX_BUOYS = 10
+MAX_BUOYS = 100
+
+
+def _buoy_limit(value):
+    """Return a bounded buoy count, using the default for invalid settings."""
+    if isinstance(value, (bool, np.bool_)):
+        return DEFAULT_MAX_BUOYS
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return DEFAULT_MAX_BUOYS
+    if not math.isfinite(numeric) or numeric < 1 or not numeric.is_integer():
+        return DEFAULT_MAX_BUOYS
+    return min(int(numeric), MAX_BUOYS)
 
 
 def _metadata_path():
@@ -154,7 +169,9 @@ def enrich_observation_with_metadata(station, observation, position_label):
         "deployment_notes": station.get("deployment_notes", ""),
     }
 
-def fetch_ndbc_buoy_data(lat, lon, position_label, max_buoys=10):
+def fetch_ndbc_buoy_data(
+    lat, lon, position_label, max_buoys=DEFAULT_MAX_BUOYS
+):
     try:
         if isinstance(lat, (bool, np.bool_)) or isinstance(
             lon, (bool, np.bool_)
@@ -170,15 +187,7 @@ def fetch_ndbc_buoy_data(lat, lon, position_label, max_buoys=10):
         ):
             logging.warning("Invalid NDBC reference coordinates; returning no data")
             return pd.DataFrame()
-        try:
-            if isinstance(max_buoys, (bool, np.bool_)):
-                raise ValueError("boolean limit")
-            max_buoys = int(max_buoys)
-        except (TypeError, ValueError, OverflowError):
-            max_buoys = 10
-        if max_buoys < 1:
-            max_buoys = 10
-        max_buoys = min(max_buoys, 100)
+        max_buoys = _buoy_limit(max_buoys)
 
         metadata_df = _metadata_with_coordinates(load_buoy_metadata())
         if metadata_df.empty:
