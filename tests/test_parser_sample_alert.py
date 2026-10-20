@@ -82,3 +82,36 @@ def test_missing_optional_metadata_does_not_replace_message_identifiers():
     assert parsed["position_method"] is None
     assert parsed["position_resolution"] is None
     assert parsed["range_ring_source_a"] == "fallback_default"
+
+
+@pytest.mark.parametrize(
+    "pre_scan_time",
+    ["not-a-time", ["2026-10-20T12:00:00Z"], 12345, float("inf")],
+)
+def test_invalid_prescan_detection_time_falls_back_to_message(
+    pre_scan_time, caplog
+):
+    message = (
+        "BEACON ID: ABC123\n"
+        "SITE ID: 42\n"
+        "DATE DETECTED: 20 OCT 2026\n"
+        "TIME DETECTED: 12:34:56 UTC"
+    )
+
+    parsed = parse_sarsat_message(
+        message,
+        _coordinate_scan(detect_time=pre_scan_time),
+    )
+
+    assert parsed is not None
+    assert parsed["detect_time"] == pd.Timestamp("2026-10-20T12:34:56Z")
+    assert "Ignoring invalid pre-scan detection time" in caplog.text
+
+
+def test_valid_prescan_detection_time_is_normalized_to_utc():
+    parsed = parse_sarsat_message(
+        "BEACON ID: ABC123\nSITE ID: 42",
+        _coordinate_scan(detect_time="2026-10-20T08:34:56-04:00"),
+    )
+
+    assert parsed["detect_time"] == pd.Timestamp("2026-10-20T12:34:56Z")
