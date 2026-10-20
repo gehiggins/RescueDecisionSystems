@@ -1,6 +1,6 @@
 """Offline regression coverage for NDBC observation text parsing."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -59,3 +59,43 @@ def test_ndbc_parsers_use_field_header_and_bounded_request(
     assert result["wind_speed"] == pytest.approx(5.5)
     assert result["wind_direction"] == pytest.approx(180.0)
     assert result["wave_height"] == pytest.approx(1.2)
+
+
+def _ndbc_row(observation_time, wind_speed):
+    return [
+        str(observation_time.year),
+        f"{observation_time.month:02d}",
+        f"{observation_time.day:02d}",
+        f"{observation_time.hour:02d}",
+        f"{observation_time.minute:02d}",
+        "180",
+        str(wind_speed),
+    ]
+
+
+def test_row_selection_rejects_stale_and_future_observations():
+    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    current = _ndbc_row(now - timedelta(minutes=30), 5.5)
+    stale = _ndbc_row(now - timedelta(hours=2), 9.9)
+    future = _ndbc_row(now + timedelta(hours=2), 8.8)
+
+    result = utils._select_best_data_row([stale, future, current])
+
+    assert result == current
+
+
+@pytest.mark.parametrize(
+    "observation_time",
+    [
+        datetime.now(timezone.utc).replace(second=0, microsecond=0)
+        - timedelta(hours=2),
+        datetime.now(timezone.utc).replace(second=0, microsecond=0)
+        + timedelta(hours=2),
+    ],
+)
+def test_row_selection_returns_none_when_no_current_observation(
+    observation_time,
+):
+    assert utils._select_best_data_row(
+        [_ndbc_row(observation_time, 5.5)]
+    ) is None

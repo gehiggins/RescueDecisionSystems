@@ -106,9 +106,13 @@ def _select_best_data_row(data_lines):
         try:
             year, month, day, hour, minute = map(int, line[:5])
             obs_time = datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
-            age_hours = (now - obs_time).total_seconds() / 3600
+            age_seconds = (now - obs_time).total_seconds()
 
-            if age_hours > 60:
+            # The NDBC adapter promises a current observation. The previous
+            # comparison treated the 60-minute window as 60 hours, allowing
+            # multi-day-old readings to appear on an operational map. Reject
+            # future timestamps as well as rows older than one hour.
+            if age_seconds < 0 or age_seconds > 60 * 60:
                 continue
 
             completeness = sum(1 for val in line[5:] if val != 'MM')
