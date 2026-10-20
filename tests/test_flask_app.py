@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from flask_app.app import create_app
 
@@ -138,6 +139,38 @@ def test_map_generation_rejects_site_id_path_traversal(tmp_path):
 
     assert response.status_code == 400
     assert not (tmp_path / "outside").exists()
+
+
+@pytest.mark.parametrize(
+    ("latitude", "longitude"),
+    [
+        ("91", "0"),
+        ("-91", "0"),
+        ("0", "181"),
+        ("0", "-181"),
+        ("nan", "0"),
+        ("0", "inf"),
+    ],
+)
+def test_map_generation_rejects_invalid_coordinate_bounds(
+    latitude, longitude, monkeypatch
+):
+    application = create_app({"TESTING": True})
+    map_called = False
+
+    def generate_map(_alert_row, _output_path):
+        nonlocal map_called
+        map_called = True
+
+    monkeypatch.setattr("flask_app.app.routes.generate_gis_map", generate_map)
+
+    response = application.test_client().get(
+        f"/generate_gis_map/{latitude}/{longitude}/98372"
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Coordinates are outside valid bounds"
+    assert map_called is False
 
 
 def test_full_pipeline_import_and_sequence_fallback_without_database(monkeypatch):
