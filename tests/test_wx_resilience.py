@@ -278,7 +278,7 @@ def test_weather_pipeline_discards_invalid_targets_and_keeps_valid_target(
     assert "Discarded 2 invalid weather target coordinate" in caplog.text
 
 
-def test_weather_pipeline_preserves_per_point_policy_metadata(monkeypatch):
+def test_weather_pipeline_preserves_usable_per_point_policy_metadata(monkeypatch):
     captured = {}
 
     def capture_targets(**kwargs):
@@ -305,7 +305,6 @@ def test_weather_pipeline_preserves_per_point_policy_metadata(monkeypatch):
             "lat": 37.5,
             "lon": -75.5,
             "error_radius_km": 12.5,
-            "coast_distance_km": "unknown",
         }
     ]
     assert captured["include_marine"] is None
@@ -335,6 +334,44 @@ def test_weather_pipeline_applies_existing_marine_policy_per_point(monkeypatch):
 
     assert result.empty
     assert captured == [True, False]
+
+
+def test_weather_pipeline_merges_duplicate_coordinate_policy_metadata(monkeypatch):
+    captured = {}
+
+    def capture_targets(**kwargs):
+        captured.update(kwargs)
+        return _station_observation()
+
+    monkeypatch.setattr(wx_pipeline, "build_wx_obs_for_area", capture_targets)
+    targets = pd.DataFrame(
+        [
+            {
+                "lat": 37.5,
+                "lon": -75.5,
+                "error_radius_km": 1.0,
+                "coast_distance_km": 20.0,
+            },
+            {
+                "lat": 37.5,
+                "lon": -75.5,
+                "error_radius_km": 12.5,
+                "coast_distance_km": 3.0,
+            },
+        ]
+    )
+
+    result = wx_pipeline.run_wx_pipeline(targets, include_marine=None)
+
+    assert result["source_id"].tolist() == ["TEST-STATION"]
+    assert captured["ref_points"] == [
+        {
+            "lat": 37.5,
+            "lon": -75.5,
+            "error_radius_km": 12.5,
+            "coast_distance_km": 3.0,
+        }
+    ]
 
 
 @pytest.mark.parametrize("targets", [None, pd.DataFrame(), [], "not-a-table"])
