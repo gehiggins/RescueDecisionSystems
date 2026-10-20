@@ -26,7 +26,7 @@ def test_ensure_utc_and_index():
 def test_window_slice_and_range():
     s, e = coerce_utc_range("2025-01-01 00:00Z", "2025-01-01 03:00Z")
     df = pd.DataFrame({"x": [1, 2, 3, 4]},
-                      index=pd.date_range("2025-01-01", periods=4, freq="H", tz="UTC"))
+                      index=pd.date_range("2025-01-01", periods=4, freq="h", tz="UTC"))
     out = window_slice(df, s, e)
     assert len(out) == 4  # inclusive window
 

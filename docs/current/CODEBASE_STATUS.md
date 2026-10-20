@@ -4,7 +4,7 @@ Status: verified current
 
 Reviewed against code and runtime: 2026-10-19
 
-Baseline: `main` commit `01444a3c9bb777f62e37785175f9f82bdee3269d`
+Baseline: `main` commit `ecf19b70b5ebedf97adc8af8e38f049dcad14c17`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -49,9 +49,19 @@ hours from the alert time is rejected by default rather than used to draw a
 potentially misleading position. The limit is configurable through
 `RDS_SAT_MAX_TLE_AGE_HOURS`.
 
+The browser now reports processing state, returned layers, and weather and
+satellite row counts. Invalid or excessive alert requests are rejected before
+pipeline work starts, and the direct map endpoint rejects non-finite or
+out-of-range coordinates.
+
+Diagnostic alert CSVs are disabled during normal operation. They can be
+enabled deliberately with `RDS_DEBUG_DUMP=1`; `RDS_DEBUG_DIR` selects their
+output directory. Untimestamped map-input transforms remain offline instead of
+silently contacting the satellite service.
+
 ## Automated verification
 
-- Default offline suite: 37 passed; 2 live tests deselected.
+- Default offline suite: 50 passed; 2 live tests deselected.
 - Explicit external-service suite: 2 passed.
 - Editable development installation succeeded.
 - The deployment requirements wrapper installed successfully.
@@ -76,6 +86,10 @@ The default and live test commands are documented in `pytest.ini` and
   unavailable, RDS continues with the alert positions and range rings it can
   verify.
 - Python 3.9 is the installation environment verified during this review.
+- That macOS Python 3.9 environment emits third-party compatibility warnings
+  for LibreSSL/urllib3 and the installed Matplotlib/pyparsing versions. They do
+  not currently fail the offline or live suites, but a newer Python runtime and
+  dependency refresh remain advisable before deployment.
 - No production deployment was performed as part of this verification.
 
 ## Deferred capabilities
