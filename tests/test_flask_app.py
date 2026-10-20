@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pandas as pd
+
 from flask_app.app import create_app
 
 
@@ -71,3 +73,16 @@ def test_map_generation_rejects_site_id_path_traversal(tmp_path):
 
     assert response.status_code == 400
     assert not (tmp_path / "outside").exists()
+
+
+def test_full_pipeline_import_and_sequence_fallback_without_database(monkeypatch):
+    """Local alert processing must not require a configured database."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    from flask_app.app import pipeline_controller
+
+    existing_alerts = pipeline_controller._get_existing_alerts_for_sequence()
+
+    assert isinstance(existing_alerts, pd.DataFrame)
+    assert existing_alerts.empty
+    assert list(existing_alerts.columns) == ["site_id", "alert_sequence_number"]
