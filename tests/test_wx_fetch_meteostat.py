@@ -45,6 +45,7 @@ def test_meteostat_converts_metric_wind_and_gust_to_metres_per_second(monkeypatc
     )
 
     assert len(result) == 1
+    assert isinstance(result.index, pd.RangeIndex)
     assert result.iloc[0]["wind_ms"] == 10.0
     assert result.iloc[0]["wind_gust_ms"] == 20.0
 
@@ -53,3 +54,25 @@ def test_meteostat_wind_conversion_rejects_nonfinite_values():
     assert np.isnan(wx_fetch_meteostat._kmh_to_ms(None))
     assert np.isnan(wx_fetch_meteostat._kmh_to_ms("bad"))
     assert np.isnan(wx_fetch_meteostat._kmh_to_ms(np.inf))
+
+
+def test_meteostat_rejects_invalid_time_window_without_station_lookup(monkeypatch):
+    monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
+    monkeypatch.setattr(
+        wx_fetch_meteostat,
+        "Stations",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("station provider called with invalid time window")
+        ),
+        raising=False,
+    )
+
+    result = wx_fetch_meteostat.fetch_meteostat_obs_near(
+        37.5,
+        -75.5,
+        "invalid",
+        "2026-10-20T12:00:00Z",
+    )
+
+    assert result.empty
+    assert "valid_utc" in result.columns
