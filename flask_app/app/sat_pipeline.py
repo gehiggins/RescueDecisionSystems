@@ -141,7 +141,16 @@ def build_sat_overlay_df(
         # keep these in final DF:
         "role","popup_html","sat_type"
     ]
-    if alert_df.empty:
+    if not isinstance(alert_df, pd.DataFrame) or alert_df.empty:
+        return pd.DataFrame(columns=COLS)
+
+    raw_alert_time = alert_df.iloc[0].get("alert_time_utc")
+    if not pd.api.types.is_scalar(raw_alert_time):
+        LOG.warning("Skipping satellite overlay: alert_time_utc is not scalar")
+        return pd.DataFrame(columns=COLS)
+    at_time_utc = pd.to_datetime(raw_alert_time, utc=True, errors="coerce")
+    if not isinstance(at_time_utc, pd.Timestamp) or pd.isna(at_time_utc):
+        LOG.warning("Skipping satellite overlay: alert_time_utc is invalid")
         return pd.DataFrame(columns=COLS)
 
     sat_ref = load_sat_reference()
@@ -166,7 +175,6 @@ def build_sat_overlay_df(
     if row is None:
         row = {}  # defer return so fallback/overrides can run
 
-    at_time_utc = pd.to_datetime(alert_df.iloc[0]["alert_time_utc"], utc=True)
     name = str(row.get("common_name") or row.get("designator"))
     norad_id = int(row["norad_id"]) if pd.notna(row.get("norad_id")) else np.nan
     source = "reference"
