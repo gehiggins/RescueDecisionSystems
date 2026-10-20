@@ -8,6 +8,7 @@ from flask_app.app.pipeline_controller import (
     _fallback_map_id,
     _map_output_path,
     _safe_map_site_id,
+    _weather_target_from_position,
 )
 
 
@@ -36,6 +37,28 @@ def test_fallback_map_ids_are_stable_and_separate_different_alerts():
     assert first != _fallback_map_id("second alert", 1)
     assert first.startswith("ALERT_1_")
     assert len(first.rsplit("_", 1)[1]) == 12
+
+
+def test_weather_target_carries_position_uncertainty_in_kilometres():
+    target = _weather_target_from_position(
+        pd.Series(
+            {
+                "site_id": "98372",
+                "role": "A",
+                "lat_dd": 37.5,
+                "lon_dd": -75.5,
+                "range_ring_meters": 12_500,
+            }
+        )
+    )
+
+    assert target == {
+        "site_id": "98372",
+        "target": "A",
+        "lat": 37.5,
+        "lon": -75.5,
+        "error_radius_km": 12.5,
+    }
 
 
 def test_satellite_overlay_site_symlink_cannot_escape_root(monkeypatch, tmp_path):
