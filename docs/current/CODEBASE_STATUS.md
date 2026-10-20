@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `666c75b95aed29a808bacef3655fa2fd8d804d97`
+Baseline: `main` commit `415375adf24330a7b2728bd422d7187b263137ac`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -120,6 +120,8 @@ malformed coverage cannot reach the displayed map. Valid images are embedded
 into the generated HTML map as georeferenced satellite imagery. Image opacity
 is finite and constrained from zero to one. Malformed or filesystem-rejected
 image paths are skipped without stopping valid alert layers from rendering.
+The renderer independently rejects symlinked files, verifies that image content
+is a readable PNG, and treats non-scalar image names as missing.
 Satellite footprints, tracks, and pass markers share one orbit-layer classifier; explicit
 LEO, MEO, and GEO metadata is preserved, while missing or unknown types use the
 documented LEO default instead of being mislabeled as GEO.
@@ -308,8 +310,9 @@ without stopping other layers.
 The map renderer independently validates point, ring, track, and satellite
 geometry, so malformed rows cannot abort otherwise valid layers. External
 station and provider display values are escaped before entering map popup and
-tooltip HTML. Alert finalization normalizes site identifiers, ignores invalid
-historical sequence values, parses exact integer sequence text without
+tooltip HTML. Shared map field fallbacks skip non-scalar malformed values and
+continue to later usable fields. Alert finalization normalizes site identifiers,
+ignores invalid historical sequence values, parses exact integer sequence text without
 floating-point rounding, and assigns distinct increasing sequence numbers to
 repeated sites in the same batch. Shared UTC slicing accepts naive, aware,
 and mixed-offset timestamps without comparing incompatible indexes. Shared
@@ -324,7 +327,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 670 passed; 2 live tests deselected.
+- Default offline suite: 678 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
