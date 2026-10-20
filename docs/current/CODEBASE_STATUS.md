@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `4b8e2b4d2f1dd6437599de1a1eac9f1c80cb801d`
+Baseline: `main` commit `fcb5d037f2af53c0a6fe240121e412c0a761ea0a`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -43,9 +43,15 @@ returns:
 - a served HTML map.
 
 Live Open-Meteo retrieval was exercised for both sample positions on
-2026-10-20. During the initial 2026-10-19 review, a current-time NOAA-15 test
-exercised CelesTrak TLE retrieval, Skyfield propagation, satellite footprints,
-and map overlays. A direct CelesTrak check on 2026-10-20 timed out, so current
+2026-10-20. The full controller produced two weather rows and an HTML map with
+alert-position, range-ring, and weather layers. Open-Meteo is explicitly asked
+for metres-per-second wind values to match the `wind_ms` schema; the verified
+sample displayed 19 kt and 31 kt after this correction, rather than the
+incorrect 70 kt and 111 kt produced when the provider's default km/h values
+were treated as m/s. During the initial 2026-10-19 review, a current-time
+NOAA-15 test exercised CelesTrak TLE retrieval, Skyfield propagation,
+satellite footprints, and map overlays. A direct CelesTrak check on 2026-10-20
+timed out, so current
 TLE-provider availability was not reconfirmed; cached TLEs remain usable and
 provider failures now enter a short backoff instead of causing a retry cascade.
 
@@ -70,9 +76,20 @@ bounded path components when a numeric site ID is unavailable. The normalized
 identifier is retained through the final map write, so raw alert text cannot
 escape the configured map directory.
 
-Validated local satellite PNG overlays are loaded only with finite geographic
-bounds and non-symlinked image/sidecar files. They are embedded into the
-generated HTML map as georeferenced satellite imagery. Equator and
+Validated local satellite PNG overlays are loaded only with ordered, finite,
+in-range geographic bounds and non-symlinked image/sidecar files. The loader,
+map-input builder, and renderer apply the same boundary rule, so reversed or
+malformed coverage cannot reach the displayed map. Valid images are embedded
+into the generated HTML map as georeferenced satellite imagery. Satellite
+footprints, tracks, and pass markers share one orbit-layer classifier; explicit
+LEO, MEO, and GEO metadata is preserved, while missing or unknown types use the
+documented LEO default instead of being mislabeled as GEO.
+
+The map renderer recognizes both normalized coordinate fields and the
+`latitude_a`/`longitude_a` names emitted by the active parser. It keeps each
+latitude/longitude candidate paired, then falls back to position B or the
+first valid alert geometry. Valid alerts therefore open centered on their
+plotted location rather than the coordinate-less default. Equator and
 prime-meridian coordinates remain valid map centers, and untrusted site IDs
 are HTML-escaped in the map title.
 
@@ -91,8 +108,10 @@ to committed static assets.
 
 Diagnostic alert CSVs are disabled during normal operation. They can be
 enabled deliberately with `RDS_DEBUG_DUMP=1`; `RDS_DEBUG_DIR` selects their
-output directory. Untimestamped map-input transforms remain offline instead of
-silently contacting the satellite service.
+output directory. Diagnostic filenames are confined to that directory and
+symbolic-link output targets are rejected before writing. Untimestamped
+map-input transforms remain offline instead of silently contacting the
+satellite service.
 
 Active data and projection defaults no longer depend on one developer's file
 system. Repository-relative paths are used by default, with environment
@@ -107,17 +126,54 @@ reduction preserves the source identifier used to associate observations with
 stations. Missing or non-finite measurements and invalid timestamps remain
 absent instead of aborting map generation. Invalid A/B and direct provider
 reference coordinates are rejected independently, while valid targets
-continue through the weather pipeline.
+continue through the weather pipeline. Empty, null, or unsupported weather
+target inputs return the canonical empty observation schema without contacting
+a provider.
+
+Weather policy is evaluated independently for every valid alert position.
+When A and B have identical coordinates, RDS performs one provider lookup but
+retains the most conservative combined metadata: the largest available error
+radius and the smallest available coast distance. Invalid optional policy
+metadata is omitted rather than passed downstream.
+
+Open-Meteo keeps usable timestamp rows when individual provider arrays are
+short or malformed. Meteostat's documented km/h wind and gust values are
+converted to the shared m/s schema, invalid station metadata is filtered per
+row, and valid stations remain available. Invalid provider time windows are
+rejected before network lookup. Shared weather calculations accept finite
+scalar numeric strings and reject malformed, array-like, and non-finite
+values.
 
 Satellite context enrichment isolates visible-satellite, upcoming-pass, and
 nearest-satellite failures. Empty provider results preserve the overlay schema;
 incomplete satellite metadata does not discard valid geometry. Satellite
 subpoints can render without a footprint radius, and malformed track vertices
-or next-pass coordinates are removed individually.
+or next-pass coordinates are removed individually. Missing, array-like, or
+malformed alert timestamps return an empty satellite overlay before reference
+or TLE-provider work begins. Satellite propagation boundaries normalize valid
+times to UTC and reject malformed timestamps or out-of-range alert coordinates
+before invoking Skyfield. Malformed or empty constellation responses are not
+cached as successful TLE lookups, allowing a later provider recovery to be
+retried.
+
+Coordinate source spans identify the exact matched DMS or decimal-degree token
+pair and preserve offsets across LF, CRLF, and CR line endings. Coordinate
+interpretation rules themselves were not changed by that maintenance.
 
 Map inputs accept only finite, in-range coordinates and positive finite range
 rings. Numeric range-ring text is normalized; malformed radii are omitted
 without stopping other layers.
+
+The map renderer independently validates point, ring, track, and satellite
+geometry, so malformed rows cannot abort otherwise valid layers. External
+station and provider display values are escaped before entering map popup and
+tooltip HTML. Alert finalization normalizes site identifiers, ignores invalid
+historical sequence values, parses exact integer sequence text without
+floating-point rounding, and assigns distinct increasing sequence numbers to
+repeated sites in the same batch. Shared UTC slicing accepts naive, aware,
+and mixed-offset timestamps without comparing incompatible indexes. Shared
+coordinate utilities enforce pole and antimeridian bounds even when called
+outside the primary alert validator.
 
 Database modules can be imported without a database URL. Database setup is
 lazy and explicit, and missing configuration produces a clear error if a
@@ -127,7 +183,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 181 passed; 2 live tests deselected.
+- Default offline suite: 410 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
