@@ -595,6 +595,30 @@ def test_weather_context_treats_invalid_optional_distance_as_unknown(invalid):
     assert context.zone == "unknown"
 
 
+def test_weather_context_normalizes_numeric_text_coordinates():
+    context = classify_zone_context(lat="37.5", lon="-75.5")
+
+    assert context.lat == 37.5
+    assert context.lon == -75.5
+
+
+@pytest.mark.parametrize(
+    ("lat", "lon"),
+    [
+        ("bad", -75.5),
+        (37.5, None),
+        (float("nan"), -75.5),
+        (37.5, float("inf")),
+        (True, -75.5),
+        (91, -75.5),
+        (37.5, -181),
+    ],
+)
+def test_weather_context_rejects_invalid_coordinates(lat, lon):
+    with pytest.raises(ValueError, match="lat|lon"):
+        classify_zone_context(lat=lat, lon=lon)
+
+
 def test_weather_aggregator_uses_normalized_context_metadata(monkeypatch):
     captured = {}
     monkeypatch.setattr(
