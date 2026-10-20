@@ -18,7 +18,8 @@ setup(
         'contextily',
         'pillow',
         'requests',
-        'python-dotenv'
+        'python-dotenv',
+        'skyfield'
     ],
     entry_points={
         'console_scripts': [
