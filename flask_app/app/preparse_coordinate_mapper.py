@@ -35,6 +35,8 @@
 
 from app.setup_imports import *
 
+import re
+
 from app.debug_outputs import dump_dataframe
 from app.utils_coordinates import clean_and_standardize_coordinate
 from app.field_validator import (
@@ -44,6 +46,29 @@ from app.field_validator import (
 
 def _short(s, n=200):
     return (s or "")[:n]
+
+
+def _token_span(raw_text, token):
+    """Locate a normalized coordinate token in the original source text."""
+    if not isinstance(token, str):
+        return None
+    parts = token.strip().split()
+    if not parts:
+        return None
+    # Validators collapse whitespace before matching. Rebuild a whitespace-
+    # tolerant expression so the stored offsets still reference the raw alert.
+    pattern = r"\s+".join(re.escape(part) for part in parts)
+    match = re.search(pattern, raw_text, re.IGNORECASE)
+    return match.span() if match else None
+
+
+def _coordinate_pair_span(raw_text, lat_token, lon_token):
+    """Return the raw span covering both validated coordinate tokens."""
+    lat_span = _token_span(raw_text, lat_token)
+    lon_span = _token_span(raw_text, lon_token)
+    if lat_span is None or lon_span is None:
+        return None
+    return min(lat_span[0], lon_span[0]), max(lat_span[1], lon_span[1])
 
 def pre_scan_for_coordinates(raw_message):
     """
@@ -71,21 +96,33 @@ def pre_scan_for_coordinates(raw_message):
     # and CR messages. Validation receives only the line content.
     for raw_line in raw_message.splitlines(keepends=True):
         line = raw_line.rstrip("\r\n")
-        result = validate_and_extract_coordinate_pair(
-            field_name="coord_pair",
-            raw_text=line,
-            config={},
-            context={}
-        )
-        if result.get("is_valid"):
+        cursor = 0
+        while cursor < len(line):
+            segment = line[cursor:]
+            result = validate_and_extract_coordinate_pair(
+                field_name="coord_pair",
+                raw_text=segment,
+                config={},
+                context={}
+            )
+            if not result.get("is_valid"):
+                break
             lat_token = result.get("lat_token")
             lon_token = result.get("lon_token")
-            # Use validator tokens if present, else fallback to slice
-            lat_val = lat_token if lat_token else line[result.get("start_pos"):result.get("end_pos")] if result.get("start_pos") is not None and result.get("end_pos") is not None else line
-            lon_val = lon_token if lon_token else line[result.get("start_pos"):result.get("end_pos")] if result.get("start_pos") is not None and result.get("end_pos") is not None else line
-            # Compute global spans
-            start_pos = offset + (result.get("start_pos") if result.get("start_pos") is not None else 0)
-            end_pos = offset + (result.get("end_pos") if result.get("end_pos") is not None else len(line))
+            pair_span = _coordinate_pair_span(segment, lat_token, lon_token)
+            if pair_span is None:
+                pair_start = result.get("start_pos")
+                pair_end = result.get("end_pos")
+                if not isinstance(pair_start, int) or not isinstance(pair_end, int):
+                    break
+            else:
+                pair_start, pair_end = pair_span
+            if pair_end <= pair_start:
+                break
+            lat_val = lat_token if lat_token else segment[pair_start:pair_end]
+            lon_val = lon_token if lon_token else segment[pair_start:pair_end]
+            start_pos = offset + cursor + pair_start
+            end_pos = offset + cursor + pair_end
             coordinate_pairs.append({
                 "lat": lat_val,
                 "lon": lon_val,
@@ -98,7 +135,9 @@ def pre_scan_for_coordinates(raw_message):
                 "confidence": result.get("confidence", 0.0),
                 "notes": _short("; ".join(result.get("notes", [])), 120)
             })
-            # Deterministic: stop on first valid pair per line
+            # Continue after the raw match so compact messages containing A
+            # and B on the same line retain both positions without re-matching.
+            cursor += pair_end
         offset += len(raw_line)
 
     # Build DataFrame with fixed column order
