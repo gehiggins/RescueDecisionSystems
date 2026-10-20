@@ -448,6 +448,93 @@ def test_malformed_tle_epoch_skips_propagation(monkeypatch, malformed_epoch):
     assert overlay.empty
 
 
+def test_subpoint_propagation_failure_returns_empty_overlay(monkeypatch, caplog):
+    tle = pd.DataFrame(
+        [
+            {
+                "name": "NOAA 15",
+                "norad_id": 25338,
+                "tle_line1": "line 1",
+                "tle_line2": "line 2",
+                "epoch_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+            }
+        ]
+    )
+    monkeypatch.setattr(sat_pipeline, "load_tle_snapshot", lambda _ids: tle)
+    def fail_subpoint(*_args):
+        raise ValueError("bad orbital elements")
+
+    monkeypatch.setattr(sat_pipeline, "compute_subpoint_at", fail_subpoint)
+    monkeypatch.setattr(
+        sat_pipeline,
+        "compute_short_track",
+        lambda *_args, **_kwargs: pytest.fail(
+            "track calculation ran without a valid subpoint"
+        ),
+    )
+    alert = pd.DataFrame(
+        [
+            {
+                "alert_time_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+                "norad_id": 25338,
+            }
+        ]
+    )
+
+    overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=True)
+
+    assert overlay.empty
+    assert "subpoint propagation failure" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "malformed_subpoint",
+    [
+        None,
+        ([], -74.0, 850.0),
+        (38.0, -74.0, float("inf")),
+        (95.0, -74.0, 850.0),
+    ],
+)
+def test_malformed_propagated_subpoint_returns_empty_overlay(
+    monkeypatch, malformed_subpoint
+):
+    tle = pd.DataFrame(
+        [
+            {
+                "name": "NOAA 15",
+                "norad_id": 25338,
+                "tle_line1": "line 1",
+                "tle_line2": "line 2",
+                "epoch_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+            }
+        ]
+    )
+    monkeypatch.setattr(sat_pipeline, "load_tle_snapshot", lambda _ids: tle)
+    monkeypatch.setattr(
+        sat_pipeline, "compute_subpoint_at", lambda *_args: malformed_subpoint
+    )
+    monkeypatch.setattr(
+        sat_pipeline,
+        "compute_short_track",
+        lambda *_args, **_kwargs: pytest.fail(
+            "track calculation ran without a valid subpoint"
+        ),
+    )
+    alert = pd.DataFrame(
+        [
+            {
+                "alert_time_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+                "norad_id": 25338,
+            }
+        ]
+    )
+
+    overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=True)
+
+    assert overlay.empty
+
+
 @pytest.mark.parametrize("configured", ["not-a-number", "nan", "inf", "-1", "0"])
 def test_invalid_tle_age_configuration_uses_safe_default(
     monkeypatch, configured
