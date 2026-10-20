@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `f2cf44682f7b9772af8c90755e3d2759d23fae28`
+Baseline: `main` commit `27c3b38c425ee15bf608462f5ea6cabd4f4180d9`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -244,6 +244,9 @@ while invalid NOAA limits skip the provider request.
 NOAA station, NOAA alert, and NDBC observation request timeouts require finite
 positive values; invalid settings fall back to each provider's established
 bounded default.
+Meteostat station searches are capped at 100 candidates before provider access.
+Finite weather lookback values that exceed Python's supported datetime range
+fall back to the established six-hour window instead of aborting the alert.
 
 Weather policy is evaluated independently for every valid alert position.
 When A and B have identical coordinates, RDS performs one provider lookup but
@@ -266,7 +269,10 @@ values. Open-Meteo atmospheric and marine values are range-checked before
 entering the shared schema: negative wind, gust, pressure, precipitation,
 wave-height, and wave-period values are omitted, as are percentages and
 directions outside their physical ranges. Invalid humidity cannot produce a
-derived dew point. Meteostat now applies matching finite and physical range
+derived dew point. Open-Meteo also parses conventional true/false text for its
+marine-data option, so a false-like string cannot accidentally enable the
+marine request; unrecognized values log a warning and use the existing enabled
+default. Meteostat now applies matching finite and physical range
 checks to its temperature, dew-point, humidity, wind, direction, pressure, and
 precipitation fields before creating shared weather rows. Malformed Meteostat
 station identifiers are skipped independently so valid neighboring stations
@@ -313,7 +319,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 652 passed; 2 live tests deselected.
+- Default offline suite: 660 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
