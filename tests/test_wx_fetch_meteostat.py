@@ -1,0 +1,55 @@
+import numpy as np
+import pandas as pd
+
+from app import wx_fetch_meteostat
+
+
+class _StationsQuery:
+    def nearby(self, lat, lon):
+        assert (lat, lon) == (37.5, -75.5)
+        return self
+
+    def fetch(self, limit):
+        assert limit == 3
+        return pd.DataFrame(
+            [{"latitude": 37.5, "longitude": -75.5, "name": "Test Station"}],
+            index=pd.Index(["KTEST"], name="id"),
+        )
+
+
+class _HourlyQuery:
+    def __init__(self, station_id, start, end):
+        assert station_id == "KTEST"
+        self.start = start
+        self.end = end
+
+    def fetch(self):
+        return pd.DataFrame(
+            [{"wspd": 36.0, "wpgt": 72.0, "wdir": 180.0}],
+            index=pd.DatetimeIndex(["2026-10-20T12:00:00"]),
+        )
+
+
+def test_meteostat_converts_metric_wind_and_gust_to_metres_per_second(monkeypatch):
+    monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
+    monkeypatch.setattr(wx_fetch_meteostat, "Stations", _StationsQuery, raising=False)
+    monkeypatch.setattr(wx_fetch_meteostat, "Hourly", _HourlyQuery, raising=False)
+
+    result = wx_fetch_meteostat.fetch_meteostat_obs_near(
+        37.5,
+        -75.5,
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T12:00:00Z",
+        radius_km=50.0,
+        max_stations=1,
+    )
+
+    assert len(result) == 1
+    assert result.iloc[0]["wind_ms"] == 10.0
+    assert result.iloc[0]["wind_gust_ms"] == 20.0
+
+
+def test_meteostat_wind_conversion_rejects_nonfinite_values():
+    assert np.isnan(wx_fetch_meteostat._kmh_to_ms(None))
+    assert np.isnan(wx_fetch_meteostat._kmh_to_ms("bad"))
+    assert np.isnan(wx_fetch_meteostat._kmh_to_ms(np.inf))

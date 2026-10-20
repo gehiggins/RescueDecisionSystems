@@ -15,6 +15,15 @@ from app.utils_time import ensure_utc, ensure_utc_index, window_slice, coerce_ut
 
 LOG = logging.getLogger(__name__)
 
+
+def _kmh_to_ms(value):
+    """Convert one finite Meteostat wind value from km/h to m/s."""
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return np.nan
+    return numeric / 3.6 if np.isfinite(numeric) else np.nan
+
 try:
     from meteostat import Stations, Hourly
     _HAS_METEOSTAT = True
@@ -124,9 +133,10 @@ def fetch_meteostat_obs_near(lat: float, lon: float, start_utc, end_utc,
                     "temp_c": r.get("temp", np.nan),
                     "dewpoint_c": r.get("dwpt", np.nan),
                     "rh_pct": r.get("rhum", np.nan),
-                    "wind_ms": r.get("wspd", np.nan),
+                    # Meteostat's default metric response reports wind in km/h.
+                    "wind_ms": _kmh_to_ms(r.get("wspd", np.nan)),
                     "wind_dir_deg": r.get("wdir", np.nan),
-                    "wind_gust_ms": np.nan,
+                    "wind_gust_ms": _kmh_to_ms(r.get("wpgt", np.nan)),
                     "pressure_hpa": r.get("pres", np.nan),
                     "precip_mmhr": r.get("prcp", np.nan),
                     "visibility_km": np.nan,
