@@ -849,7 +849,7 @@ def generate_gis_map_html_from_dfs(
                 ):
                     try:
                         candidate = Path(image_path)
-                        if candidate.is_file():
+                        if candidate.is_file() and not candidate.is_symlink():
                             # Satellite overlays are PNG artifacts. Verify the
                             # file before Folium blindly embeds its raw bytes.
                             with Image.open(candidate) as image:
