@@ -116,3 +116,81 @@ def test_open_meteo_non_mapping_payload_returns_empty(monkeypatch):
     )
 
     assert result.empty
+
+
+def test_open_meteo_preserves_marine_rows_when_atmosphere_is_empty(monkeypatch):
+    calls = []
+
+    def fake_get(url, params, timeout):
+        calls.append(url)
+        if "marine-api" in url:
+            return _Response(
+                {
+                    "hourly": {
+                        "time": ["2026-10-20T12:00"],
+                        "wave_height": [2.5],
+                        "wave_period": [8.0],
+                        "wave_direction": [225.0],
+                    }
+                }
+            )
+        return _Response({"hourly": {}})
+
+    monkeypatch.setattr(wx_fetch_open_meteo.requests, "get", fake_get)
+
+    result = wx_fetch_open_meteo.fetch_open_meteo_obs(
+        37.5,
+        -75.5,
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T12:00:00Z",
+        include_marine=True,
+    )
+
+    assert len(calls) == 2
+    assert len(result) == 1
+    assert result.loc[0, "valid_utc"] == pd.Timestamp("2026-10-20T12:00:00Z")
+    assert result.loc[0, "wave_height_m"] == 2.5
+    assert result.loc[0, "wave_period_s"] == 8.0
+    assert result.loc[0, "wave_dir_deg"] == 225.0
+    assert pd.isna(result.loc[0, "temp_c"])
+    assert pd.isna(result.loc[0, "wind_ms"])
+
+
+def test_open_meteo_merges_additional_marine_timestamp(monkeypatch):
+    def fake_get(url, params, timeout):
+        if "marine-api" in url:
+            return _Response(
+                {
+                    "hourly": {
+                        "time": ["2026-10-20T13:00"],
+                        "wave_height": [1.5],
+                    }
+                }
+            )
+        return _Response(
+            {
+                "hourly": {
+                    "time": ["2026-10-20T12:00"],
+                    "temperature_2m": [20.0],
+                }
+            }
+        )
+
+    monkeypatch.setattr(wx_fetch_open_meteo.requests, "get", fake_get)
+
+    result = wx_fetch_open_meteo.fetch_open_meteo_obs(
+        37.5,
+        -75.5,
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T13:00:00Z",
+        include_marine=True,
+    )
+
+    assert result["valid_utc"].tolist() == [
+        pd.Timestamp("2026-10-20T12:00:00Z"),
+        pd.Timestamp("2026-10-20T13:00:00Z"),
+    ]
+    assert result.loc[0, "temp_c"] == 20.0
+    assert pd.isna(result.loc[0, "wave_height_m"])
+    assert pd.isna(result.loc[1, "temp_c"])
+    assert result.loc[1, "wave_height_m"] == 1.5
