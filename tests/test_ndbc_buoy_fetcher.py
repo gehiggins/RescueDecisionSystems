@@ -42,6 +42,41 @@ def test_single_buoy_uses_preferred_source_then_fallback(monkeypatch):
     assert result.iloc[0]["wave_height"] == pytest.approx(1.2)
 
 
+@pytest.mark.parametrize(
+    "invalid_station_id",
+    [None, "", "   ", True, pd.NA, "../44009", "44009?x=1", "44009/extra"],
+)
+def test_single_buoy_rejects_invalid_station_identifier(
+    monkeypatch, invalid_station_id
+):
+    monkeypatch.setattr(
+        fetcher_ndbc_buoy,
+        "parse_realtime2_data",
+        lambda *_args, **_kwargs: pytest.fail("provider parser called"),
+    )
+    monkeypatch.setattr(
+        fetcher_ndbc_buoy,
+        "parse_5day2_data",
+        lambda *_args, **_kwargs: pytest.fail("provider parser called"),
+    )
+
+    assert fetcher_ndbc_buoy.fetch_single_buoy(invalid_station_id).empty
+
+
+def test_metadata_filter_skips_invalid_station_identifiers():
+    metadata = pd.DataFrame(
+        [
+            {"station_id": " 44009 ", "latitude": 37.5, "longitude": -74.5},
+            {"station_id": "../BAD", "latitude": 37.6, "longitude": -74.6},
+            {"station_id": "", "latitude": 37.7, "longitude": -74.7},
+        ]
+    )
+
+    result = fetcher_ndbc_buoy._metadata_with_coordinates(metadata)
+
+    assert result["station_id"].tolist() == ["44009"]
+
+
 def test_buoy_fetch_enriches_nearest_station_observation(monkeypatch):
     metadata = pd.DataFrame(
         [

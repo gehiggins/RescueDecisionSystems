@@ -17,6 +17,7 @@ from flask_app.app.utils_weather import calculate_timelate
 DEFAULT_DATA_FOLDER = Path(__file__).resolve().parents[2] / "data"
 DEFAULT_MAX_BUOYS = 10
 MAX_BUOYS = 100
+NDBC_STATION_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,20}\Z")
 
 
 def _buoy_limit(value):
@@ -36,6 +37,19 @@ def _metadata_path():
     """Resolve buoy metadata from configuration or the repository data folder."""
     data_folder = Path(os.getenv("RDS_DATA_FOLDER", str(DEFAULT_DATA_FOLDER)))
     return data_folder / "reference" / "ndbc_station_metadata_full.csv"
+
+
+def _station_id(value):
+    """Return one provider-safe NDBC station identifier, or ``None``."""
+    if value is None or isinstance(value, (bool, np.bool_)):
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return None
+    normalized = str(value).strip()
+    return normalized if NDBC_STATION_ID_PATTERN.fullmatch(normalized) else None
 
 def load_buoy_metadata():
     metadata_path = _metadata_path()
@@ -92,11 +106,11 @@ def _metadata_with_coordinates(metadata_df):
     rows = []
     for _, station in metadata_df.iterrows():
         coordinates = _coordinates_from_metadata(station)
-        station_id = station.get("station_id")
-        if coordinates is None or pd.isna(station_id):
+        station_id = _station_id(station.get("station_id"))
+        if coordinates is None or station_id is None:
             continue
         normalized = station.copy()
-        normalized["station_id"] = str(station_id).strip()
+        normalized["station_id"] = station_id
         normalized["latitude"], normalized["longitude"] = coordinates
         rows.append(normalized)
     return pd.DataFrame(rows)
@@ -104,7 +118,10 @@ def _metadata_with_coordinates(metadata_df):
 
 def fetch_single_buoy(station_id, preferred_data_source="none"):
     """Fetch one recent NDBC observation using the preferred source first."""
-    station_id = str(station_id).strip()
+    station_id = _station_id(station_id)
+    if station_id is None:
+        logging.warning("Invalid NDBC station identifier; skipping provider request")
+        return pd.DataFrame()
     preferred = str(preferred_data_source or "none").strip().lower()
     parsers = (
         ("5day2", parse_5day2_data),
