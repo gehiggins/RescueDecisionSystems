@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `d1d1486bbebf6061768386703062edc9cd9a8467`
+Baseline: `main` commit `fd0af9614a8918df9270500bc29c2a3e9a8530e8`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -205,7 +205,9 @@ becoming temperature, wind, direction, or wave measurements. A read-only live
 check of station 44009 on 2026-10-20 returned a current observation and
 populated temperature, wind speed, and wind direction through the repaired
 parser. Negative wind speeds and wave heights, and directions outside 0–360
-degrees, are also excluded from the shared weather schema.
+degrees, are also excluded from the shared weather schema. NDBC metadata and
+direct lookups accept only normalized station-code identifiers; empty,
+path-like, and query-like identifiers do not reach provider requests.
 
 The optional NOAA shore adapter no longer returns Seattle's KSEA station for
 every alert. It discovers NWS observation stations around the requested point,
@@ -215,7 +217,9 @@ KWAL, KMFV, and KSBY in increasing distance order. NOAA active-alert clients
 now use the documented `/alerts/active/zone/{zone_id}` route through a shared,
 bounded lookup. A live check resolved the sample position to marine zone
 ANZ652 and returned one active alert. These repaired legacy adapters remain
-outside the active production path.
+outside the active production path. NOAA discovery and observation lookups
+likewise accept only normalized station-code identifiers and discard malformed
+provider entries independently.
 
 The central empty DataFrame schemas now initialize successfully with current
 pandas. Timestamp columns are UTC-aware, while list and coordinate-container
@@ -261,7 +265,9 @@ values. Open-Meteo atmospheric and marine values are range-checked before
 entering the shared schema: negative wind, gust, pressure, precipitation,
 wave-height, and wave-period values are omitted, as are percentages and
 directions outside their physical ranges. Invalid humidity cannot produce a
-derived dew point.
+derived dew point. Meteostat now applies matching finite and physical range
+checks to its temperature, dew-point, humidity, wind, direction, pressure, and
+precipitation fields before creating shared weather rows.
 
 Satellite context enrichment isolates visible-satellite, upcoming-pass, and
 nearest-satellite failures. Empty provider results preserve the overlay schema;
@@ -304,7 +310,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 604 passed; 2 live tests deselected.
+- Default offline suite: 627 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
