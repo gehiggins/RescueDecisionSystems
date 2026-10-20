@@ -2,7 +2,10 @@
 
 Status: verified current
 
-Reviewed and installation-tested: 2026-10-19\n\nContinuous verification baseline: `main` commit\n`b4c626a6b87914c8e7532fae6582a0a8f046f818` (2026-10-20)
+Reviewed and installation-tested: 2026-10-19
+
+Continuous verification baseline: `main` commit
+`b4c626a6b87914c8e7532fae6582a0a8f046f818` (2026-10-20)
 
 Supersedes: `docs/archive/2025/RDS_Installation_Requirements_2025-02-28.md`
 
@@ -60,7 +63,7 @@ deployment configuration is intentionally outside this installation check.
 ## Continuous verification
 
 GitHub Actions runs the supported Python 3.9 and Python 3.11 installations,
-dependency checks, offline test suites, and Gunicorn configuration checks for
-every pull request and every update to `main`. Live external-service tests
-remain deliberately separate so temporary provider outages do not block
-unrelated code changes.
+dependency checks, active-module compilation, offline test suites, and
+Gunicorn configuration checks for every pull request and every update to
+`main`. Live external-service tests remain deliberately separate so temporary
+provider outages do not block unrelated code changes.
