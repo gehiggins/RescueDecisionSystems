@@ -57,6 +57,7 @@ REQUIRED_COLS = [
 # numbers and international designators follow the public CelesTrak catalog.
 DEFAULT_REFERENCE_ROWS = [
     # type, designator, common_name, norad_id, intl_designator
+    ("GEO", "GOES-16", "GOES-16", 41866, "2016-071A"),
     ("LEO", "NOAA-15", "NOAA 15", 25338, "1998-030A"),
     ("LEO", "NOAA-18", "NOAA 18", 28654, "2005-018A"),
     ("LEO", "NOAA-19", "NOAA 19", 33591, "2009-005A"),
