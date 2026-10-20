@@ -4,6 +4,7 @@
 from app.setup_imports import *
 from flask_app.app.utils_coordinates import coordinate_pair_to_dd, is_valid_coordinate, clean_and_standardize_coordinate
 from flask_app.app.utils import log_error_and_continue
+import math
 import re
 
 
@@ -28,6 +29,37 @@ def _parse_detect_time(message_text):
         errors="coerce",
     )
     return None if pd.isna(detected) else detected
+
+
+def _has_scalar_value(value):
+    """Return whether optional parser metadata contains one usable scalar."""
+    if value is None:
+        return False
+    try:
+        return bool(pd.notna(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _coerce_expected_error_nm(value):
+    """Normalize a positive finite expected-error distance in nautical miles."""
+    if not _has_scalar_value(value):
+        return None
+    if isinstance(value, str):
+        value = (
+            value.lower()
+            .replace("nautical miles", "")
+            .replace("nm", "")
+            .replace(",", "")
+            .strip()
+        )
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(normalized) or normalized <= 0:
+        return None
+    return normalized
 
 def parse_sarsat_message(message_text, pre_scan_results=None):
     """
@@ -68,10 +100,9 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
         # --- Parse EE from message_text ---
         ee_msg_match = re.search(r"EXPECTED\s+HORIZONTAL\s+ERROR\s*\(EE\)\s*:\s*([0-9]*\.?[0-9]+)\s*NM", message_text, re.IGNORECASE)
         if ee_msg_match:
-            try:
-                parsed_data["expected_error_nm"] = float(ee_msg_match.group(1))
-            except Exception:
-                pass
+            parsed_data["expected_error_nm"] = _coerce_expected_error_nm(
+                ee_msg_match.group(1)
+            )
 
         # Consume only the pre-parsed DataFrame (pre_scan_results)
         if pre_scan_results is None or pre_scan_results.empty:
@@ -130,9 +161,13 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
 
         # Carry through additional fields if present
         if 'beacon_id' in pre_scan_results.columns:
-            parsed_data['beacon_id'] = pre_scan_results['beacon_id'].iloc[0]
+            value = pre_scan_results['beacon_id'].iloc[0]
+            if _has_scalar_value(value) and str(value).strip():
+                parsed_data['beacon_id'] = value
         if 'site_id' in pre_scan_results.columns:
-            parsed_data['site_id'] = pre_scan_results['site_id'].iloc[0]
+            value = pre_scan_results['site_id'].iloc[0]
+            if _has_scalar_value(value) and str(value).strip():
+                parsed_data['site_id'] = value
         if 'detect_time' in pre_scan_results.columns:
             pre_scanned_detect_time = pre_scan_results['detect_time'].iloc[0]
             if pd.notna(pre_scanned_detect_time):
@@ -140,20 +175,22 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
         if parsed_data['detect_time'] is None:
             parsed_data['detect_time'] = _parse_detect_time(message_text)
         if 'position_method' in pre_scan_results.columns:
-            parsed_data['position_method'] = pre_scan_results['position_method'].iloc[0]
+            value = pre_scan_results['position_method'].iloc[0]
+            if _has_scalar_value(value):
+                parsed_data['position_method'] = value
         if 'position_resolution' in pre_scan_results.columns:
-            parsed_data['position_resolution'] = pre_scan_results['position_resolution'].iloc[0]
+            value = pre_scan_results['position_resolution'].iloc[0]
+            if _has_scalar_value(value):
+                parsed_data['position_resolution'] = value
         # If EE was not found in message_text, try pre_scan_results
         if parsed_data.get('expected_error_nm') is None and 'expected_error_nm' in pre_scan_results.columns:
             raw_ee = pre_scan_results['expected_error_nm'].iloc[0]
-            try:
-                if isinstance(raw_ee, (float, int)):
-                    parsed_data['expected_error_nm'] = float(raw_ee)
-                elif isinstance(raw_ee, str):
-                    ee_clean = raw_ee.lower().replace('nm', '').replace('nautical miles', '').replace(',', '').strip()
-                    parsed_data['expected_error_nm'] = float(ee_clean)
-            except Exception:
-                parsed_data['expected_error_nm'] = raw_ee
+            parsed_data['expected_error_nm'] = _coerce_expected_error_nm(raw_ee)
+            if _has_scalar_value(raw_ee) and parsed_data['expected_error_nm'] is None:
+                logging.warning(
+                    "Ignoring invalid expected horizontal error value: %r",
+                    raw_ee,
+                )
 
 
         # Final required fields check (non-fatal for smoke test)
@@ -166,9 +203,11 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
             if lat is None or lon is None:
                 return None, None
             if expected_error_nm is not None:
-                ring_m = float(expected_error_nm) * 1852.0
+                ring_m = expected_error_nm * 1852.0
                 return ring_m, "EE_95"
-            if (method and method.upper() in ["GNSS", "SGB"]) or (format_type and "gps" in str(format_type).lower()):
+            method_text = str(method).upper() if _has_scalar_value(method) else ""
+            format_text = str(format_type).lower() if _has_scalar_value(format_type) else ""
+            if method_text in ["GNSS", "SGB"] or "gps" in format_text:
                 return 18.0, "fallback_gnss"
             return 5000.0, "fallback_default"
 
