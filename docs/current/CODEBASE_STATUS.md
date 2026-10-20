@@ -4,7 +4,7 @@ Status: verified current
 
 Reviewed against code and runtime: 2026-10-19
 
-Baseline: `main` commit `f8a887289230564e24f572fd9ebacace1d4da189`
+Baseline: `main` commit `7efc2f8e2448a9ff9b8b2dc9e3c03c82515b919a`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -47,13 +47,21 @@ propagation, satellite footprints, and map overlays.
 Satellite propagation uses the alert detection time. TLE data more than 168
 hours from the alert time is rejected by default rather than used to draw a
 potentially misleading position. The limit is configurable through
-`RDS_SAT_MAX_TLE_AGE_HOURS`.
+`RDS_SAT_MAX_TLE_AGE_HOURS`. Invalid, non-finite, zero, or negative limits
+fall back to the 168-hour safeguard.
+
+Coordinate validation rejects latitude/longitude pairs unless both tokens are
+valid. Minutes and seconds must remain below 60, hemisphere letters must match
+the coordinate type, and signed decimal degrees cannot also carry a cardinal
+suffix that could reverse the intended hemisphere.
 
 The browser now reports processing state, returned layers, and weather and
 satellite row counts. Invalid or excessive alert requests are rejected before
 pipeline work starts, and the direct map endpoint rejects non-finite or
 out-of-range coordinates. Generated map serving is confined to the configured
 map directory, including when a requested file is a symbolic link.
+Pipeline-generated map and satellite-overlay directories also use normalized,
+bounded path components when a numeric site ID is unavailable.
 
 Detailed pipeline failures are logged on the server but are not returned to
 the browser. Raised exceptions, malformed integration results, malformed JSON
@@ -77,6 +85,11 @@ variables available for deliberate overrides. Legacy TLE and sample-message
 utilities are quiet on import and perform file or network work only when
 called explicitly.
 
+Open-Meteo and Meteostat retrieval are isolated so an unexpected failure in
+one provider does not discard valid observations from the other. Weather-row
+reduction preserves the source identifier used to associate observations with
+stations.
+
 Database modules can be imported without a database URL. Database setup is
 lazy and explicit, and missing configuration produces a clear error if a
 database operation is actually requested. A retired local database credential
@@ -85,7 +98,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 81 passed; 2 live tests deselected.
+- Default offline suite: 110 passed; 2 live tests deselected.
 - Explicit external-service suite: 2 passed.
 - Editable development installation succeeded.
 - The deployment requirements wrapper installed successfully.
