@@ -224,6 +224,28 @@ def build_sat_overlay_df(
         overlay["role"] = "reported"
         overlay["popup_html"] = overlay.apply(lambda r: _build_sat_popup(r), axis=1)
 
+    if overlay.empty and fallback_to_nearest and use_tle:
+        try:
+            alert_lat = float(alert_df.iloc[0].get("alert_lat_dd"))
+            alert_lon = float(alert_df.iloc[0].get("alert_lon_dd"))
+            if math.isfinite(alert_lat) and math.isfinite(alert_lon):
+                overlay = _fallback_nearest_leo(
+                    alert_lat,
+                    alert_lon,
+                    at_time_utc,
+                    types=types,
+                )
+        except Exception as exc:
+            LOG.warning("Nearest-satellite fallback skipped: %s", exc)
+            overlay = pd.DataFrame()
+        if not overlay.empty:
+            # A proximity fallback is contextual guidance, not the reporting
+            # satellite asserted by the incoming alert.
+            overlay["role"] = "suggested"
+            overlay["popup_html"] = overlay.apply(
+                lambda r: _build_sat_popup(r), axis=1
+            )
+
     # Nearby-not-detected & upcoming (optional window via env)
     extra = []
     try:
@@ -312,10 +334,17 @@ def build_sat_overlay_df(
                      .dropna(subset=["norad_id"])
                      .copy())
         sat_types["norad_id"] = sat_types["norad_id"].astype(int)
-        sat_types = sat_types.rename(columns={"type": "sat_type"})
+        sat_types = sat_types.rename(columns={"type": "reference_sat_type"})
         if not overlay.empty and "norad_id" in overlay.columns:
             overlay["norad_id"] = overlay["norad_id"].astype("Int64")
             overlay = overlay.merge(sat_types, on="norad_id", how="left")
+            if "sat_type" not in overlay.columns:
+                overlay["sat_type"] = overlay["reference_sat_type"]
+            else:
+                overlay["sat_type"] = overlay["sat_type"].fillna(
+                    overlay["reference_sat_type"]
+                )
+            overlay = overlay.drop(columns=["reference_sat_type"])
     except Exception:
         # non-fatal: icon helper will still have a fallback
         pass
@@ -369,12 +398,25 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     a = math.sin(dphi/2)**2 + math.cos(p1)*math.cos(p2)*math.sin(dlmb/2)**2
     return 2*r*math.asin(math.sqrt(a))
 
-def _fallback_nearest_leo(alert_lat, alert_lon, at_time_utc, max_candidates=12, top_n=3):
+def _fallback_nearest_leo(
+    alert_lat,
+    alert_lon,
+    at_time_utc,
+    max_candidates=12,
+    top_n=3,
+    types=None,
+):
     # [updated] honor RDS_SAT_TYPES (default "LEO")
     ref = load_sat_reference()
     import os as _os  # [updated]
-    _types = tuple(s.strip().upper() for s in _os.getenv("RDS_SAT_TYPES","LEO").split(",") if s.strip())  # [updated]
     TYPE_MAP = {"LEOSAR":"LEO","MEOSAR":"MEO","GEOSAR":"GEO"}  # [updated]
+    if types is None:
+        types = _os.getenv("RDS_SAT_TYPES", "LEO").split(",")
+    _types = tuple(
+        TYPE_MAP.get(str(value).strip().upper(), str(value).strip().upper())
+        for value in types
+        if str(value).strip()
+    )
     ref["type_norm"] = ref["type"].str.upper().map(lambda x: TYPE_MAP.get(x, x))  # [updated]
     cand = ref[ref["type_norm"].isin(_types) & pd.notna(ref["norad_id"])] .copy()  # [updated]
     if cand.empty: 
