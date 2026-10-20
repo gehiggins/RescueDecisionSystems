@@ -119,7 +119,7 @@ def test_buoy_fetch_honors_station_limit(monkeypatch):
 
 @pytest.mark.parametrize(
     ("latitude", "longitude"),
-    [(91, 0), (0, 181), (float("nan"), 0), ("bad", 0)],
+    [(91, 0), (0, 181), (float("nan"), 0), ("bad", 0), (True, False)],
 )
 def test_buoy_fetch_rejects_invalid_reference_coordinates(
     monkeypatch, latitude, longitude
