@@ -20,6 +20,7 @@ from rds_engine.policy_wx import make_wx_data_plan
 LOG = logging.getLogger(__name__)
 
 from datetime import datetime, timezone, timedelta
+import math
 
 import pandas as pd
 import numpy as np
@@ -87,8 +88,44 @@ def build_wx_obs_for_area(ref_points: list[tuple[float,float]],
     if not ref_points:
         return _empty_wx_obs()
 
+    valid_ref_points = []
+    rejected_points = 0
+    for ref_point in ref_points:
+        try:
+            if isinstance(ref_point, dict):
+                lat = float(ref_point.get("lat"))
+                lon = float(ref_point.get("lon"))
+            else:
+                lat, lon = ref_point
+                lat = float(lat)
+                lon = float(lon)
+        except (TypeError, ValueError):
+            rejected_points += 1
+            continue
+        if (
+            not math.isfinite(lat)
+            or not math.isfinite(lon)
+            or not -90.0 <= lat <= 90.0
+            or not -180.0 <= lon <= 180.0
+        ):
+            rejected_points += 1
+            continue
+        if isinstance(ref_point, dict):
+            normalized = dict(ref_point)
+            normalized.update({"lat": lat, "lon": lon})
+            valid_ref_points.append(normalized)
+        else:
+            valid_ref_points.append((lat, lon))
+    if rejected_points:
+        LOG.warning(
+            "Discarded %s invalid weather provider reference point(s)",
+            rejected_points,
+        )
+    if not valid_ref_points:
+        return _empty_wx_obs()
+
     frames = []
-    for r in ref_points:
+    for r in valid_ref_points:
         # Accept tuple or dict for ref_points
         if isinstance(r, dict):
             lat, lon = r.get("lat"), r.get("lon")

@@ -201,3 +201,62 @@ def test_weather_pipeline_skips_providers_when_all_targets_invalid(
     assert result.empty
     assert list(result.columns) == wx_obs._WX_OBS_COLS
     assert "No valid weather target coordinates" in caplog.text
+
+
+def test_weather_aggregator_filters_invalid_reference_points(
+    monkeypatch, caplog
+):
+    calls = []
+
+    def open_meteo(lat, lon, *_args, **_kwargs):
+        calls.append(("open-meteo", lat, lon))
+        return pd.DataFrame()
+
+    def meteostat(lat, lon, *_args, **_kwargs):
+        calls.append(("meteostat", lat, lon))
+        return pd.DataFrame()
+
+    monkeypatch.setattr(wx_obs, "fetch_open_meteo_obs", open_meteo)
+    monkeypatch.setattr(wx_obs, "fetch_meteostat_obs_near", meteostat)
+
+    result = wx_obs.build_wx_obs_for_area(
+        [("bad", -75.0), (91.0, 0.0), (37.5,), None, (37.5, -75.5)],
+        pd.Timestamp("2026-10-19T12:00:00Z"),
+        pd.Timestamp("2026-10-19T18:00:00Z"),
+    )
+
+    assert result.empty
+    assert calls == [
+        ("open-meteo", 37.5, -75.5),
+        ("meteostat", 37.5, -75.5),
+    ]
+    assert "Discarded 4 invalid weather provider reference point" in caplog.text
+
+
+def test_weather_aggregator_skips_providers_when_all_references_invalid(
+    monkeypatch, caplog
+):
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_open_meteo_obs",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("Open-Meteo called with no valid reference")
+        ),
+    )
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_meteostat_obs_near",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("Meteostat called with no valid reference")
+        ),
+    )
+
+    result = wx_obs.build_wx_obs_for_area(
+        [{"lat": pd.NA, "lon": -75.0}, (float("inf"), 0.0)],
+        pd.Timestamp("2026-10-19T12:00:00Z"),
+        pd.Timestamp("2026-10-19T18:00:00Z"),
+    )
+
+    assert result.empty
+    assert list(result.columns) == wx_obs._WX_OBS_COLS
+    assert "Discarded 2 invalid weather provider reference point" in caplog.text
