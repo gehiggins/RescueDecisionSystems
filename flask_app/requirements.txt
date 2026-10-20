@@ -1,6 +1,2 @@
-flask 
-flask-sqlalchemy 
-psycopg2-binary 
-requests 
-gunicorn 
-skyfield
+# Run from the repository root: pip install -r flask_app/requirements.txt
+-e .[server]
