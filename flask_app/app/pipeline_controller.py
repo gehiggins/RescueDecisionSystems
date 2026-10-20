@@ -49,7 +49,6 @@ LOG = logging.getLogger(__name__)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from app.setup_imports import *
-from app.database import save_alert_to_db, save_weather_to_db, get_existing_alerts
 from app.gis_map_inputs_builder import build_gis_map_inputs_df
 from app.gis_mapping import generate_gis_map_html_from_dfs
 from app.preparse_coordinate_mapper import pre_scan_for_coordinates
@@ -60,6 +59,27 @@ from app.fetcher_noaa_weather_alerts import fetch_weather_alerts_zone
 from app.finalize_alert_df import finalize_alert_df
 from app.parser_sarsat_msg import parse_sarsat_message
 from app.wx_pipeline import run_wx_pipeline
+
+
+def _get_existing_alerts_for_sequence():
+    """Return prior alert sequence data when a database is configured.
+
+    Database persistence is optional in the current prototype.  Importing the
+    database module without ``DATABASE_URL`` raises before the alert pipeline
+    can parse or map anything, so keep that dependency behind this boundary.
+    """
+    empty_alerts = pd.DataFrame(columns=["site_id", "alert_sequence_number"])
+    if not os.getenv("DATABASE_URL"):
+        LOG.info("DATABASE_URL is not configured; starting alert sequencing locally.")
+        return empty_alerts
+
+    try:
+        from app.database import get_existing_alerts
+
+        return get_existing_alerts()
+    except Exception as exc:
+        LOG.warning("Database lookup unavailable; starting alert sequencing locally: %s", exc)
+        return empty_alerts
 
 def load_sat_overlays_for_site(site_id: str):
     """
@@ -120,7 +140,7 @@ def process_sarsat_alert(raw_alert_message):
 
         # Step 3: Finalize Alert Data
         # Fetch existing alerts from the database for sequence number assignment
-        existing_alerts_db = get_existing_alerts()  # Fetch past alerts from the database
+        existing_alerts_db = _get_existing_alerts_for_sequence()
 
         alert_df = finalize_alert_df(alert_df, existing_alerts_db)  # Pass it to finalize_alert_df()
         logging.info(f"{get_current_utc_timestamp()} âœ… Finalized alert data.")
