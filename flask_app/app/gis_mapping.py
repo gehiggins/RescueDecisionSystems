@@ -25,6 +25,8 @@ Next step: Add generate_gis_map_html_from_dfs(positions_df, ...) (DF inputs, lay
 
 
 import os, math, logging, base64
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from typing import Optional
@@ -147,7 +149,10 @@ def generate_gis_map(alert_row, save_path):
 
     site_id = str(alert_row['site_id'])  # âœ… Force site_id to string to avoid int64 serialization issues
 
-    base_data_path = os.getenv('RDS_DATA_FOLDER', 'C:/Users/gehig/Projects/RescueDecisionSystems/data')
+    # Resolve the repository data directory by default so the map script works
+    # from any checkout; deployments can still override it explicitly.
+    default_data_path = Path(__file__).resolve().parents[2] / "data"
+    base_data_path = os.getenv('RDS_DATA_FOLDER', str(default_data_path))
     coastline_shapefile = os.path.join(base_data_path, 'shapefiles', 'coastline', 'ne_10m_coastline.shp')
 
     try:
@@ -548,12 +553,28 @@ def _rds_ring_lonlat_points(lat_deg: float, lon_deg: float, radius_m: float, n: 
 # --- RDS: end PROJ datadir helper ---
 
 # [RDS-ANCHOR: GIS_EXPORTS]
-def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles_mode="online"):
+def generate_gis_map_html_from_dfs(
+    gis_map_inputs_df,
+    alert_row=None,
+    out_path=None,
+    tiles_mode="online",
+    *,
+    out_dir=None,
+    site_id=None,
+):
     import folium, os, pandas as pd, logging
     from folium import LayerControl, DivIcon, FeatureGroup, PolyLine, Marker, Circle
 
+    # Accept the original out_dir/site_id calling convention while keeping the
+    # newer explicit alert_row/out_path form used by the active pipeline.
+    alert_row = alert_row or {}
+    site_id = str(site_id or alert_row.get("site_id", "unknown"))
+    if out_path is None:
+        if out_dir is None:
+            raise ValueError("out_path or out_dir is required")
+        out_path = str(Path(out_dir) / f"gis_map_{site_id}.html")
+
     # --- Center/Meta ---
-    site_id = str((alert_row or {}).get("site_id", "unknown"))
     lat0 = (alert_row or {}).get("position_lat_dd_a") or (alert_row or {}).get("alert_lat_dd")
     lon0 = (alert_row or {}).get("position_lon_dd_a") or (alert_row or {}).get("alert_lon_dd")
     if pd.isna(lat0) or pd.isna(lon0):
@@ -771,7 +792,24 @@ def generate_gis_map_html_from_dfs(gis_map_inputs_df, alert_row, out_path, tiles
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     m.save(out_path)
     logging.info(f"✅ DF-based HTML map saved: {out_path}")
-    return {"site_id": site_id, "map_html_path": out_path, "status": "ok"}
+    layer_names = {
+        "alert_position": "Alert Positions",
+        "range_ring": "Range Rings",
+        "weather": "Weather",
+        "station": "Stations",
+        "satellite_overlay": "Satellite Overlays",
+    }
+    layers = [
+        label
+        for key, label in layer_names.items()
+        if key in set(gis_map_inputs_df["layer"].dropna())
+    ]
+    return {
+        "site_id": site_id,
+        "map_html_path": out_path,
+        "status": "ok",
+        "layers": layers,
+    }
 
 
 

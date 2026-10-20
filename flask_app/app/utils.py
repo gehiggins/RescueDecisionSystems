@@ -1,4 +1,5 @@
 ﻿# utils.py
+from __future__ import annotations
 # Location: flask_app/app/utils.py
 # Updated: 2025-03-06
 # Follow all locked rules - no removals, only additive.
