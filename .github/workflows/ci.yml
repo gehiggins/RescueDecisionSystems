@@ -43,6 +43,9 @@ jobs:
       - name: Check dependency consistency
         run: python -m pip check
 
+      - name: Compile active Python modules
+        run: python -m compileall -q -x '(^|/)(0_archive|local archive|\.venv)(/|$)' flask_app rds_engine tests
+
       - name: Run offline test suite
         run: python -m pytest -q
 
