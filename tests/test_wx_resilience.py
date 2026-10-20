@@ -167,7 +167,32 @@ def test_weather_reducer_normalizes_ids_and_discards_unhashable_shapes():
     assert result["source_id"].tolist() == ["VALID-STATION"]
 
 
-@pytest.mark.parametrize("max_age_hours", [-1, float("inf"), "bad"])
+def test_weather_reducer_discards_boolean_provider_ids():
+    observations = pd.DataFrame(
+        [
+            {"source_id": True, "valid_utc": "2026-10-19T18:00:00Z"},
+            {
+                "source_id": np.bool_(False),
+                "valid_utc": "2026-10-19T18:00:00Z",
+            },
+            {
+                "source_id": "VALID-STATION",
+                "valid_utc": "2026-10-19T18:00:00Z",
+            },
+        ]
+    )
+
+    result = wx_obs.reduce_to_nearest_or_latest(
+        observations,
+        target_utc="2026-10-19T18:00:00Z",
+    )
+
+    assert result["source_id"].tolist() == ["VALID-STATION"]
+
+
+@pytest.mark.parametrize(
+    "max_age_hours", [-1, float("inf"), "bad", True, np.bool_(True)]
+)
 def test_weather_reducer_rejects_invalid_age_window(max_age_hours):
     with pytest.raises(ValueError, match="max_age_hours"):
         wx_obs.reduce_to_nearest_or_latest(
@@ -177,10 +202,13 @@ def test_weather_reducer_rejects_invalid_age_window(max_age_hours):
         )
 
 
-def test_weather_reducer_rejects_invalid_target_timestamp():
+@pytest.mark.parametrize(
+    "target_utc", ["not-a-time", True, 1, 1.5, np.int64(1)]
+)
+def test_weather_reducer_rejects_invalid_target_timestamp(target_utc):
     with pytest.raises(ValueError, match="target_utc"):
         wx_obs.reduce_to_nearest_or_latest(
-            _station_observation(), target_utc="not-a-time"
+            _station_observation(), target_utc=target_utc
         )
 
 
