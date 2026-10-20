@@ -58,7 +58,7 @@
 
             <!-- ✅ Embedded Live GIS Map (Hidden by Default) -->
             <div id="gis-container" style="display: none;">
-                <iframe id="gis-map-frame" src="" width="100%" height="500px" frameborder="0"></iframe>
+                <iframe id="gis-map-frame" title="RDS alert map" width="100%" height="500px" frameborder="0"></iframe>
             </div>
         </div>
     </div>
@@ -111,7 +111,15 @@ document.getElementById("sarsat-form").addEventListener("submit", function (even
     let alertText = document.querySelector("textarea[name='alert_text']").value;
     const submitButton = event.currentTarget.querySelector("button[type='submit']");
     const status = document.getElementById("processing-status");
+    const mapFrame = document.getElementById("gis-map-frame");
+    const mapContainer = document.getElementById("gis-container");
+    const mapPlaceholder = document.getElementById("gis-placeholder");
     submitButton.disabled = true;
+    // Never leave the preceding alert's map visible while a new alert is
+    // being processed or after the new request fails.
+    mapFrame.removeAttribute("src");
+    mapContainer.style.display = "none";
+    mapPlaceholder.style.display = "block";
     status.textContent = "Processing alert and building the operational map...";
 
     fetch("/process_alert", {
@@ -136,20 +144,18 @@ document.getElementById("sarsat-form").addEventListener("submit", function (even
     })
     .then(data => {
         if (data.success) {
-            let latitude = data.parsed_data?.[0]?.latitude_a;
-            let longitude = data.parsed_data?.[0]?.longitude_a;
-            let siteId = data.parsed_data?.[0]?.site_id;
-
-            if (latitude != null && longitude != null && siteId != null && data.map_url) {
+            // A returned map URL is authoritative. The server may validly use
+            // position B or a generated site identifier when A/site ID is absent.
+            if (data.map_url) {
                 // The server owns the output path; the browser only consumes the returned URL.
                 let mapUrl = data.map_url;
                 
                 // ✅ Update the iframe src instead of redirecting the page
-                document.getElementById("gis-map-frame").src = mapUrl;
+                mapFrame.src = mapUrl;
 
                 // ✅ Hide the placeholder image and show the GIS map
-                document.getElementById("gis-placeholder").style.display = "none";
-                document.getElementById("gis-container").style.display = "block";
+                mapPlaceholder.style.display = "none";
+                mapContainer.style.display = "block";
                 const layers = (data.layers || []).join(", ") || "Alert Positions";
                 status.textContent = `Map ready. Layers: ${layers}. Weather rows: ${data.weather_rows || 0}. Satellite rows: ${data.satellite_rows || 0}.`;
             } else {
