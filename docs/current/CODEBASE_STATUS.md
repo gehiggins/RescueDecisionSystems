@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `83bb3110cd0fceeb7cb244d869bd6749b618c936`
+Baseline: `main` commit `61fea367dbc1e2c0c12d57328b8a5a24c6440a09`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -229,7 +229,10 @@ bounded lookup. A live check resolved the sample position to marine zone
 ANZ652 and returned one active alert. These repaired legacy adapters remain
 outside the active production path. NOAA discovery and observation lookups
 likewise accept only normalized station-code identifiers and discard malformed
-provider entries independently.
+provider entries independently. Station discovery also validates that provider
+feature collections, metadata objects, and GeoJSON coordinate containers have
+the expected shapes. Boolean, non-finite, and out-of-range station coordinates
+are discarded entry by entry without interrupting other station results.
 
 NOAA active-alert coordinates are checked for malformed, non-finite, and
 out-of-range values before any provider request. Point and alert response
@@ -346,7 +349,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 722 passed; 2 live tests deselected.
+- Default offline suite: 730 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.

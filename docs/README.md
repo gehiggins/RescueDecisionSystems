@@ -6,7 +6,7 @@ Reviewed against code: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `83bb3110cd0fceeb7cb244d869bd6749b618c936`
+Baseline: `main` commit `61fea367dbc1e2c0c12d57328b8a5a24c6440a09`
 
 This index separates documentation that was checked against the repository from
 historical drafts and external reference material. A review date means the
