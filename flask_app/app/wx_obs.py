@@ -50,16 +50,20 @@ def reduce_to_nearest_or_latest(df: pd.DataFrame, *, target_utc, max_age_hours: 
             + ", ".join(sorted(missing_columns))
         )
 
-    if target_utc is None or not pd.api.types.is_scalar(target_utc):
+    if (
+        target_utc is None
+        or not pd.api.types.is_scalar(target_utc)
+        or isinstance(target_utc, (bool, int, float, np.number))
+    ):
         raise ValueError("target_utc must be a valid timestamp")
     target = pd.to_datetime(target_utc, utc=True, errors="coerce")
     if pd.isna(target):
         raise ValueError("target_utc must be a valid timestamp")
-    if isinstance(max_age_hours, bool):
+    if isinstance(max_age_hours, (bool, np.bool_)):
         raise ValueError("max_age_hours must be a finite non-negative number")
     try:
         max_age_hours = float(max_age_hours)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise ValueError("max_age_hours must be a finite non-negative number") from exc
     if not math.isfinite(max_age_hours) or max_age_hours < 0:
         raise ValueError("max_age_hours must be a finite non-negative number")
@@ -169,7 +173,7 @@ def _empty_wx_obs() -> pd.DataFrame:
 
 def _normalize_source_id(value):
     """Return a stable provider identifier, or ``None`` when malformed."""
-    if not pd.api.types.is_scalar(value) or isinstance(value, bool):
+    if not pd.api.types.is_scalar(value) or isinstance(value, (bool, np.bool_)):
         return None
     try:
         if pd.isna(value):
@@ -180,7 +184,7 @@ def _normalize_source_id(value):
         try:
             if not math.isfinite(float(value)):
                 return None
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return None
     normalized = str(value).strip()
     return normalized or None
@@ -212,7 +216,7 @@ def build_wx_obs_for_area(ref_points: list[tuple[float,float]],
                 raise ValueError("boolean coordinates are invalid")
             lat = float(raw_lat)
             lon = float(raw_lon)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             rejected_points += 1
             continue
         if (
