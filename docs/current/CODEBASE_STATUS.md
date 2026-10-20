@@ -4,7 +4,7 @@ Status: verified current
 
 Reviewed against code and runtime: 2026-10-19
 
-Baseline: `main` commit `7efc2f8e2448a9ff9b8b2dc9e3c03c82515b919a`
+Last verified maintenance update: 2026-10-20\n\nBaseline: `main` commit `b4c626a6b87914c8e7532fae6582a0a8f046f818`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -98,8 +98,8 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 110 passed; 2 live tests deselected.
-- Explicit external-service suite: 2 passed.
+- Default offline suite: 125 passed; 2 live tests deselected.
+- Explicit external-service suite: 2 passed during the 2026-10-19 review; it\n  remains outside per-commit CI.
 - Editable development installation succeeded.
 - The deployment requirements wrapper installed successfully.
 - `pip check` reported no broken requirements.
