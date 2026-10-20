@@ -842,10 +842,19 @@ def generate_gis_map_html_from_dfs(
                 opacity = _style_number(
                     geom.get("opacity"), 0.6, minimum=0.0, maximum=1.0
                 )
+                image_file = None
+                if isinstance(image_path, (str, os.PathLike)) and not isinstance(
+                    image_path, bool
+                ):
+                    try:
+                        candidate = Path(image_path)
+                        if candidate.is_file():
+                            image_file = candidate
+                    except (OSError, ValueError):
+                        pass
                 if (
                     is_valid_overlay_bounds(bounds)
-                    and image_path
-                    and Path(image_path).is_file()
+                    and image_file is not None
                 ):
                     overlay_name = geom.get("name")
                     try:
@@ -855,7 +864,7 @@ def generate_gis_map_html_from_dfs(
                     if name_missing:
                         overlay_name = sat.get("label")
                     folium.raster_layers.ImageOverlay(
-                        image=str(image_path),
+                        image=str(image_file),
                         bounds=bounds,
                         opacity=opacity,
                         name=_safe_display_text(overlay_name, default="Satellite overlay"),
