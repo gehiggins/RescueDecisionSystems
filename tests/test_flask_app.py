@@ -397,6 +397,32 @@ def test_process_alert_rejects_missing_reported_map(monkeypatch, caplog, tmp_pat
     assert "did not create its reported map" in caplog.text
 
 
+def test_process_alert_rejects_reported_non_html_map(monkeypatch, caplog, tmp_path):
+    maps_dir = tmp_path / "maps"
+    non_map = maps_dir / "123" / "diagnostic.txt"
+    non_map.parent.mkdir(parents=True)
+    non_map.write_text("not a map", encoding="utf-8")
+    application = create_app(
+        {"TESTING": True, "RDS_MAPS_DIR": str(maps_dir)}
+    )
+    monkeypatch.setattr(
+        "flask_app.app.routes.run_alert_pipeline",
+        lambda _message, maps_root: {
+            "status": "ok",
+            "parsed_data": {"site_id": "123"},
+            "map_html_path": str(non_map),
+        },
+    )
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Alert processing failed"}
+    assert "non-HTML map file" in caplog.text
+
+
 def test_map_generation_rejects_site_id_path_traversal(tmp_path):
     application = create_app(
         {"TESTING": True, "RDS_MAPS_DIR": str(tmp_path / "maps")}
@@ -539,6 +565,21 @@ def test_map_route_rejects_symlink_outside_map_directory(tmp_path):
 
     assert response.status_code == 404
     assert b"not an RDS map" not in response.data
+
+
+def test_map_route_does_not_serve_non_html_files(tmp_path):
+    maps_dir = tmp_path / "maps"
+    maps_dir.mkdir()
+    private_file = maps_dir / "diagnostic.txt"
+    private_file.write_text("private diagnostic", encoding="utf-8")
+    application = create_app(
+        {"TESTING": True, "RDS_MAPS_DIR": str(maps_dir)}
+    )
+
+    response = application.test_client().get("/maps/diagnostic.txt")
+
+    assert response.status_code == 404
+    assert b"private diagnostic" not in response.data
 
 
 @pytest.mark.parametrize(

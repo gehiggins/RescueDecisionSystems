@@ -190,6 +190,11 @@ def process_alert():
                 "Alert pipeline returned a map outside RDS_MAPS_DIR: %s", map_path
             )
             return jsonify({"error": "Alert processing failed"}), 500
+        if relative_map_path.suffix.lower() != ".html":
+            current_app.logger.error(
+                "Alert pipeline returned a non-HTML map file: %s", map_path
+            )
+            return jsonify({"error": "Alert processing failed"}), 500
         if not map_path.is_file():
             current_app.logger.error(
                 "Alert pipeline did not create its reported map: %s", map_path
@@ -258,6 +263,8 @@ def gis_map(latitude, longitude, site_id):
 def serve_map(filename):
     maps_dir = Path(current_app.config["RDS_MAPS_DIR"]).resolve()
     requested_path = (maps_dir / filename).resolve()
+    if requested_path.suffix.lower() != ".html":
+        return abort(404, description="Map not found")
     try:
         relative_path = requested_path.relative_to(maps_dir)
     except ValueError:
