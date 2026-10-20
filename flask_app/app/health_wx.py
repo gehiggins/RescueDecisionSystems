@@ -34,7 +34,6 @@ except Exception:
     HAS_METEOSTAT = False
 
 LOG = logging.getLogger("health_wx")
-logging.basicConfig(level=os.environ.get("RDS_LOG_LEVEL", "INFO"))
 
 REQUIRED_COLS = ["valid_utc", "lat", "lon", "provider", "source_type"]
 
@@ -97,6 +96,8 @@ def run_wx_health_check(lat: float, lon: float, hours: int = 6,
 
 
 if __name__ == "__main__":
+    # Library imports must not replace application-wide logging settings.
+    logging.basicConfig(level=os.environ.get("RDS_LOG_LEVEL", "INFO"))
     # Default: Seattle, 6-hour window
     summary = run_wx_health_check(47.6062, -122.3321, hours=6, radius_km=75, max_stations=5, include_marine=True)
     # Non-zero exit if neither provider returns rows (makes CLI usable in CI)
