@@ -193,13 +193,13 @@ def validate_and_extract(field_name: str, raw_text: str, config: dict, context: 
             break
         else:
             notes.append(f"Pattern {pat} did not match: {err}")
-            result["value"] = None
-            result["raw_span"] = None
-            result["valid"] = False
-            result["confidence"] = 0.0
-            result["notes"] = notes + ["no regex match in this stage"]
-            result["checks_failed"].append("pattern_no_match")
-            return result
+
+    # Only report failure after the complete pattern family has been tried.
+    # Returning inside the loop made every configured fallback unreachable.
+    if not match and field_name != "longitude":
+        result["notes"] = notes + ["no regex match in this stage"]
+        result["checks_failed"].append("pattern_no_match")
+        return result
 
     # Minutes-only longitude repair logic
     if not match and field_name == "longitude":
