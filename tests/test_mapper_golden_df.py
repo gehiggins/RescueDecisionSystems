@@ -1,6 +1,6 @@
 # tests/test_mapper_golden_df.py
 try:
-    from app.gis_mapping import generate_gis_map_html_from_dfs
+    from app.gis_mapping import _style_bool, generate_gis_map_html_from_dfs
 except ModuleNotFoundError:
     import os, sys
     from pathlib import Path
@@ -8,11 +8,20 @@ except ModuleNotFoundError:
     flask_app_dir = repo_root / "flask_app"
     if str(flask_app_dir) not in sys.path:
         sys.path.insert(0, str(flask_app_dir))
-    from app.gis_mapping import generate_gis_map_html_from_dfs
+    from app.gis_mapping import _style_bool, generate_gis_map_html_from_dfs
 
 import pandas as pd
 import os
 import base64
+
+
+def test_satellite_style_boolean_normalization():
+    assert _style_bool("false") is False
+    assert _style_bool(" OFF ") is False
+    assert _style_bool("true") is True
+    assert _style_bool(0) is False
+    assert _style_bool(1) is True
+    assert _style_bool("unexpected", default=True) is True
 
 def test_golden_gis_map_inputs_df():
     df = pd.DataFrame([
