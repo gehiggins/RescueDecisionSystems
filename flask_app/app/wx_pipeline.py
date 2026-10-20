@@ -45,6 +45,7 @@ def run_wx_pipeline(alert_targets_df: pd.DataFrame,
 
     # Unique A/B coordinates for the case
     pts = []
+    seen_coordinates = set()
     rejected_points = 0
     for _, r in alert_targets_df.iterrows():
         try:
@@ -61,8 +62,15 @@ def run_wx_pipeline(alert_targets_df: pd.DataFrame,
         ):
             rejected_points += 1
             continue
-        pts.append((lat, lon))
-    pts = list(dict.fromkeys(pts))  # unique order-preserving
+        coordinates = (lat, lon)
+        if coordinates in seen_coordinates:
+            continue
+        seen_coordinates.add(coordinates)
+        point = {"lat": lat, "lon": lon}
+        for field in ("error_radius_km", "coast_distance_km"):
+            if field in r:
+                point[field] = r.get(field)
+        pts.append(point)
     if rejected_points:
         LOG.warning("Discarded %s invalid weather target coordinate(s)", rejected_points)
     if not pts:
@@ -76,30 +84,15 @@ def run_wx_pipeline(alert_targets_df: pd.DataFrame,
     end_ts = datetime.now(timezone.utc)
     start_ts = end_ts - timedelta(hours=hours_back)
 
-    # Decide include_marine via rds_engine (global for this call)
-    wx_mode = os.getenv("RDS_WX_POLICY_MODE", "auto")
-    _include_marine = include_marine  # default from function arg
-    _radius_km = radius_km
-    _max_stations = max_stations
-
-    if pts:
-        lat0, lon0 = pts[0]
-        _ctx = classify_zone_context(lat=lat0, lon=lon0, error_radius_km=None, coast_distance_km=None)
-        _plan = make_wx_data_plan(_ctx, mode=wx_mode)
-        _include_marine = _plan.include_marine if include_marine is None else include_marine
-        _radius_km = radius_km if radius_km is not None else _plan.spatial_radius_km
-        _max_stations = max_stations if max_stations is not None else _plan.station_limit
-        LOG.info("wx policy (global): include_marine=%s radius_km=%.1f stations=%s rationale=%s",
-                 _include_marine, _radius_km, _max_stations, _plan.rationale)
-        LOG.info("wx policy rationale: %s", _plan.rationale)
-
+    # Preserve ``None`` so the aggregator can apply the existing policy to
+    # each A/B point using its own uncertainty and coast-distance metadata.
     df_wx_obs = build_wx_obs_for_area(
         ref_points=pts,
         start_utc=start_ts,
         end_utc=end_ts,
-        radius_km=_radius_km,
-        max_stations=_max_stations,
-        include_marine=_include_marine,
+        radius_km=radius_km,
+        max_stations=max_stations,
+        include_marine=include_marine,
     )
     return df_wx_obs
 
