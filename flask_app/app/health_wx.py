@@ -43,6 +43,7 @@ _DEFAULT_LON = -122.3321
 _DEFAULT_HOURS = 6.0
 _DEFAULT_RADIUS_KM = 75.0
 _DEFAULT_MAX_STATIONS = 5
+_MAX_STATIONS = 100
 
 
 def _bounded_float(value, *, default, minimum, maximum, name):
@@ -120,6 +121,13 @@ def run_wx_health_check(lat: float, lon: float, hours: int = 6,
     max_stations = _positive_int(
         max_stations, default=_DEFAULT_MAX_STATIONS, name="max_stations"
     )
+    if max_stations > _MAX_STATIONS:
+        LOG.warning(
+            "Weather health max_stations=%r exceeds provider limit; using %s",
+            max_stations,
+            _MAX_STATIONS,
+        )
+        max_stations = _MAX_STATIONS
     end_utc = now_utc().replace(minute=0, second=0, microsecond=0)
     try:
         start_utc = end_utc - pd.Timedelta(hours=hours)
