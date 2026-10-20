@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from app.setup_imports import *
 from datetime import datetime, timezone
+import math
 
 NDBC_REQUEST_TIMEOUT_SECONDS = 15
 
@@ -164,8 +165,11 @@ def _safe_float_lookup(header, row, field_name):
     try:
         idx = header.index(field_name)
         value = row[idx]
-        return None if value == 'MM' else float(value)
-    except (ValueError, IndexError, TypeError):
+        if value == 'MM':
+            return None
+        numeric = float(value)
+        return numeric if math.isfinite(numeric) else None
+    except (ValueError, IndexError, TypeError, OverflowError):
         return None
 
 def format_weather_summary(station_row):
