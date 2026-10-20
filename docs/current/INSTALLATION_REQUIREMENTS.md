@@ -5,7 +5,7 @@ Status: verified current
 Reviewed and installation-tested: 2026-10-19
 
 Continuous verification baseline: `main` commit
-`b4c626a6b87914c8e7532fae6582a0a8f046f818` (2026-10-20)
+`4b8e2b4d2f1dd6437599de1a1eac9f1c80cb801d` (2026-10-20)
 
 Supersedes: `docs/archive/2025/RDS_Installation_Requirements_2025-02-28.md`
 
