@@ -180,6 +180,7 @@ def test_weather_and_station_rows_accept_pandas_missing_values():
             {
                 "station_id": pd.NA,
                 "source_type": pd.NA,
+                "obs_type": pd.NA,
                 "lat_dd": 37.0,
                 "lon_dd": -75.0,
                 "wave_height_m": pd.NA,
@@ -215,6 +216,31 @@ def test_weather_and_station_rows_accept_pandas_missing_values():
     assert pd.isna(weather["ts_local"])
     assert station["source_id"] == ""
     assert station["label"] == "Station"
+
+
+def test_prebuilt_satellite_overlays_skip_malformed_nullable_entries(caplog):
+    overlays = [
+        None,
+        pd.NA,
+        "not-an-overlay",
+        {"type": "Circle", "center": pd.NA, "radius_m": pd.NA},
+        {
+            "type": "Point",
+            "coordinates": [-74.0, 38.0],
+            "label": "Valid subpoint",
+            "sat_type": pd.NA,
+        },
+    ]
+
+    result = build_gis_map_inputs_df(
+        make_positions_df(), sat_overlays=overlays, op_tz_env="UTC"
+    )
+
+    satellite_rows = result[result["layer"] == "satellite_overlay"]
+    assert satellite_rows["geom_type"].tolist() == ["Point"]
+    assert satellite_rows.iloc[0]["label"] == "Valid subpoint"
+    assert satellite_rows.iloc[0]["sat_type"] == ""
+    assert "Skipping malformed satellite overlay entry" in caplog.text
 
 
 @pytest.mark.parametrize(
