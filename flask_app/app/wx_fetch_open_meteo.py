@@ -28,11 +28,15 @@ _FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 _HISTORICAL_FORECAST_URL = (
     "https://historical-forecast-api.open-meteo.com/v1/forecast"
 )
+_HISTORICAL_WEATHER_URL = "https://archive-api.open-meteo.com/v1/archive"
+_HISTORICAL_FORECAST_START = pd.Timestamp("2022-01-01T00:00:00Z")
 _LIVE_FORECAST_PAST_DAYS = 92
 
 
 def _atmosphere_url(end_utc, current_utc=None):
-    """Select the archived service when the live API no longer covers the date."""
+    """Select the provider service whose documented range covers the date."""
+    if end_utc < _HISTORICAL_FORECAST_START:
+        return _HISTORICAL_WEATHER_URL
     current_utc = (
         _to_utc(current_utc)
         if current_utc is not None

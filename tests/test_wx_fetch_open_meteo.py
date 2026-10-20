@@ -71,6 +71,28 @@ def test_open_meteo_uses_historical_forecast_service_for_old_alert(monkeypatch):
     assert result["valid_utc"].tolist() == [target]
 
 
+def test_open_meteo_uses_long_term_archive_before_forecast_history(monkeypatch):
+    calls = []
+    target = pd.Timestamp("2020-06-15T12:00:00Z")
+
+    def fake_get(url, params, timeout):
+        calls.append((url, params, timeout))
+        return _Response({"hourly": {"time": ["2020-06-15T12:00"]}})
+
+    monkeypatch.setattr(wx_fetch_open_meteo.requests, "get", fake_get)
+
+    result = wx_fetch_open_meteo.fetch_open_meteo_obs(
+        37.5,
+        -75.5,
+        target,
+        target,
+        include_marine=False,
+    )
+
+    assert calls[0][0] == wx_fetch_open_meteo._HISTORICAL_WEATHER_URL
+    assert result["valid_utc"].tolist() == [target]
+
+
 def test_open_meteo_keeps_live_forecast_service_for_recent_alert(monkeypatch):
     calls = []
     target = pd.Timestamp.now(tz="UTC").floor("h") - pd.Timedelta(days=1)
