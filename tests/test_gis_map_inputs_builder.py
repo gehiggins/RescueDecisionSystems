@@ -317,3 +317,53 @@ def test_invalid_satellite_subpoint_is_ignored(latitude, longitude):
     )
 
     assert result[result["layer"] == "satellite_overlay"].empty
+
+
+@pytest.mark.parametrize(
+    "bad_vertex", [["bad", 39.0], [1], None, [-181.0, 39.0]]
+)
+def test_invalid_satellite_track_vertices_are_removed(bad_vertex):
+    sat_overlays = pd.DataFrame(
+        [
+            {
+                "sat_name": "TEST SAT",
+                "lat_dd": 38.0,
+                "lon_dd": -74.0,
+                "footprint_radius_km": 1000.0,
+                "track_coords": [[-74.0, 38.0], bad_vertex, [-72.0, 40.0]],
+            }
+        ]
+    )
+
+    result = build_gis_map_inputs_df(
+        make_positions_df(), sat_overlays=sat_overlays, op_tz_env="UTC"
+    )
+
+    satellite_rows = result[result["layer"] == "satellite_overlay"]
+    assert satellite_rows["geom_type"].tolist() == ["Circle", "Point", "LineString"]
+    track = satellite_rows[satellite_rows["geom_type"] == "LineString"].iloc[0]
+    assert track["geometry"]["coordinates"] == [[-74.0, 38.0], [-72.0, 40.0]]
+
+
+@pytest.mark.parametrize(
+    "coordinates", [["bad", 38.0], [-181.0, 38.0], [1], None]
+)
+def test_invalid_next_pass_coordinates_are_ignored(coordinates):
+    sat_overlays = pd.DataFrame(
+        [
+            {
+                "sat_name": "TEST SAT",
+                "lat_dd": 38.0,
+                "lon_dd": -74.0,
+                "footprint_radius_km": 1000.0,
+                "next_pass_marker": {"coordinates": coordinates},
+            }
+        ]
+    )
+
+    result = build_gis_map_inputs_df(
+        make_positions_df(), sat_overlays=sat_overlays, op_tz_env="UTC"
+    )
+
+    satellite_rows = result[result["layer"] == "satellite_overlay"]
+    assert satellite_rows["geom_type"].tolist() == ["Circle", "Point"]
