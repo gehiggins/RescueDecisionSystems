@@ -46,8 +46,8 @@ def _atmosphere_url(end_utc, current_utc=None):
     return _HISTORICAL_FORECAST_URL if end_utc < cutoff else _FORECAST_URL
 
 
-def _numeric_at(mapping, key, index):
-    """Return one finite numeric provider value, or NaN when unavailable."""
+def _numeric_at(mapping, key, index, minimum=None, maximum=None):
+    """Return one finite in-range provider value, or NaN when unavailable."""
     if not isinstance(mapping, dict):
         return np.nan
     values = mapping.get(key)
@@ -57,7 +57,13 @@ def _numeric_at(mapping, key, index):
         value = float(values[index])
     except (IndexError, KeyError, TypeError, ValueError):
         return np.nan
-    return value if np.isfinite(value) else np.nan
+    if not np.isfinite(value):
+        return np.nan
+    if minimum is not None and value < minimum:
+        return np.nan
+    if maximum is not None and value > maximum:
+        return np.nan
+    return value
 
 def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_marine: bool = True) -> pd.DataFrame:
     start_utc = _to_utc(start_utc)
@@ -164,9 +170,11 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
                 if marine_time is None:
                     continue
                 m_map[marine_time] = (
-                    _numeric_at(marine, "wave_height", i),
-                    _numeric_at(marine, "wave_period", i),
-                    _numeric_at(marine, "wave_direction", i),
+                    _numeric_at(marine, "wave_height", i, minimum=0),
+                    _numeric_at(marine, "wave_period", i, minimum=0),
+                    _numeric_at(
+                        marine, "wave_direction", i, minimum=0, maximum=360
+                    ),
                 )
         except Exception as e:
             LOG.info(f"Open-Meteo marine unavailable @({lat:.4f},{lon:.4f}): {e}")
@@ -182,7 +190,9 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
             continue
         i = atmosphere_index.get(ts)
         temp_c = _numeric_at(hourly, "temperature_2m", i)
-        rh = _numeric_at(hourly, "relative_humidity_2m", i)
+        rh = _numeric_at(
+            hourly, "relative_humidity_2m", i, minimum=0, maximum=100
+        )
         wh, wp, wd = m_map.get(ts, (np.nan, np.nan, np.nan))
         rows.append({
             "source_id": f"om:{lat:.4f},{lon:.4f}",
@@ -194,13 +204,25 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
             "temp_c": temp_c,
             "dewpoint_c": dewpoint_magnus_c(temp_c, rh),
             "rh_pct": rh,
-            "wind_ms": _numeric_at(hourly, "wind_speed_10m", i),
-            "wind_dir_deg": _numeric_at(hourly, "wind_direction_10m", i),
-            "wind_gust_ms": _numeric_at(hourly, "wind_gusts_10m", i),
-            "pressure_hpa": _numeric_at(hourly, "pressure_msl", i),
-            "precip_mmhr": _numeric_at(hourly, "precipitation", i),
+            "wind_ms": _numeric_at(
+                hourly, "wind_speed_10m", i, minimum=0
+            ),
+            "wind_dir_deg": _numeric_at(
+                hourly, "wind_direction_10m", i, minimum=0, maximum=360
+            ),
+            "wind_gust_ms": _numeric_at(
+                hourly, "wind_gusts_10m", i, minimum=0
+            ),
+            "pressure_hpa": _numeric_at(
+                hourly, "pressure_msl", i, minimum=0
+            ),
+            "precip_mmhr": _numeric_at(
+                hourly, "precipitation", i, minimum=0
+            ),
             "visibility_km": np.nan,
-            "cloud_cover_pct": _numeric_at(hourly, "cloud_cover", i),
+            "cloud_cover_pct": _numeric_at(
+                hourly, "cloud_cover", i, minimum=0, maximum=100
+            ),
             "wave_height_m": wh,
             "wave_period_s": wp,
             "wave_dir_deg": wd,
