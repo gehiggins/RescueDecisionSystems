@@ -562,6 +562,31 @@ def test_weather_aggregator_normalizes_direct_search_parameters(
     assert captured["max_stations"] == 5
 
 
+def test_weather_aggregator_caps_direct_station_search(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_open_meteo_obs",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
+
+    def capture_meteostat(*_args, **kwargs):
+        captured.update(kwargs)
+        return pd.DataFrame()
+
+    monkeypatch.setattr(wx_obs, "fetch_meteostat_obs_near", capture_meteostat)
+
+    result = wx_obs.build_wx_obs_for_area(
+        [(37.5, -75.5)],
+        pd.Timestamp("2026-10-19T12:00:00Z"),
+        pd.Timestamp("2026-10-19T18:00:00Z"),
+        max_stations=1_000_000,
+    )
+
+    assert result.empty
+    assert captured["max_stations"] == 100
+
+
 @pytest.mark.parametrize(
     ("explicit_value", "policy_value", "expected"),
     [(False, True, False), (True, False, True), (None, True, True)],
