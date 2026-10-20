@@ -204,24 +204,37 @@ def build_sat_overlay_df(
         t = tle_df.iloc[0]
         tle1, tle2 = t["tle_line1"], t["tle_line2"]
         tle_epoch = pd.to_datetime(t["epoch_utc"], utc=True, errors="coerce")
-        lat, lon, alt_km = compute_subpoint_at(tle1, tle2, at_time_utc.to_pydatetime())
         if pd.notna(tle_epoch):
             tle_age_hours = float(abs((at_time_utc - tle_epoch).total_seconds())/3600.0)
-        # forward track (+60 min)
-        try:
-            track_coords, track_start_utc, track_end_utc = compute_short_track(
-                tle1, tle2, at_time_utc.to_pydatetime(), forward_min=30, step_s=60
+        # Reject stale elements before any propagation work. Calculating a
+        # subpoint, track, or pass from elements that cannot be displayed is
+        # both unnecessary and potentially misleading during diagnostics.
+        if _tle_is_fresh(at_time_utc, tle_epoch):
+            lat, lon, alt_km = compute_subpoint_at(
+                tle1, tle2, at_time_utc.to_pydatetime()
             )
-        except Exception:
-            track_coords, track_start_utc, track_end_utc = None, None, None
-        # next-pass marker (if alert lat/lon provided)
-        if {"alert_lat_dd","alert_lon_dd"}.issubset(alert_df.columns):
-            la, lo = alert_df.iloc[0].get("alert_lat_dd"), alert_df.iloc[0].get("alert_lon_dd")
-            if pd.notna(la) and pd.notna(lo):
-                try:
-                    next_pass_marker = find_next_pass_marker(tle1, tle2, (float(la), float(lo)), at_time_utc.to_pydatetime(), max_hours=12)
-                except Exception:
-                    next_pass_marker = None
+            # forward track (+60 min)
+            try:
+                track_coords, track_start_utc, track_end_utc = compute_short_track(
+                    tle1, tle2, at_time_utc.to_pydatetime(), forward_min=30, step_s=60
+                )
+            except Exception:
+                track_coords, track_start_utc, track_end_utc = None, None, None
+            # next-pass marker (if alert lat/lon provided)
+            if {"alert_lat_dd","alert_lon_dd"}.issubset(alert_df.columns):
+                la = alert_df.iloc[0].get("alert_lat_dd")
+                lo = alert_df.iloc[0].get("alert_lon_dd")
+                if pd.notna(la) and pd.notna(lo):
+                    try:
+                        next_pass_marker = find_next_pass_marker(
+                            tle1,
+                            tle2,
+                            (float(la), float(lo)),
+                            at_time_utc.to_pydatetime(),
+                            max_hours=12,
+                        )
+                    except Exception:
+                        next_pass_marker = None
         # prefer provider name/CATNR when present
         name = str(t.get("name") or name)
         if pd.notna(t.get("norad_id")): norad_id = int(t["norad_id"])
