@@ -270,3 +270,50 @@ def test_satellite_overlay_accepts_missing_catalog_metadata():
         "Satellite – subpoint",
     ]
     assert satellite_rows["popup_html"].isna().all()
+
+
+@pytest.mark.parametrize(
+    "radius_km", [pd.NA, None, "bad", float("nan"), float("inf"), -1, 0]
+)
+def test_satellite_subpoint_survives_invalid_footprint_radius(radius_km):
+    sat_overlays = pd.DataFrame(
+        [
+            {
+                "sat_name": "TEST SAT",
+                "lat_dd": 38.0,
+                "lon_dd": -74.0,
+                "footprint_radius_km": radius_km,
+            }
+        ]
+    )
+
+    result = build_gis_map_inputs_df(
+        make_positions_df(), sat_overlays=sat_overlays, op_tz_env="UTC"
+    )
+
+    satellite_rows = result[result["layer"] == "satellite_overlay"]
+    assert satellite_rows["geom_type"].tolist() == ["Point"]
+    assert satellite_rows.iloc[0]["geometry"]["coordinates"] == [-74.0, 38.0]
+
+
+@pytest.mark.parametrize(
+    ("latitude", "longitude"),
+    [("bad", -74.0), (38.0, "bad"), (91.0, -74.0), (38.0, -181.0)],
+)
+def test_invalid_satellite_subpoint_is_ignored(latitude, longitude):
+    sat_overlays = pd.DataFrame(
+        [
+            {
+                "sat_name": "TEST SAT",
+                "lat_dd": latitude,
+                "lon_dd": longitude,
+                "footprint_radius_km": 1000.0,
+            }
+        ]
+    )
+
+    result = build_gis_map_inputs_df(
+        make_positions_df(), sat_overlays=sat_overlays, op_tz_env="UTC"
+    )
+
+    assert result[result["layer"] == "satellite_overlay"].empty
