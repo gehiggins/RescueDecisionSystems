@@ -502,6 +502,7 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
             radius_km=25.0,
             max_stations=5,
             include_marine=None,  # let policy decide per-point
+            target_utc=alert_row.get("detect_time"),
         )
 
         # --- Collapse to one row per station with latest values ---
