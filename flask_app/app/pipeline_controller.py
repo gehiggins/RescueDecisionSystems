@@ -59,6 +59,7 @@ from app.gis_map_inputs_builder import build_gis_map_inputs_df
 from app.gis_mapping import generate_gis_map_html_from_dfs
 from app.preparse_coordinate_mapper import pre_scan_for_coordinates
 from app.utils import log_error_and_continue, load_sample_message, get_current_utc_timestamp
+from app.utils_coordinates import is_valid_overlay_bounds
 from app.fetcher_noaa_shore import fetch_noaa_shore_data
 from app.fetcher_ndbc_buoy import fetch_ndbc_buoy_data
 from app.fetcher_noaa_weather_alerts import fetch_weather_alerts_zone
@@ -228,19 +229,8 @@ def load_sat_overlays_for_site(site_id: str):
 
 
 def _valid_overlay_bounds(bounds):
-    """Validate ``[[south, west], [north, east]]`` image bounds."""
-    try:
-        if len(bounds) != 2 or any(len(point) != 2 for point in bounds):
-            return False
-        south, west = (float(value) for value in bounds[0])
-        north, east = (float(value) for value in bounds[1])
-    except (TypeError, ValueError):
-        return False
-    return (
-        all(math.isfinite(value) for value in (south, west, north, east))
-        and -90 <= south < north <= 90
-        and -180 <= west < east <= 180
-    )
+    """Compatibility wrapper for the shared image-boundary validation."""
+    return is_valid_overlay_bounds(bounds)
 
 
 def _append_model_spot_predictions(df_wx_obs, wx_df):
