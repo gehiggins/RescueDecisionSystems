@@ -1,15 +1,31 @@
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from flask_app.app import pipeline_controller
 from flask_app.app.pipeline_controller import (
+    _coerce_position,
+    _coerce_range_ring,
     _fallback_map_id,
     _map_output_path,
     _safe_map_site_id,
     _weather_target_from_position,
 )
+
+
+@pytest.mark.parametrize(
+    ("latitude", "longitude"),
+    [(True, -75.5), (37.5, False), (np.bool_(True), -75.5)],
+)
+def test_pipeline_rejects_boolean_alert_coordinates(latitude, longitude):
+    assert _coerce_position(latitude, longitude) is None
+
+
+@pytest.mark.parametrize("radius", [True, False, np.bool_(True)])
+def test_pipeline_rejects_boolean_range_rings(radius):
+    assert _coerce_range_ring(radius) == 0.0
 
 
 @pytest.mark.parametrize(

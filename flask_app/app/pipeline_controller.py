@@ -132,9 +132,13 @@ def _first_present(*values):
 
 def _coerce_position(lat, lon):
     """Return a finite in-range latitude/longitude pair, or ``None``."""
+    # Boolean values are numeric subclasses in Python, but they are never
+    # meaningful alert coordinates and must not become 0/1 degree positions.
+    if isinstance(lat, (bool, np.bool_)) or isinstance(lon, (bool, np.bool_)):
+        return None
     try:
         lat, lon = float(lat), float(lon)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     if (
         not math.isfinite(lat)
@@ -147,9 +151,11 @@ def _coerce_position(lat, lon):
 
 
 def _coerce_range_ring(value):
+    if isinstance(value, (bool, np.bool_)):
+        return 0.0
     try:
         value = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return 0.0
     return value if math.isfinite(value) and value > 0 else 0.0
 
