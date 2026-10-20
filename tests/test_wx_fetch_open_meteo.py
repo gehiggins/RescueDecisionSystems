@@ -255,6 +255,74 @@ def test_open_meteo_preserves_marine_rows_when_atmosphere_is_empty(monkeypatch):
     assert pd.isna(result.loc[0, "wind_ms"])
 
 
+def test_open_meteo_rejects_physically_invalid_provider_measurements(monkeypatch):
+    def fake_get(url, params, timeout):
+        if "marine-api" in url:
+            return _Response(
+                {
+                    "hourly": {
+                        "time": ["2026-10-20T12:00"],
+                        "wave_height": [-1.0],
+                        "wave_period": [-2.0],
+                        "wave_direction": [361.0],
+                    }
+                }
+            )
+        return _Response(
+            {
+                "hourly": {
+                    "time": ["2026-10-20T12:00"],
+                    "temperature_2m": [20.0],
+                    "relative_humidity_2m": [101.0],
+                    "wind_speed_10m": [-1.0],
+                    "wind_direction_10m": [-1.0],
+                    "wind_gusts_10m": [-2.0],
+                    "pressure_msl": [-1.0],
+                    "precipitation": [-1.0],
+                    "cloud_cover": [101.0],
+                }
+            }
+        )
+
+    monkeypatch.setattr(wx_fetch_open_meteo.requests, "get", fake_get)
+
+    result = wx_fetch_open_meteo.fetch_open_meteo_obs(
+        37.5,
+        -75.5,
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T12:00:00Z",
+        include_marine=True,
+    )
+
+    invalid_fields = [
+        "rh_pct",
+        "dewpoint_c",
+        "wind_ms",
+        "wind_dir_deg",
+        "wind_gust_ms",
+        "pressure_hpa",
+        "precip_mmhr",
+        "cloud_cover_pct",
+        "wave_height_m",
+        "wave_period_s",
+        "wave_dir_deg",
+    ]
+    assert result.loc[0, invalid_fields].isna().all()
+    assert result.loc[0, "temp_c"] == 20.0
+
+
+@pytest.mark.parametrize(
+    ("minimum", "maximum", "value"),
+    [(0, 100, 0), (0, 100, 100), (0, 360, 0), (0, 360, 360)],
+)
+def test_open_meteo_numeric_range_preserves_boundaries(
+    minimum, maximum, value
+):
+    assert wx_fetch_open_meteo._numeric_at(
+        {"value": [value]}, "value", 0, minimum=minimum, maximum=maximum
+    ) == float(value)
+
+
 def test_open_meteo_merges_additional_marine_timestamp(monkeypatch):
     def fake_get(url, params, timeout):
         if "marine-api" in url:
