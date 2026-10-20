@@ -119,8 +119,10 @@ def _normalize_search_parameters(radius_km, max_stations):
     normalized_radius = radius_km
     if radius_km is not None:
         try:
-            normalized_radius = float(radius_km)
-        except (TypeError, ValueError):
+            normalized_radius = (
+                float("nan") if isinstance(radius_km, bool) else float(radius_km)
+            )
+        except (TypeError, ValueError, OverflowError):
             normalized_radius = float("nan")
         if not math.isfinite(normalized_radius) or normalized_radius <= 0:
             LOG.warning(
@@ -133,8 +135,12 @@ def _normalize_search_parameters(radius_km, max_stations):
     normalized_max_stations = max_stations
     if max_stations is not None:
         try:
-            numeric_max_stations = float(max_stations)
-        except (TypeError, ValueError):
+            numeric_max_stations = (
+                float("nan")
+                if isinstance(max_stations, bool)
+                else float(max_stations)
+            )
+        except (TypeError, ValueError, OverflowError):
             numeric_max_stations = float("nan")
         if (
             not math.isfinite(numeric_max_stations)
