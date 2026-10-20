@@ -130,6 +130,33 @@ def fmt_coord(x):
     """Latitude/longitude display, 4 dp, safe."""
     return fmt_num(x, ".4f")
 
+
+def _coerce_lon_lat(coords):
+    """Return a finite in-range ``(lon, lat)`` pair, or ``None``."""
+    if not isinstance(coords, (list, tuple)) or len(coords) != 2:
+        return None
+    try:
+        lon, lat = float(coords[0]), float(coords[1])
+    except (TypeError, ValueError):
+        return None
+    if (
+        not math.isfinite(lon)
+        or not math.isfinite(lat)
+        or not -180.0 <= lon <= 180.0
+        or not -90.0 <= lat <= 90.0
+    ):
+        return None
+    return lon, lat
+
+
+def _positive_finite(value):
+    """Return a positive finite float, or ``None`` for an unusable value."""
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError):
+        return None
+    return normalized if math.isfinite(normalized) and normalized > 0 else None
+
 def _fmt_num(v, prec=5, dash="—"):
     """Safe float formatting for UI: returns '—' if v is None/NaN; else formats to given precision."""
     try:
@@ -571,7 +598,13 @@ def generate_gis_map_html_from_dfs(
 
     # Accept the original out_dir/site_id calling convention while keeping the
     # newer explicit alert_row/out_path form used by the active pipeline.
-    alert_row = alert_row or {}
+    if alert_row is None:
+        alert_row = {}
+    if not isinstance(gis_map_inputs_df, pd.DataFrame):
+        gis_map_inputs_df = pd.DataFrame(columns=["layer"])
+    elif "layer" not in gis_map_inputs_df.columns:
+        gis_map_inputs_df = gis_map_inputs_df.copy()
+        gis_map_inputs_df["layer"] = pd.Series(dtype="object")
     site_id = str(site_id or alert_row.get("site_id", "unknown"))
     if out_path is None:
         if out_dir is None:
@@ -586,8 +619,11 @@ def generate_gis_map_html_from_dfs(
         lat0 = alert_row.get("alert_lat_dd")
     if lon0 is None or pd.isna(lon0):
         lon0 = alert_row.get("alert_lon_dd")
-    if pd.isna(lat0) or pd.isna(lon0):
+    center = _coerce_lon_lat([lon0, lat0])
+    if center is None:
         lat0, lon0 = 38.255, -70.208333  # safe default
+    else:
+        lon0, lat0 = center
 
     m = folium.Map(location=[float(lat0), float(lon0)], zoom_start=7, tiles="OpenStreetMap" if tiles_mode=="online" else None)
 
@@ -595,26 +631,28 @@ def generate_gis_map_html_from_dfs(
     ab_positions = gis_map_inputs_df[gis_map_inputs_df["layer"] == "alert_position"]
     for _, row in ab_positions.iterrows():
         g = row.get("geometry", {})
-        coords = g.get("coordinates", [None, None]) if isinstance(g, dict) else [None, None]
-        lat_dd = coords[1]; lon_dd = coords[0]
-        label = row.get("label", "")
-        if lat_dd is None or lon_dd is None or pd.isna(lat_dd) or pd.isna(lon_dd):
+        coords = g.get("coordinates") if isinstance(g, dict) else None
+        point = _coerce_lon_lat(coords)
+        if point is None:
             continue
-        popup = f"{label} Location<br>{_fmt_num(lat_dd, 5)}, {_fmt_num(lon_dd, 5)}"
+        lon_dd, lat_dd = point
+        label = row.get("label", "")
+        safe_label = escape(str(label))
+        popup = f"{safe_label} Location<br>{_fmt_num(lat_dd, 5)}, {_fmt_num(lon_dd, 5)}"
         folium.Marker([lat_dd, lon_dd], popup=popup, icon=folium.Icon(color="red", icon="info-sign")).add_to(m)
         folium.map.Marker([lat_dd, lon_dd], icon=DivIcon(icon_size=(150, 36), icon_anchor=(0, 0),
-                              html=f'<div style="font-size: 14pt; color: red; font-weight: bold">{label}</div>')).add_to(m)
+                              html=f'<div style="font-size: 14pt; color: red; font-weight: bold">{safe_label}</div>')).add_to(m)
 
     # --- Range Rings ---
     rings = gis_map_inputs_df[gis_map_inputs_df["layer"] == "range_ring"]
     for _, row in rings.iterrows():
         g = row.get("geometry", {})
         center = g.get("center") if isinstance(g, dict) else None
-        rad_m = g.get("radius_m") if isinstance(g, dict) else None
-        if (isinstance(center, (list, tuple)) and len(center) == 2
-                and center[0] is not None and center[1] is not None
-                and rad_m and rad_m > 0):
-            folium.Circle(location=[center[1], center[0]], radius=float(rad_m),
+        rad_m = _positive_finite(g.get("radius_m")) if isinstance(g, dict) else None
+        point = _coerce_lon_lat(center)
+        if point is not None and rad_m is not None:
+            lon, lat = point
+            folium.Circle(location=[lat, lon], radius=rad_m,
                           color="red", fill=False, weight=2,
                           tooltip=f"{row.get('label','')} — EE95 Ring").add_to(m)
 
@@ -626,10 +664,11 @@ def generate_gis_map_html_from_dfs(
         from folium.features import CustomIcon
         for _, row in wx_rows.iterrows():
             g = row.get("geometry", {})
-            coords = g.get("coordinates", [None, None]) if isinstance(g, dict) else [None, None]
-            lat, lon = coords[1], coords[0]
-            if lat is None or lon is None or pd.isna(lat) or pd.isna(lon):
+            coords = g.get("coordinates") if isinstance(g, dict) else None
+            point = _coerce_lon_lat(coords)
+            if point is None:
                 continue
+            lon, lat = point
             icon_key = row.get("icon_key")
             icon_path = _icon_relpath_for_key(icon_key, out_path) if icon_key else None
             logging.info(f"[icons] Using icon_path={icon_path} (icon_key={icon_key})")
@@ -661,10 +700,11 @@ def generate_gis_map_html_from_dfs(
         from folium.features import CustomIcon
         for _, row in st_rows.iterrows():
             g = row.get("geometry", {})
-            coords = g.get("coordinates", [None, None]) if isinstance(g, dict) else [None, None]
-            lat, lon = coords[1], coords[0]
-            if lat is None or lon is None or pd.isna(lat) or pd.isna(lon):
+            coords = g.get("coordinates") if isinstance(g, dict) else None
+            point = _coerce_lon_lat(coords)
+            if point is None:
                 continue
+            lon, lat = point
             icon_key = row.get("icon_key")
             icon_path = _icon_relpath_for_key(icon_key, out_path) if icon_key else None
             logging.info(f"[icons] Using icon_path={icon_path} (icon_key={icon_key})")
@@ -745,12 +785,13 @@ def generate_gis_map_html_from_dfs(
             # Circle (footprint)
             elif gtype == "Circle":
                 center = geom.get("center")
-                rad_m  = geom.get("radius_m")
-                if (isinstance(center, (list, tuple)) and len(center) == 2
-                        and pd.notna(center[0]) and pd.notna(center[1]) and rad_m and rad_m > 0):
+                rad_m = _positive_finite(geom.get("radius_m"))
+                point = _coerce_lon_lat(center)
+                if point is not None and rad_m is not None:
+                    lon, lat = point
                     sty = (geom.get("style") or {})
-                    folium.Circle(location=[float(center[1]), float(center[0])],
-                          radius=float(rad_m),
+                    folium.Circle(location=[lat, lon],
+                          radius=rad_m,
                           color=sty.get("color", "#0b84f3"),
                           weight=int(sty.get("weight", 1)),
                           fill=bool(sty.get("fill", True)),
@@ -767,12 +808,10 @@ def generate_gis_map_html_from_dfs(
                 coords = geom.get("coordinates") or []
                 clean = []
                 for pt in coords:
-                    try:
-                        lon, lat = pt
-                        if pd.notna(lon) and pd.notna(lat):
-                            clean.append([float(lat), float(lon)])  # folium = [lat, lon]
-                    except Exception:
-                        continue
+                    point = _coerce_lon_lat(pt)
+                    if point is not None:
+                        lon, lat = point
+                        clean.append([lat, lon])  # folium = [lat, lon]
                 if len(clean) > 1:
                     sty = (geom.get("style") or {})
                     PolyLine(locations=clean,
@@ -788,13 +827,15 @@ def generate_gis_map_html_from_dfs(
 
             # Point (next-pass)
             elif gtype == "Point":
-                coords = geom.get("coordinates", [None, None])
+                coords = geom.get("coordinates")
+                point = _coerce_lon_lat(coords)
                 icon_key = sat.get("icon_key")
                 icon_path = _icon_relpath_for_key(icon_key, out_path) if icon_key else None
-                if len(coords) == 2 and pd.notna(coords[0]) and pd.notna(coords[1]):
+                if point is not None:
+                    lon, lat = point
                     if icon_path:
                         Marker(
-                            location=[float(coords[1]), float(coords[0])],
+                            location=[lat, lon],
                             tooltip=str(sat.get("label","Next pass")),
                             popup=sat.get("popup_html"),
                             icon=CustomIcon(icon_image=icon_path, icon_size=(28, 28))
@@ -804,7 +845,7 @@ def generate_gis_map_html_from_dfs(
                         )  # [updated]
                     else:
                         folium.CircleMarker(
-                            location=[float(coords[1]), float(coords[0])],
+                            location=[lat, lon],
                             radius=6,
                             weight=1,
                             fill=True,
@@ -829,7 +870,7 @@ def generate_gis_map_html_from_dfs(
         "</b></h3>"
     )
     m.get_root().html.add_child(folium.Element(title_html))
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     m.save(out_path)
     logging.info(f"✅ DF-based HTML map saved: {out_path}")
     layer_names = {

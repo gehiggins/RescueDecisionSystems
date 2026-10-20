@@ -207,3 +207,101 @@ def test_renderer_escapes_site_id_in_map_title(tmp_path):
     html = output_path.read_text(encoding="utf-8")
     assert unsafe_site_id not in html
     assert "&lt;script&gt;alert(&quot;map&quot;)&lt;/script&gt;" in html
+
+
+def test_renderer_skips_malformed_and_out_of_range_geometry(tmp_path):
+    output_path = tmp_path / "resilient-map.html"
+    inputs = pd.DataFrame(
+        [
+            {
+                "layer": "alert_position",
+                "geometry": {"type": "Point", "coordinates": ["bad"]},
+                "label": "Bad alert",
+            },
+            {
+                "layer": "weather",
+                "geometry": {"type": "Point", "coordinates": [-75.0, 95.0]},
+                "label": "Bad weather",
+            },
+            {
+                "layer": "station",
+                "geometry": {"type": "Point", "coordinates": [float("inf"), 37.5]},
+                "label": "Bad station",
+            },
+            {
+                "layer": "range_ring",
+                "geometry": {
+                    "type": "Circle",
+                    "center": [-75.0, 37.5],
+                    "radius_m": "bad",
+                },
+            },
+            {
+                "layer": "satellite_overlay",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[-75.2, 37.4], [181.0, 37.5], [-75.0, 37.6]],
+                },
+                "label": "Partially valid track",
+            },
+            {
+                "layer": "satellite_overlay",
+                "geometry": {"type": "Point", "coordinates": ["bad", 37.5]},
+                "label": "Bad next pass",
+            },
+        ]
+    )
+
+    result = generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row={"site_id": "BOUNDARY", "position_lat_dd_a": "bad", "position_lon_dd_a": -75.0},
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["status"] == "ok"
+    assert "Partially valid track" in html
+    assert "Bad alert" not in html
+    assert "Bad weather" not in html
+    assert "Bad station" not in html
+    assert "Bad next pass" not in html
+
+
+def test_renderer_accepts_series_metadata_and_escapes_position_label(tmp_path):
+    output_path = tmp_path / "series-row.html"
+    unsafe_label = '<img src=x onerror="alert(1)">'
+    inputs = pd.DataFrame(
+        [
+            {
+                "layer": "alert_position",
+                "geometry": {"type": "Point", "coordinates": [-75.0, 37.5]},
+                "label": unsafe_label,
+            }
+        ]
+    )
+
+    result = generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row=pd.Series(
+            {"site_id": "SERIES", "position_lat_dd_a": 37.5, "position_lon_dd_a": -75.0}
+        ),
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["status"] == "ok"
+    assert unsafe_label not in html
+    assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in html
+
+
+def test_renderer_handles_missing_layer_column(tmp_path):
+    output_path = tmp_path / "missing-layer.html"
+
+    result = generate_gis_map_html_from_dfs(
+        pd.DataFrame([{"label": "not a layer"}]),
+        alert_row={"site_id": "EMPTY", "position_lat_dd_a": 0.0, "position_lon_dd_a": 0.0},
+        out_path=str(output_path),
+    )
+
+    assert result["status"] == "ok"
+    assert result["layers"] == []
