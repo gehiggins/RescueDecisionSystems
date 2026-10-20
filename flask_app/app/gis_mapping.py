@@ -178,6 +178,21 @@ def _style_color(value, default="#0b84f3"):
     return value if isinstance(value, str) and value.strip() else default
 
 
+def _style_bool(value, default=True):
+    """Normalize common configuration booleans without truth-testing strings."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "off"}:
+            return False
+    if isinstance(value, (int, float)) and value in {0, 1}:
+        return bool(value)
+    return default
+
+
 def _safe_display_text(value, default=""):
     """Escape plain display text before giving it to Folium HTML widgets."""
     if value is None:
@@ -840,7 +855,7 @@ def generate_gis_map_html_from_dfs(
                           radius=rad_m,
                           color=_style_color(sty.get("color")),
                           weight=_style_number(sty.get("weight"), 1.0, minimum=0.0),
-                          fill=bool(sty.get("fill", True)),
+                          fill=_style_bool(sty.get("fill"), default=True),
                           fill_opacity=_style_number(
                               sty.get("fillOpacity"), 0.15, minimum=0.0, maximum=1.0
                           ),
