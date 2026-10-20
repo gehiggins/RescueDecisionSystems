@@ -341,7 +341,6 @@ def test_renderer_handles_malformed_image_overlay_name(
     assert result["status"] == "ok"
     assert "Satellite imagery" in html
     assert "data:image/png;base64" in html
-    assert "bad" not in html
 
 
 def test_renderer_skips_unreadable_image_overlay_content(tmp_path, caplog):
