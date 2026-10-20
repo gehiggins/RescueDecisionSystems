@@ -1,12 +1,14 @@
 ﻿# noaa_weather_alerts_fetch.py
 
 from app.setup_imports import *
-from datetime import datetime
+from flask_app.app.fetcher_noaa_weather_alerts import (
+    NOAA_ALERT_TIMEOUT_SECONDS,
+    fetch_weather_alert_features,
+)
 
-import requests
-import logging
-
-def fetch_weather_alerts_zone(lat, lon):
+def fetch_weather_alerts_zone(
+    lat, lon, request_timeout=NOAA_ALERT_TIMEOUT_SECONDS
+):
     """
     Fetches active weather alerts for the weather zone associated with the given lat/lon.
 
@@ -18,24 +20,18 @@ def fetch_weather_alerts_zone(lat, lon):
         tuple: (zone_id (str), list of active alerts (list of str))
     """
     try:
-        # Fetch the grid point metadata to find the forecast zone
-        grid_url = f"https://api.weather.gov/points/{lat},{lon}"
-        response = requests.get(grid_url)
-        response.raise_for_status()
-        properties = response.json().get('properties', {})
-
-        zone_url = properties.get('forecastZone')
+        zone_url, _zone_id, features = fetch_weather_alert_features(
+            lat, lon, request_timeout=request_timeout
+        )
         if not zone_url:
             logging.warning(f"âš ï¸ No forecast zone found for ({lat}, {lon})")
             return None, []
 
-        # Fetch active alerts for the forecast zone
-        alerts_url = f"{zone_url}/alerts/active"
-        alerts_response = requests.get(alerts_url)
-        alerts_response.raise_for_status()
-
-        alerts_data = alerts_response.json()
-        alerts = [alert['properties']['headline'] for alert in alerts_data.get('features', [])]
+        alerts = []
+        for feature in features:
+            properties = feature.get("properties") or {}
+            if isinstance(properties, dict) and properties.get("headline"):
+                alerts.append(properties["headline"])
 
         if alerts:
             logging.info(f"ðŸš¨ Active weather alerts for zone {zone_url}: {alerts}")
