@@ -151,6 +151,7 @@ def test_pipeline_uses_safe_site_id_for_final_map_path(monkeypatch, tmp_path):
         ]
     )
     rendered_paths = []
+    weather_args = {}
 
     monkeypatch.setattr(pipeline_controller, "pre_scan_for_coordinates", lambda _m: [])
     monkeypatch.setattr(
@@ -161,9 +162,11 @@ def test_pipeline_uses_safe_site_id_for_final_map_path(monkeypatch, tmp_path):
     monkeypatch.setattr(
         pipeline_controller, "finalize_alert_df", lambda _df, _existing: finalized
     )
-    monkeypatch.setattr(
-        pipeline_controller, "run_wx_pipeline", lambda **_kwargs: pd.DataFrame()
-    )
+    def capture_weather(**kwargs):
+        weather_args.update(kwargs)
+        return pd.DataFrame()
+
+    monkeypatch.setattr(pipeline_controller, "run_wx_pipeline", capture_weather)
     monkeypatch.setattr(
         pipeline_controller,
         "build_gis_map_inputs_df",
@@ -184,6 +187,7 @@ def test_pipeline_uses_safe_site_id_for_final_map_path(monkeypatch, tmp_path):
     expected = maps_root / "outside" / "gis_map_outside.html"
     assert result["status"] == "ok"
     assert rendered_paths == [expected]
+    assert weather_args["target_utc"] == pd.Timestamp("2026-10-20T06:00:00Z")
     assert expected.parent.is_dir()
     assert not (tmp_path / "outside").exists()
 

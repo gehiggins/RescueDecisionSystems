@@ -24,6 +24,23 @@ from app.utils_weather import dewpoint_magnus_c
 
 LOG = logging.getLogger(__name__)
 
+_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+_HISTORICAL_FORECAST_URL = (
+    "https://historical-forecast-api.open-meteo.com/v1/forecast"
+)
+_LIVE_FORECAST_PAST_DAYS = 92
+
+
+def _atmosphere_url(end_utc, current_utc=None):
+    """Select the archived service when the live API no longer covers the date."""
+    current_utc = (
+        _to_utc(current_utc)
+        if current_utc is not None
+        else pd.Timestamp.now(tz="UTC")
+    )
+    cutoff = current_utc - pd.Timedelta(days=_LIVE_FORECAST_PAST_DAYS)
+    return _HISTORICAL_FORECAST_URL if end_utc < cutoff else _FORECAST_URL
+
 
 def _numeric_at(mapping, key, index):
     """Return one finite numeric provider value, or NaN when unavailable."""
@@ -90,7 +107,7 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
         "end_date": end_utc.strftime("%Y-%m-%d")
     }
     try:
-        r = requests.get("https://api.open-meteo.com/v1/forecast", params=wx_params, timeout=20)
+        r = requests.get(_atmosphere_url(end_utc), params=wx_params, timeout=20)
         r.raise_for_status()
         j = r.json()
         if not isinstance(j, dict):
