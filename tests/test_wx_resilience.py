@@ -97,6 +97,28 @@ def test_weather_reducer_preserves_source_identity():
     )
 
 
+def test_weather_reducer_returns_one_row_per_source_with_duplicate_input_index():
+    observations = pd.DataFrame(
+        [
+            {"source_id": "A", "valid_utc": "2026-10-19T17:00:00Z"},
+            {"source_id": "A", "valid_utc": "2026-10-19T18:00:00Z"},
+            {"source_id": "B", "valid_utc": "2026-10-19T16:00:00Z"},
+        ],
+        index=[0, 0, 1],
+    )
+
+    result = wx_obs.reduce_to_nearest_or_latest(
+        observations,
+        target_utc=pd.Timestamp("2026-10-19T18:00:00Z"),
+        max_age_hours=24,
+    )
+
+    assert result["source_id"].tolist() == ["A", "B"]
+    assert result.loc[result["source_id"] == "A", "valid_utc"].item() == (
+        pd.Timestamp("2026-10-19T18:00:00Z")
+    )
+
+
 def test_malformed_provider_rows_do_not_discard_valid_observations(
     monkeypatch, caplog
 ):

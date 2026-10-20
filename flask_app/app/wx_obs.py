@@ -43,7 +43,10 @@ def reduce_to_nearest_or_latest(df: pd.DataFrame, *, target_utc, max_age_hours: 
     if df is None or len(df) == 0:
         return df
 
-    df = df.copy()
+    # Selection below uses index labels returned by idxmin/idxmax. Normalize
+    # them first so duplicate caller indexes cannot expand one selected label
+    # back into multiple observations.
+    df = df.copy().reset_index(drop=True)
 
     # Ensure tz-aware UTC
     df["valid_utc"] = pd.to_datetime(df["valid_utc"], utc=True)
