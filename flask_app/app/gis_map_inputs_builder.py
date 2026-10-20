@@ -83,6 +83,15 @@ def _valid_coordinate_pair(lon, lat):
         and -90.0 <= lat_value <= 90.0
     )
 
+
+def _positive_finite(value):
+    """Return a positive finite geometry value, or ``None`` when unusable."""
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError):
+        return None
+    return normalized if math.isfinite(normalized) and normalized > 0 else None
+
 def build_gis_map_inputs_df(
     positions_df: pd.DataFrame,
     wx_df: Optional[pd.DataFrame] = None,
@@ -423,11 +432,13 @@ def build_gis_map_inputs_df(
 
             # Circle footprint
             center = o.get("center")
+            radius_m = _positive_finite(o.get("radius_m"))
             if (
                 o.get("type") == "Circle"
                 and isinstance(center, (list, tuple))
                 and len(center) == 2
-                and not _is_missing(o.get("radius_m"))
+                and _valid_coordinate_pair(center[0], center[1])
+                and radius_m is not None
             ):
                 rows.append({
                     "site_id": positions_df["site_id"].iloc[0] if positions_df is not None and not positions_df.empty else None,
@@ -435,8 +446,8 @@ def build_gis_map_inputs_df(
                     "geom_type": "Circle",
                     "geometry": {
                         "type": "Circle",
-                        "center": o["center"],
-                        "radius_m": o["radius_m"],
+                        "center": [float(center[0]), float(center[1])],
+                        "radius_m": radius_m,
                         "style": o.get("style", {})
                     },
                     "ts_utc": None, "ts_local": None, "local_tz": None,
@@ -454,13 +465,25 @@ def build_gis_map_inputs_df(
                 and isinstance(coordinates, (list, tuple))
                 and len(coordinates) > 1
             ):
+                clean_coordinates = []
+                for point in coordinates:
+                    if (
+                        isinstance(point, (list, tuple))
+                        and len(point) == 2
+                        and _valid_coordinate_pair(point[0], point[1])
+                    ):
+                        clean_coordinates.append(
+                            [float(point[0]), float(point[1])]
+                        )
+                if len(clean_coordinates) < 2:
+                    continue
                 rows.append({
                     "site_id": positions_df["site_id"].iloc[0] if positions_df is not None and not positions_df.empty else None,
                     "layer": "satellite_overlay",
                     "geom_type": "LineString",
                     "geometry": {
                         "type": "LineString",
-                        "coordinates": o["coordinates"],
+                        "coordinates": clean_coordinates,
                         "style": o.get("style", {})
                     },
                     "ts_utc": None, "ts_local": None, "local_tz": None,
@@ -477,12 +500,18 @@ def build_gis_map_inputs_df(
                 o.get("type") == "Point"
                 and isinstance(coordinates, (list, tuple))
                 and len(coordinates) == 2
+                and _valid_coordinate_pair(coordinates[0], coordinates[1])
             ):
                 rows.append({
                     "site_id": positions_df["site_id"].iloc[0] if positions_df is not None and not positions_df.empty else None,
                     "layer": "satellite_overlay",
                     "geom_type": "Point",
-                    "geometry": {"type": "Point", "coordinates": o["coordinates"]},
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            float(coordinates[0]), float(coordinates[1])
+                        ],
+                    },
                     "ts_utc": None, "ts_local": None, "local_tz": None,
                     "label": o.get("label","Next pass"),
                     "popup_html": o.get("popup_html"),
