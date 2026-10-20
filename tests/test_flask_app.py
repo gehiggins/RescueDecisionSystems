@@ -13,6 +13,9 @@ def test_application_factory_serves_home_page():
 
     assert response.status_code == 200
     assert b"Rescue Decision Systems" in response.data
+    assert response.headers["X-Frame-Options"] == "SAMEORIGIN"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["Referrer-Policy"] == "same-origin"
 
 
 def test_analysis_page_has_existing_placeholder_and_processing_status():
@@ -44,6 +47,7 @@ def test_process_alert_rejects_blank_message():
 
     assert response.status_code == 400
     assert response.get_json()["error"] == "No message provided"
+    assert response.headers["Cache-Control"] == "no-store"
 
 
 def test_process_alert_rejects_message_over_configured_limit(monkeypatch):
@@ -157,6 +161,24 @@ def test_map_generation_rejects_site_id_path_traversal(tmp_path):
 
     assert response.status_code == 400
     assert not (tmp_path / "outside").exists()
+
+
+def test_generated_map_response_is_not_cached(tmp_path):
+    maps_dir = tmp_path / "maps"
+    map_path = maps_dir / "98372" / "gis_map_98372.html"
+    map_path.parent.mkdir(parents=True)
+    map_path.write_text("<html>map</html>", encoding="utf-8")
+    application = create_app(
+        {"TESTING": True, "RDS_MAPS_DIR": str(maps_dir)}
+    )
+
+    response = application.test_client().get(
+        "/maps/98372/gis_map_98372.html"
+    )
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["X-Frame-Options"] == "SAMEORIGIN"
 
 
 @pytest.mark.parametrize(
