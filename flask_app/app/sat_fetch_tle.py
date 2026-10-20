@@ -34,6 +34,8 @@ import numpy as np
 import requests
 import logging
 import time
+import math
+import os
 
 from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -123,6 +125,27 @@ _TLE_CACHE_CATNR: dict[int, dict] = {}
 _TLE_CACHE_GROUP: dict[str, list] = {}
 _TLE_PROVIDER_UNAVAILABLE_UNTIL = 0.0
 _TLE_PROVIDER_BACKOFF_SECONDS = 60.0
+_TLE_REQUEST_TIMEOUT_SECONDS = 10.0
+
+
+def _request_timeout_seconds() -> float:
+    """Return the configured finite positive satellite-provider timeout."""
+    try:
+        timeout = float(
+            os.getenv(
+                "RDS_SAT_REQUEST_TIMEOUT_SECONDS",
+                str(_TLE_REQUEST_TIMEOUT_SECONDS),
+            )
+        )
+    except (TypeError, ValueError):
+        timeout = _TLE_REQUEST_TIMEOUT_SECONDS
+    if not math.isfinite(timeout) or timeout <= 0:
+        LOG.warning(
+            "Invalid RDS_SAT_REQUEST_TIMEOUT_SECONDS; using %.0f seconds",
+            _TLE_REQUEST_TIMEOUT_SECONDS,
+        )
+        return _TLE_REQUEST_TIMEOUT_SECONDS
+    return timeout
 
 
 def _provider_is_available() -> bool:
@@ -171,7 +194,11 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
             break
         url = f"https://celestrak.org/NORAD/elements/gp.php?CATNR={norad_id}&FORMAT=TLE"
         try:
-            resp = requests.get(url, timeout=10, headers={"User-Agent": "RDS-SAT/1.0"})
+            resp = requests.get(
+                url,
+                timeout=_request_timeout_seconds(),
+                headers={"User-Agent": "RDS-SAT/1.0"},
+            )
             if resp.status_code == 200:
                 lines = [l.strip() for l in resp.text.splitlines() if l.strip()]
                 if len(lines) >= 3:
@@ -225,7 +252,11 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
             break
         url = f"https://celestrak.org/NORAD/elements/gp.php?GROUP={group.upper()}&FORMAT=TLE"
         try:
-            resp = requests.get(url, timeout=10, headers={"User-Agent": "RDS-SAT/1.0"})
+            resp = requests.get(
+                url,
+                timeout=_request_timeout_seconds(),
+                headers={"User-Agent": "RDS-SAT/1.0"},
+            )
             if resp.status_code == 200:
                 lines = [l.strip() for l in resp.text.splitlines() if l.strip()]
                 tles = []
