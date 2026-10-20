@@ -429,6 +429,46 @@ def test_missing_satellite_overlay_does_not_create_placeholder(monkeypatch, tmp_
     assert pipeline_controller.load_sat_overlays_for_site("98372") == []
 
 
+def test_local_satellite_overlay_is_typed_and_validated(monkeypatch, tmp_path):
+    from flask_app.app import pipeline_controller
+
+    overlays_root = tmp_path / "data" / "sat_overlays" / "98372"
+    overlays_root.mkdir(parents=True)
+    image_path = overlays_root / "coverage.png"
+    image_path.write_bytes(b"png")
+    image_path.with_suffix(".bounds.json").write_text(
+        "[[35.0, -78.0], [40.0, -72.0]]", encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        pipeline_controller,
+        "__file__",
+        str(tmp_path / "flask_app" / "app" / "pipeline_controller.py"),
+    )
+
+    overlays = pipeline_controller.load_sat_overlays_for_site("98372")
+
+    assert len(overlays) == 1
+    assert overlays[0]["type"] == "ImageOverlay"
+    assert overlays[0]["bounds"] == [[35.0, -78.0], [40.0, -72.0]]
+
+
+@pytest.mark.parametrize(
+    "bounds",
+    [
+        [[40.0, -78.0], [35.0, -72.0]],
+        [[35.0, -181.0], [40.0, -72.0]],
+        [[35.0, -78.0], [91.0, -72.0]],
+        [[35.0, float("nan")], [40.0, -72.0]],
+        [[35.0, -78.0]],
+        "not-bounds",
+    ],
+)
+def test_invalid_satellite_overlay_bounds_are_rejected(bounds):
+    from flask_app.app import pipeline_controller
+
+    assert pipeline_controller._valid_overlay_bounds(bounds) is False
+
+
 def test_model_spot_predictions_are_added_to_map_weather_rows():
     from flask_app.app import pipeline_controller
 
