@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `fcb5d037f2af53c0a6fe240121e412c0a761ea0a`
+Baseline: `main` commit `ba9c027b016f21ffc65a5e8cbc1c2a89927ac60c`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -67,10 +67,15 @@ the coordinate type, and signed decimal degrees cannot also carry a cardinal
 suffix that could reverse the intended hemisphere.
 
 The browser now reports processing state, returned layers, and weather and
-satellite row counts. Invalid or excessive alert requests are rejected before
-pipeline work starts, and the direct map endpoint rejects non-finite or
-out-of-range coordinates. Generated map serving is confined to the configured
-map directory, including when a requested file is a symbolic link.
+satellite row counts. It clears the preceding alert map when a new request
+starts, displays valid maps built from either position A or B, and does not
+require the original site ID when the controller safely generates one. Alerts
+with no parsed position do not present the renderer's fallback center as an
+alert location; changing that behavior remains a product decision. Invalid or
+excessive alert requests are rejected before pipeline work starts, and the
+direct map endpoint rejects non-finite or out-of-range coordinates. Generated
+map serving is confined to the configured map directory, including when a
+requested file is a symbolic link.
 Pipeline-generated map and satellite-overlay directories also use normalized,
 bounded path components when a numeric site ID is unavailable. The normalized
 identifier is retained through the final map write, so raw alert text cannot
@@ -84,6 +89,12 @@ into the generated HTML map as georeferenced satellite imagery. Satellite
 footprints, tracks, and pass markers share one orbit-layer classifier; explicit
 LEO, MEO, and GEO metadata is preserved, while missing or unknown types use the
 documented LEO default instead of being mislabeled as GEO.
+
+Map layer controls are available even when satellite enrichment is absent, so
+Weather and Stations remain independently toggleable on degraded-data maps.
+Unused satellite footprint, track, and next-pass controls were removed; actual
+satellite features remain grouped under populated LEO, MEO, GEO, and imagery
+controls.
 
 The map renderer recognizes both normalized coordinate fields and the
 `latitude_a`/`longitude_a` names emitted by the active parser. It keeps each
@@ -157,8 +168,10 @@ cached as successful TLE lookups, allowing a later provider recovery to be
 retried.
 
 Coordinate source spans identify the exact matched DMS or decimal-degree token
-pair and preserve offsets across LF, CRLF, and CR line endings. Coordinate
-interpretation rules themselves were not changed by that maintenance.
+pair and preserve offsets across irregular whitespace and LF, CRLF, and CR
+line endings. Multiple valid A/B coordinate pairs on one line are collected in
+source order and retained by the parser. Coordinate interpretation rules
+themselves were not changed by that maintenance.
 
 Map inputs accept only finite, in-range coordinates and positive finite range
 rings. Numeric range-ring text is normalized; malformed radii are omitted
@@ -183,7 +196,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 410 passed; 2 live tests deselected.
+- Default offline suite: 415 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
