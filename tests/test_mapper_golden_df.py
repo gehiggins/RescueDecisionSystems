@@ -188,3 +188,22 @@ def test_renderer_preserves_zero_coordinates_for_map_center(tmp_path):
 
     html = output_path.read_text(encoding="utf-8")
     assert "center: [0.0, 0.0]" in html
+
+
+def test_renderer_escapes_site_id_in_map_title(tmp_path):
+    output_path = tmp_path / "escaped-title.html"
+    unsafe_site_id = '<script>alert("map")</script>'
+
+    generate_gis_map_html_from_dfs(
+        pd.DataFrame(columns=["layer"]),
+        alert_row={
+            "site_id": unsafe_site_id,
+            "position_lat_dd_a": 10.0,
+            "position_lon_dd_a": 20.0,
+        },
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert unsafe_site_id not in html
+    assert "&lt;script&gt;alert(&quot;map&quot;)&lt;/script&gt;" in html
