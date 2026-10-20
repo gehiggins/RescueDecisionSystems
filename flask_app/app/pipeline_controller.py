@@ -184,7 +184,8 @@ def _weather_source_ids(weather_rows):
         ids.loc[missing] = generated.loc[missing]
     return ids.rename("sid")
 
-def process_sarsat_alert(raw_alert_message):
+def process_sarsat_alert(raw_alert_message, maps_root=None):
+    """Run the full alert pipeline and return its parsed data and map result."""
 
     try:
         logging.info(f"{get_current_utc_timestamp()} ðŸš€ Starting SARSAT alert processing pipeline")
@@ -197,7 +198,7 @@ def process_sarsat_alert(raw_alert_message):
         parsed_data = parse_sarsat_message(raw_alert_message, pre_scan_results=pre_scan_results)
         if parsed_data is None:
             logging.error(f"{get_current_utc_timestamp()} âŒ SARSAT message parsing failed â€” skipping further processing.")
-            return
+            return {"status": "error", "error": "Message parsing failed"}
 
         alert_df = pd.DataFrame([parsed_data])
 
@@ -295,9 +296,6 @@ def process_sarsat_alert(raw_alert_message):
             fallback_reason = "site_id missing; using UTC fallback"
         if fallback_reason:
             logging.warning(f"[RDS] GIS map step fallback: {fallback_reason} (site_id_safe={site_id_safe})")
-
-        out_dir = os.path.join('data', 'maps', site_id_safe)
-        os.makedirs(out_dir, exist_ok=True)
 
         # Load satellite overlays for this site
         sat_overlays = load_sat_overlays_for_site(site_id_safe)
@@ -451,7 +449,9 @@ def process_sarsat_alert(raw_alert_message):
         from pathlib import Path
 
         site_id = str(alert_row.get("site_id") or "unknown")
-        out_dir = Path("data/maps") / site_id
+        if maps_root is None:
+            maps_root = Path(__file__).resolve().parents[2] / "data" / "maps"
+        out_dir = Path(maps_root) / site_id
         out_dir.mkdir(parents=True, exist_ok=True)
         out_html = out_dir / f"gis_map_{site_id}.html"
 
@@ -466,9 +466,20 @@ def process_sarsat_alert(raw_alert_message):
 
         print("✅ Map:", result)
         LOG.info(f"Map HTML output path: {result.get('map_html_path')}")
+        return {
+            "status": "ok",
+            "parsed_data": alert_row.to_dict(),
+            "map_html_path": result.get("map_html_path"),
+            "layers": result.get("layers", []),
+            "weather_rows": int(
+                gis_map_inputs_df[gis_map_inputs_df["layer"] == "weather"].shape[0]
+            ),
+            "satellite_rows": n_sat,
+        }
                 
     except Exception as e:
         log_error_and_continue(f"{get_current_utc_timestamp()} âŒ Pipeline processing error: {e}")
+        return {"status": "error", "error": str(e)}
     
 if __name__ == "__main__":
     sample_message_path = "C:/Users/gehig/Projects/RescueDecisionSystems/sample_sarsat_message.txt"

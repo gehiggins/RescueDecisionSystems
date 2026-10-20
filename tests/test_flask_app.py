@@ -27,29 +27,24 @@ def test_process_alert_returns_active_parser_shape(monkeypatch, tmp_path):
     application = create_app(
         {"TESTING": True, "RDS_MAPS_DIR": str(tmp_path / "maps")}
     )
-    parsed = {
-        "site_id": "123",
-        "latitude_a": 37.5,
-        "longitude_a": -75.5,
-        "latitude_b": None,
-        "longitude_b": None,
-        "range_ring_meters_a": 0.0,
-        "range_ring_meters_b": 0.0,
-    }
+    def run_pipeline(_message, maps_root):
+        output_path = Path(maps_root) / "123" / "gis_map_123.html"
+        output_path.parent.mkdir(parents=True)
+        output_path.write_text("<html>map</html>", encoding="utf-8")
+        return {
+            "status": "ok",
+            "parsed_data": {
+                "site_id": "123",
+                "latitude_a": 37.5,
+                "longitude_a": -75.5,
+            },
+            "map_html_path": str(output_path),
+            "layers": ["Alert Positions", "Weather"],
+            "weather_rows": 1,
+            "satellite_rows": 0,
+        }
 
-    monkeypatch.setattr(
-        "flask_app.app.routes.pre_scan_for_coordinates", lambda _message: object()
-    )
-    monkeypatch.setattr(
-        "flask_app.app.routes.parse_sarsat_message",
-        lambda _message, pre_scan_results: parsed,
-    )
-
-    def write_map(_alert, output_path):
-        Path(output_path).write_text("<html>map</html>", encoding="utf-8")
-        return output_path
-
-    monkeypatch.setattr("flask_app.app.routes.generate_gis_map", write_map)
+    monkeypatch.setattr("flask_app.app.routes.run_alert_pipeline", run_pipeline)
 
     response = application.test_client().post(
         "/process_alert", json={"message": "sample alert"}
@@ -59,7 +54,24 @@ def test_process_alert_returns_active_parser_shape(monkeypatch, tmp_path):
     body = response.get_json()
     assert body["success"] is True
     assert body["parsed_data"][0]["site_id"] == "123"
-    assert body["map_url"] == "/maps/gis_map_123.html"
+    assert body["map_url"] == "/maps/123/gis_map_123.html"
+    assert body["layers"] == ["Alert Positions", "Weather"]
+    assert body["weather_rows"] == 1
+
+
+def test_process_alert_reports_full_pipeline_failure(monkeypatch):
+    application = create_app({"TESTING": True})
+    monkeypatch.setattr(
+        "flask_app.app.routes.run_alert_pipeline",
+        lambda _message, maps_root: {"status": "error", "error": "weather failed"},
+    )
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    assert response.status_code == 500
+    assert response.get_json()["error"] == "weather failed"
 
 
 def test_map_generation_rejects_site_id_path_traversal(tmp_path):
