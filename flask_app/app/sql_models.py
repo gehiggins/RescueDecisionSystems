@@ -1,21 +1,33 @@
 ﻿# sql_models.py - Defines Database Models for SARSAT Alert Processing
 # 2025-03-07 (Updated for alert_sequence_number & site_creation_time)
 
-from app.setup_imports import *
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
 from datetime import datetime
-from dotenv import load_dotenv
 import os
 
-# âœ… Load environment variables (database connection)
-load_dotenv()
-DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, create_engine
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+
 
 Base = declarative_base()
+engine = None
+SessionLocal = None
+
+
+def configure_database(database_url=None):
+    """Configure SQLAlchemy only after an explicit database URL is available."""
+    global engine, SessionLocal
+
+    resolved_url = database_url or os.getenv("DATABASE_URL")
+    if not resolved_url:
+        raise RuntimeError("DATABASE_URL is required for database operations")
+
+    engine = create_engine(resolved_url)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    return engine
+
+
+if os.getenv("DATABASE_URL"):
+    configure_database()
 
 class SARSATAlert(Base):
     """
