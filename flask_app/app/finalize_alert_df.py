@@ -72,6 +72,21 @@ def _existing_sequence_maxima(existing_alerts_db):
         )
     return maxima
 
+
+def _coerce_detect_time(value):
+    """Return a UTC timestamp, or NaT when a parser value is not usable."""
+    # Numeric values are valid pandas epoch inputs, but they are not valid
+    # SARSAT message timestamps and can otherwise hide parser defects.
+    if not pd.api.types.is_scalar(value) or isinstance(
+        value, (bool, int, float, np.number)
+    ):
+        return pd.NaT
+    try:
+        parsed = pd.to_datetime(value, utc=True, errors="coerce")
+    except (TypeError, ValueError, OverflowError):
+        return pd.NaT
+    return pd.NaT if pd.isna(parsed) else parsed
+
 def finalize_alert_df(alert_df, existing_alerts_db):
     """
     Finalizes SARSAT alert DataFrame before committing to the database.
@@ -108,10 +123,28 @@ def finalize_alert_df(alert_df, existing_alerts_db):
         alert_df.at[idx, "alert_sequence_number"] = next_sequence
         sequence_maxima[key] = next_sequence
     
-    # Ensure detect_time is present; log a warning if missing
+    # Normalize the parser boundary so downstream weather, satellite, and map
+    # processing never receive malformed or timezone-ambiguous timestamps.
     if "detect_time" not in alert_df.columns:
         alert_df["detect_time"] = pd.NaT
-    missing_detect_time = alert_df['detect_time'].isna()
+    original_missing = alert_df["detect_time"].isna()
+    normalized_detect_time = [
+        _coerce_detect_time(value) for value in alert_df["detect_time"]
+    ]
+    # Build an object series first because pandas 3 rejects a direct cast from
+    # an all-NaT, timezone-naive datetime array to a timezone-aware dtype.
+    alert_df["detect_time"] = pd.to_datetime(
+        pd.Series(normalized_detect_time, index=alert_df.index, dtype="object"),
+        utc=True,
+        errors="coerce",
+    )
+    missing_detect_time = alert_df["detect_time"].isna()
+    invalid_detect_time = missing_detect_time & ~original_missing
+    if invalid_detect_time.any():
+        logging.warning(
+            "Rejected %s invalid detect_time value(s) during finalization.",
+            invalid_detect_time.sum(),
+        )
     if missing_detect_time.any():
         logging.warning(f"âš ï¸ {missing_detect_time.sum()} alert(s) are missing detect_time. Ensure extraction occurs in parser_sarsat_msg.py.")
     

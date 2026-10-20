@@ -60,3 +60,41 @@ def test_missing_site_ids_still_advance_deterministically_within_batch():
     result = finalize_alert_df(incoming, pd.DataFrame())
 
     assert result["alert_sequence_number"].tolist() == [1, 2]
+
+
+def test_detect_times_are_normalized_to_utc_without_mutating_input():
+    incoming = pd.DataFrame(
+        [
+            {"site_id": "A", "detect_time": "2026-10-20T03:00:00-07:00"},
+            {"site_id": "B", "detect_time": pd.Timestamp("2026-10-20 11:00:00")},
+        ]
+    )
+
+    result = finalize_alert_df(incoming, pd.DataFrame())
+
+    assert incoming.loc[0, "detect_time"] == "2026-10-20T03:00:00-07:00"
+    # Pandas 2 and 3 may choose different internal timestamp resolutions;
+    # timezone awareness and values are the operational guarantees.
+    assert pd.api.types.is_datetime64_any_dtype(result["detect_time"])
+    assert str(result["detect_time"].dt.tz) == "UTC"
+    assert result["detect_time"].tolist() == [
+        pd.Timestamp("2026-10-20T10:00:00Z"),
+        pd.Timestamp("2026-10-20T11:00:00Z"),
+    ]
+
+
+def test_invalid_detect_times_become_missing_and_are_reported(caplog):
+    incoming = pd.DataFrame(
+        [
+            {"site_id": "A", "detect_time": "not-a-time"},
+            {"site_id": "B", "detect_time": ["2026-10-20T10:00:00Z"]},
+            {"site_id": "C", "detect_time": 12345},
+            {"site_id": "D", "detect_time": None},
+        ]
+    )
+
+    result = finalize_alert_df(incoming, pd.DataFrame())
+
+    assert result["detect_time"].isna().all()
+    assert "Rejected 3 invalid detect_time value(s)" in caplog.text
+    assert "4 alert(s) are missing detect_time" in caplog.text
