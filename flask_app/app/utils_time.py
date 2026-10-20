@@ -41,7 +41,12 @@ def ensure_utc(ts) -> Optional[pd.Timestamp]:
     Mirrors the proven logic used in the Meteostat path so downstream code
     can rely on consistent semantics.
     """
-    if not pd.api.types.is_scalar(ts):
+    # Pandas accepts numbers as nanoseconds since the Unix epoch. RDS inputs
+    # are human/provider timestamps, so accepting a numeric field would turn
+    # malformed data into a plausible but incorrect 1970 time.
+    if not pd.api.types.is_scalar(ts) or isinstance(
+        ts, (bool, int, float, np.number)
+    ):
         return None
     try:
         t = pd.to_datetime(ts, errors="coerce")
@@ -183,8 +188,5 @@ def parse_iso_utc(s: str) -> Optional[pd.Timestamp]:
     """
     Parse common ISO-like strings directly to UTC Timestamp.
     """
-    try:
-        return ensure_utc(pd.to_datetime(s, errors="coerce"))
-    except Exception:
-        return None
+    return ensure_utc(s)
 

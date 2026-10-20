@@ -70,6 +70,10 @@ def to_dual_time(
     Convert a UTC timestamp to both UTC and local time ISO strings.
     Ensures input is tz-aware UTC, then converts to local_tz using zoneinfo (preferred) or dateutil (fallback).
     """
+    if not pd.api.types.is_scalar(ts_utc) or isinstance(
+        ts_utc, (bool, int, float, np.number)
+    ):
+        return None, None
     ts = pd.to_datetime(ts_utc, utc=True, errors="coerce")
     if pd.isna(ts):
         return None, None

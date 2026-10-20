@@ -77,6 +77,11 @@ def test_scalar_utc_helper_rejects_array_like_input():
     assert ensure_utc(["2025-01-01", "2025-01-02"]) is None
 
 
+def test_scalar_utc_helper_rejects_numeric_epoch_coercion():
+    for value in (True, 12345, 1.5, np.int64(12345), np.inf):
+        assert ensure_utc(value) is None
+
+
 def test_utc_index_accepts_mixed_offsets_and_invalid_values():
     idx = pd.Index(
         [
