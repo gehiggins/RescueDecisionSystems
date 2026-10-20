@@ -84,6 +84,16 @@ def process_alert():
     raw_message = payload.get("message")
     if not isinstance(raw_message, str) or not raw_message.strip():
         return jsonify({"error": "No message provided"}), 400
+    max_alert_chars = current_app.config["RDS_MAX_ALERT_CHARS"]
+    if len(raw_message) > max_alert_chars:
+        return jsonify(
+            {
+                "error": (
+                    "Alert message is too large. "
+                    f"Maximum length is {max_alert_chars} characters."
+                )
+            }
+        ), 413
 
     maps_dir = Path(current_app.config["RDS_MAPS_DIR"]).resolve()
     result = run_alert_pipeline(raw_message, maps_root=maps_dir)
