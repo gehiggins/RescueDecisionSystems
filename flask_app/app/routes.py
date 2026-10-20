@@ -17,8 +17,7 @@ from flask import (
 )
 
 from .gis_mapping import generate_gis_map
-from .parser_sarsat_msg import parse_sarsat_message
-from .preparse_coordinate_mapper import pre_scan_for_coordinates
+from .pipeline_controller import process_sarsat_alert as run_alert_pipeline
 
 
 main_bp = Blueprint("main", __name__)
@@ -77,7 +76,7 @@ def contact():
 
 @main_bp.route("/process_alert", methods=["POST"])
 def process_alert():
-    """Parse one alert and create its basic GIS map without writing to the DB."""
+    """Process one alert through the full weather, satellite, and GIS pipeline."""
     if not request.is_json:
         return jsonify({"error": "Invalid request format. Must be JSON."}), 400
 
@@ -86,29 +85,33 @@ def process_alert():
     if not isinstance(raw_message, str) or not raw_message.strip():
         return jsonify({"error": "No message provided"}), 400
 
-    pre_scan_results = pre_scan_for_coordinates(raw_message)
-    parsed = parse_sarsat_message(raw_message, pre_scan_results=pre_scan_results)
-    if not parsed:
-        return jsonify({"error": "Message parsing failed"}), 422
+    maps_dir = Path(current_app.config["RDS_MAPS_DIR"]).resolve()
+    result = run_alert_pipeline(raw_message, maps_root=maps_dir)
+    if not result or result.get("status") != "ok":
+        error = (result or {}).get("error", "Alert processing failed")
+        status_code = 422 if error == "Message parsing failed" else 500
+        return jsonify({"error": error}), status_code
 
-    parsed_data = _serialize_parsed_alert(parsed)
+    parsed_data = _serialize_parsed_alert(result["parsed_data"])
     map_url = None
-    site_id = parsed_data.get("site_id")
-
-    # A parsed alert may be useful even if it has no location or map identifier.
-    if site_id and (
-        parsed_data.get("latitude_a") is not None
-        or parsed_data.get("latitude_b") is not None
-    ):
-        output_path = _map_path(site_id)
-        generate_gis_map(parsed_data, str(output_path))
-        map_url = url_for("main.serve_map", filename=output_path.name)
+    if result.get("map_html_path"):
+        map_path = Path(result["map_html_path"]).resolve()
+        try:
+            relative_map_path = map_path.relative_to(maps_dir)
+        except ValueError:
+            return jsonify({"error": "Pipeline returned an invalid map path"}), 500
+        map_url = url_for(
+            "main.serve_map", filename=relative_map_path.as_posix()
+        )
 
     return jsonify(
         {
             "success": True,
             "parsed_data": [parsed_data],
             "map_url": map_url,
+            "layers": result.get("layers", []),
+            "weather_rows": result.get("weather_rows", 0),
+            "satellite_rows": result.get("satellite_rows", 0),
         }
     )
 
