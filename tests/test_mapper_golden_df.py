@@ -331,3 +331,56 @@ def test_renderer_escapes_external_station_tooltip(tmp_path):
     assert result["status"] == "ok"
     assert unsafe not in html
     assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in html
+
+
+def test_renderer_defaults_malformed_satellite_styles(tmp_path):
+    output_path = tmp_path / "style-resilient-map.html"
+    inputs = pd.DataFrame(
+        [
+            {
+                "site_id": "TEST",
+                "layer": "satellite_overlay",
+                "geom_type": "Circle",
+                "geometry": {
+                    "type": "Circle",
+                    "center": [-75.0, 37.5],
+                    "radius_m": 1000.0,
+                    "style": {
+                        "weight": "bad",
+                        "fillOpacity": float("inf"),
+                        "color": None,
+                    },
+                },
+                "label": "Bad style circle",
+                "sat_type": "LEO",
+            },
+            {
+                "site_id": "TEST",
+                "layer": "satellite_overlay",
+                "geom_type": "LineString",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[-75.0, 37.5], [-74.0, 38.0]],
+                    "style": {"weight": [], "opacity": "bad", "color": ""},
+                },
+                "label": "Bad style track",
+                "sat_type": "LEO",
+            },
+        ]
+    )
+
+    result = generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row={
+            "site_id": "TEST",
+            "position_lat_dd_a": 37.5,
+            "position_lon_dd_a": -75.0,
+        },
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["status"] == "ok"
+    assert "Satellite Overlays" in result["layers"]
+    assert "Bad style circle" in html
+    assert "Bad style track" in html
