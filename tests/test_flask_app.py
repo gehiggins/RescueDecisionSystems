@@ -126,6 +126,49 @@ def test_process_alert_rejects_message_over_configured_limit(monkeypatch):
     assert pipeline_called is False
 
 
+def test_process_alert_accepts_integer_text_character_limit(monkeypatch):
+    application = create_app({"TESTING": True, "RDS_MAX_ALERT_CHARS": "10"})
+    pipeline_called = False
+
+    def run_pipeline(_message, maps_root):
+        nonlocal pipeline_called
+        pipeline_called = True
+
+    monkeypatch.setattr("flask_app.app.routes.run_alert_pipeline", run_pipeline)
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "x" * 11}
+    )
+
+    assert response.status_code == 413
+    assert pipeline_called is False
+
+
+@pytest.mark.parametrize(
+    "invalid_limit", ["bad", 0, -1, 2.5, float("inf"), True]
+)
+def test_process_alert_falls_back_from_invalid_character_limit(
+    monkeypatch, caplog, invalid_limit
+):
+    application = create_app(
+        {"TESTING": True, "RDS_MAX_ALERT_CHARS": invalid_limit}
+    )
+    monkeypatch.setattr(
+        "flask_app.app.routes.run_alert_pipeline",
+        lambda _message, maps_root: {
+            "status": "ok",
+            "parsed_data": {"site_id": "123"},
+        },
+    )
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    assert response.status_code == 200
+    assert "Invalid RDS_MAX_ALERT_CHARS" in caplog.text
+
+
 def test_process_alert_returns_json_when_request_body_is_too_large():
     application = create_app({"TESTING": True, "MAX_CONTENT_LENGTH": 32})
 
