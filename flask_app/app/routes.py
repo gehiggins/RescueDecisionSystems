@@ -174,7 +174,12 @@ def gis_map(latitude, longitude, site_id):
 
 @main_bp.route("/maps/<path:filename>")
 def serve_map(filename):
-    maps_dir = Path(current_app.config["RDS_MAPS_DIR"])
-    if not (maps_dir / filename).is_file():
+    maps_dir = Path(current_app.config["RDS_MAPS_DIR"]).resolve()
+    requested_path = (maps_dir / filename).resolve()
+    try:
+        relative_path = requested_path.relative_to(maps_dir)
+    except ValueError:
         return abort(404, description="Map not found")
-    return send_from_directory(maps_dir, filename)
+    if not requested_path.is_file():
+        return abort(404, description="Map not found")
+    return send_from_directory(maps_dir, relative_path.as_posix())

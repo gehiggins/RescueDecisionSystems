@@ -181,6 +181,22 @@ def test_generated_map_response_is_not_cached(tmp_path):
     assert response.headers["X-Frame-Options"] == "SAMEORIGIN"
 
 
+def test_map_route_rejects_symlink_outside_map_directory(tmp_path):
+    maps_dir = tmp_path / "maps"
+    maps_dir.mkdir()
+    outside_map = tmp_path / "outside.html"
+    outside_map.write_text("not an RDS map", encoding="utf-8")
+    (maps_dir / "linked.html").symlink_to(outside_map)
+    application = create_app(
+        {"TESTING": True, "RDS_MAPS_DIR": str(maps_dir)}
+    )
+
+    response = application.test_client().get("/maps/linked.html")
+
+    assert response.status_code == 404
+    assert b"not an RDS map" not in response.data
+
+
 @pytest.mark.parametrize(
     ("latitude", "longitude"),
     [
