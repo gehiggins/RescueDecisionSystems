@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import math
+import os
 import re
 
 import pandas as pd
@@ -26,6 +27,8 @@ main_bp = Blueprint("main", __name__)
 
 _MAX_MAP_SITE_ID_CHARS = 80
 _DEFAULT_MAX_ALERT_CHARS = 100_000
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_MAPS_DIR = _REPOSITORY_ROOT / "data" / "maps"
 
 
 def _json_compatible(value):
@@ -68,7 +71,7 @@ def _map_path(site_id):
         or not re.fullmatch(r"[A-Za-z0-9_-]+", normalized_site_id)
     ):
         abort(400, description="Invalid site ID")
-    maps_dir = Path(current_app.config["RDS_MAPS_DIR"])
+    maps_dir = _maps_directory()
     maps_dir.mkdir(parents=True, exist_ok=True)
     output_path = maps_dir / f"gis_map_{normalized_site_id}.html"
     if output_path.is_symlink():
@@ -104,6 +107,35 @@ def _alert_character_limit():
         _DEFAULT_MAX_ALERT_CHARS,
     )
     return _DEFAULT_MAX_ALERT_CHARS
+
+
+def _maps_directory():
+    """Resolve a dedicated map directory without trusting caller CWD."""
+    configured = current_app.config.get("RDS_MAPS_DIR", _DEFAULT_MAPS_DIR)
+    valid_type = isinstance(configured, (str, os.PathLike)) and not isinstance(
+        configured, bool
+    )
+    if valid_type and str(configured).strip():
+        candidate = Path(configured).expanduser()
+        if not candidate.is_absolute():
+            candidate = _REPOSITORY_ROOT / candidate
+        resolved = candidate.resolve()
+        # A maps root that contains the whole checkout could expose unrelated
+        # HTML files through the public route. Require a dedicated descendant
+        # or an explicitly configured external directory instead.
+        try:
+            _REPOSITORY_ROOT.relative_to(resolved)
+            contains_repository = True
+        except ValueError:
+            contains_repository = False
+        if not contains_repository:
+            return resolved
+    current_app.logger.warning(
+        "Invalid or overly broad RDS_MAPS_DIR=%r; using %s",
+        configured,
+        _DEFAULT_MAPS_DIR,
+    )
+    return _DEFAULT_MAPS_DIR.resolve()
 
 
 @main_bp.route("/")
@@ -155,7 +187,7 @@ def process_alert():
             }
         ), 413
 
-    maps_dir = Path(current_app.config["RDS_MAPS_DIR"]).resolve()
+    maps_dir = _maps_directory()
     try:
         result = run_alert_pipeline(raw_message, maps_root=maps_dir)
     except Exception:
@@ -261,7 +293,7 @@ def gis_map(latitude, longitude, site_id):
 
 @main_bp.route("/maps/<path:filename>")
 def serve_map(filename):
-    maps_dir = Path(current_app.config["RDS_MAPS_DIR"]).resolve()
+    maps_dir = _maps_directory()
     requested_path = (maps_dir / filename).resolve()
     if requested_path.suffix.lower() != ".html":
         return abort(404, description="Map not found")
