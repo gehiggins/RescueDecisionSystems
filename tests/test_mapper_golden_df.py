@@ -182,6 +182,42 @@ def test_renderer_embeds_local_satellite_image_overlay(tmp_path):
     assert "data:image/png;base64" in html
 
 
+def test_renderer_skips_image_overlay_with_reversed_bounds(tmp_path):
+    image_path = tmp_path / "coverage.png"
+    image_path.write_bytes(
+        base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+            "/x8AAusB9Wl2nWQAAAAASUVORK5CYII="
+        )
+    )
+    output_path = tmp_path / "map.html"
+    inputs = pd.DataFrame(
+        [
+            {
+                "layer": "satellite_overlay",
+                "geom_type": "ImageOverlay",
+                "geometry": {
+                    "type": "ImageOverlay",
+                    "image_path": str(image_path),
+                    "bounds": [[40.0, -78.0], [35.0, -72.0]],
+                    "name": "Reversed coverage",
+                },
+            }
+        ]
+    )
+
+    result = generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row={"site_id": "TEST", "position_lat_dd_a": 37.5, "position_lon_dd_a": -75.0},
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["status"] == "ok"
+    assert "Reversed coverage" not in html
+    assert "data:image/png;base64" not in html
+
+
 def test_renderer_preserves_zero_coordinates_for_map_center(tmp_path):
     output_path = tmp_path / "zero-center.html"
 
