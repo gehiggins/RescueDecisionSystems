@@ -20,8 +20,10 @@ _DEFAULT_HOURS_BACK = 6.0
 
 def _normalize_hours_back(hours_back):
     try:
-        normalized = float(hours_back)
-    except (TypeError, ValueError):
+        normalized = (
+            float("nan") if isinstance(hours_back, bool) else float(hours_back)
+        )
+    except (TypeError, ValueError, OverflowError):
         normalized = float("nan")
     if not math.isfinite(normalized) or normalized <= 0:
         LOG.warning(
