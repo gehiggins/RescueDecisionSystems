@@ -103,7 +103,13 @@ def _icon_relpath_for_key(icon_key: str, map_out_path: str) -> Optional[str]:
 def first_notna(row, keys):
     for k in keys:
         v = row.get(k, np.nan)
-        if pd.notna(v):
+        if not pd.api.types.is_scalar(v):
+            continue
+        try:
+            available = bool(pd.notna(v))
+        except (TypeError, ValueError):
+            available = False
+        if available:
             return v
     return None
 
