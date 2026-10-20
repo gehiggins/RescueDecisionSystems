@@ -82,6 +82,27 @@ def test_invalid_station_limit_skips_provider_request(monkeypatch, invalid_limit
     ).empty
 
 
+@pytest.mark.parametrize(
+    "invalid_timeout", [True, float("nan"), float("inf"), 0, -1, "bad"]
+)
+def test_station_discovery_replaces_invalid_request_timeout(
+    monkeypatch, invalid_timeout
+):
+    captured = {}
+
+    def get(_url, timeout, headers):
+        captured.update(timeout=timeout, headers=headers)
+        return _Response({"features": []})
+
+    monkeypatch.setattr(fetcher_noaa_shore.requests, "get", get)
+
+    fetcher_noaa_shore.query_nearest_noaa_stations(
+        37.5, -74.5, request_timeout=invalid_timeout
+    )
+
+    assert captured["timeout"] == fetcher_noaa_shore.NOAA_REQUEST_TIMEOUT_SECONDS
+
+
 def test_latest_observation_preserves_shared_metric_units(monkeypatch):
     payload = {
         "properties": {
@@ -112,6 +133,27 @@ def test_latest_observation_preserves_shared_metric_units(monkeypatch):
     assert result.iloc[0]["wind_speed"] == pytest.approx(12.0)
     assert result.iloc[0]["wind_direction"] == pytest.approx(20.0)
     assert pd.api.types.is_datetime64_any_dtype(result["observation_time"])
+
+
+@pytest.mark.parametrize(
+    "invalid_timeout", [True, float("nan"), float("inf"), 0, -1, "bad"]
+)
+def test_latest_observation_replaces_invalid_request_timeout(
+    monkeypatch, invalid_timeout
+):
+    captured = {}
+
+    def get(_url, timeout, headers):
+        captured.update(timeout=timeout, headers=headers)
+        return _Response({"properties": {}})
+
+    monkeypatch.setattr(fetcher_noaa_shore.requests, "get", get)
+
+    fetcher_noaa_shore.fetch_single_noaa_station(
+        "KTEST", request_timeout=invalid_timeout
+    )
+
+    assert captured["timeout"] == fetcher_noaa_shore.NOAA_REQUEST_TIMEOUT_SECONDS
 
 
 @pytest.mark.parametrize(
