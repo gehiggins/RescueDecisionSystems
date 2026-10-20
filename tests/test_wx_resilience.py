@@ -1,6 +1,6 @@
 import pandas as pd
 
-from flask_app.app import wx_obs
+from flask_app.app import wx_obs, wx_pipeline
 
 
 def _station_observation():
@@ -150,3 +150,54 @@ def test_all_malformed_weather_rows_return_empty_schema(monkeypatch, caplog):
     assert result.empty
     assert list(result.columns) == wx_obs._WX_OBS_COLS
     assert "Discarded 2 malformed weather observation row" in caplog.text
+
+
+def test_weather_pipeline_discards_invalid_targets_and_keeps_valid_target(
+    monkeypatch, caplog
+):
+    captured = {}
+
+    def capture_targets(**kwargs):
+        captured["ref_points"] = kwargs["ref_points"]
+        return _station_observation()
+
+    monkeypatch.setattr(wx_pipeline, "build_wx_obs_for_area", capture_targets)
+    targets = pd.DataFrame(
+        [
+            {"lat": "bad", "lon": -75.0},
+            {"lat": 91.0, "lon": -75.0},
+            {"lat": 37.5, "lon": -75.5},
+            {"lat": 37.5, "lon": -75.5},
+        ]
+    )
+
+    result = wx_pipeline.run_wx_pipeline(targets)
+
+    assert captured["ref_points"] == [(37.5, -75.5)]
+    assert result["source_id"].tolist() == ["TEST-STATION"]
+    assert "Discarded 2 invalid weather target coordinate" in caplog.text
+
+
+def test_weather_pipeline_skips_providers_when_all_targets_invalid(
+    monkeypatch, caplog
+):
+    monkeypatch.setattr(
+        wx_pipeline,
+        "build_wx_obs_for_area",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("weather provider called without a valid target")
+        ),
+    )
+    targets = pd.DataFrame(
+        [
+            {"lat": pd.NA, "lon": -75.0},
+            {"lat": float("inf"), "lon": -75.0},
+            {"lat": 37.5, "lon": -181.0},
+        ]
+    )
+
+    result = wx_pipeline.run_wx_pipeline(targets)
+
+    assert result.empty
+    assert list(result.columns) == wx_obs._WX_OBS_COLS
+    assert "No valid weather target coordinates" in caplog.text
