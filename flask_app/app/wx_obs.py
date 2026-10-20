@@ -73,7 +73,12 @@ def reduce_to_nearest_or_latest(df: pd.DataFrame, *, target_utc, max_age_hours: 
     df["valid_utc"] = df["valid_utc"].map(
         lambda value: pd.to_datetime(value, utc=True, errors="coerce")
     )
-    df = df.loc[df["valid_utc"].notna()].copy()
+    # The reducer is also a public utility, so enforce the same provider-ID
+    # contract used by the higher-level aggregator before grouping rows.
+    df["source_id"] = df["source_id"].map(_normalize_source_id)
+    df = df.loc[
+        df["valid_utc"].notna() & df["source_id"].notna()
+    ].copy()
     if df.empty:
         return df
 
