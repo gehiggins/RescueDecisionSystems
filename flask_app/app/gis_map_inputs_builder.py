@@ -10,6 +10,7 @@
 
 import math
 import logging
+from html import escape as html_escape
 import pandas as pd
 import numpy as np
 from typing import Optional
@@ -60,6 +61,12 @@ def _fmt_num(v, decimals):
 
 def _latlon_str(lat, lon):
     return f"Lat: {_fmt_num(lat, 5)}, Lon: {_fmt_num(lon, 5)}"
+
+
+def _html_text(value, default=""):
+    """Escape one external display value while preserving builder markup."""
+    value = _coalesce(value, default=default)
+    return html_escape(str(value), quote=True)
 
 
 def _valid_coordinate_pair(lon, lat):
@@ -129,7 +136,7 @@ def build_gis_map_inputs_df(
             label = r.get("role", "Alert")
             ts = r.get("ts_utc", None)
             ts_utc, ts_local = to_dual_time(ts, local_tz) if ts is not None else (None, None)
-            popup_fields = [f"<b>{label}</b>", _latlon_str(lat, lon)]
+            popup_fields = [f"<b>{_html_text(label)}</b>", _latlon_str(lat, lon)]
             popup_html = "<br>".join(popup_fields)
             rows.append({
                 "site_id": r.get("site_id"),
@@ -223,7 +230,11 @@ def build_gis_map_inputs_df(
             popup_fields = [f"<b>Weather</b>", _latlon_str(lat, lon)]
             if ts_utc: popup_fields.append(f"UTC: {ts_utc}")
             if ts_local: popup_fields.append(f"Local: {ts_local}")
-            popup_fields += [f"Waves: {wave_display}", f"Wind: {wind_display}", f"Temp: {temp_display}"]
+            popup_fields += [
+                f"Waves: {_html_text(wave_display)}",
+                f"Wind: {_html_text(wind_display)}",
+                f"Temp: {_html_text(temp_display)}",
+            ]
             popup_html = "<br>".join(popup_fields)
             source_type = _coalesce(w.get("source_type"), default="")
             rows.append({
@@ -262,12 +273,12 @@ def build_gis_map_inputs_df(
             wind_display = s.get("wind_display", "None")
             temp_display = s.get("temp_display", "None")
             popup_fields = [
-                f"<b>{label}</b>",
+                f"<b>{_html_text(label)}</b>",
                 _latlon_str(lat, lon),
-                f"Type: {station_type}",
-                f"Waves: {wave_display}",
-                f"Wind: {wind_display}",
-                f"Temp: {temp_display}"
+                f"Type: {_html_text(station_type)}",
+                f"Waves: {_html_text(wave_display)}",
+                f"Wind: {_html_text(wind_display)}",
+                f"Temp: {_html_text(temp_display)}"
             ]
             popup_html = "<br>".join(popup_fields)
             rows.append({
