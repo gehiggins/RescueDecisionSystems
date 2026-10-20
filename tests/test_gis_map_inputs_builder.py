@@ -243,6 +243,56 @@ def test_prebuilt_satellite_overlays_skip_malformed_nullable_entries(caplog):
     assert "Skipping malformed satellite overlay entry" in caplog.text
 
 
+def test_prebuilt_satellite_overlays_validate_geometry_values():
+    overlays = [
+        {"type": "Circle", "center": [-74.0, 38.0], "radius_m": -1},
+        {"type": "Circle", "center": [-181.0, 38.0], "radius_m": 1000},
+        {"type": "Point", "coordinates": [float("nan"), 38.0]},
+        {
+            "type": "LineString",
+            "coordinates": [
+                [-74.0, 38.0],
+                ["bad", 39.0],
+                [-181.0, 39.0],
+                [-72.0, 40.0],
+            ],
+            "label": "Clean track",
+        },
+    ]
+
+    result = build_gis_map_inputs_df(
+        make_positions_df(), sat_overlays=overlays, op_tz_env="UTC"
+    )
+
+    satellite_rows = result[result["layer"] == "satellite_overlay"]
+    assert satellite_rows["geom_type"].tolist() == ["LineString"]
+    assert satellite_rows.iloc[0]["geometry"]["coordinates"] == [
+        [-74.0, 38.0],
+        [-72.0, 40.0],
+    ]
+
+
+def test_prebuilt_satellite_circle_normalizes_numeric_text_geometry():
+    overlays = [
+        {
+            "type": "Circle",
+            "center": ["-74.0", "38.0"],
+            "radius_m": "1000",
+        }
+    ]
+
+    result = build_gis_map_inputs_df(
+        make_positions_df(), sat_overlays=overlays, op_tz_env="UTC"
+    )
+
+    circle = result[
+        (result["layer"] == "satellite_overlay")
+        & (result["geom_type"] == "Circle")
+    ].iloc[0]
+    assert circle["geometry"]["center"] == [-74.0, 38.0]
+    assert circle["geometry"]["radius_m"] == 1000.0
+
+
 def test_external_station_display_values_are_escaped_in_popup_html():
     unsafe = '<img src=x onerror="alert(1)">'
     stations = pd.DataFrame(
