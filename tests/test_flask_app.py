@@ -86,3 +86,42 @@ def test_full_pipeline_import_and_sequence_fallback_without_database(monkeypatch
     assert isinstance(existing_alerts, pd.DataFrame)
     assert existing_alerts.empty
     assert list(existing_alerts.columns) == ["site_id", "alert_sequence_number"]
+
+
+def test_missing_satellite_overlay_does_not_create_placeholder(monkeypatch, tmp_path):
+    from flask_app.app import pipeline_controller
+
+    monkeypatch.chdir(tmp_path)
+
+    assert pipeline_controller.load_sat_overlays_for_site("98372") == []
+
+
+def test_model_spot_predictions_are_added_to_map_weather_rows():
+    from flask_app.app import pipeline_controller
+
+    observations = pd.DataFrame(
+        [
+            {
+                "lat": 37.76,
+                "lon": -75.50,
+                "valid_utc": "2026-10-19T18:00:00Z",
+                "temp_c": 18.0,
+                "wind_ms": 7.0,
+                "source_type": "model_interpolated",
+            },
+            {
+                "lat": 37.50,
+                "lon": -75.25,
+                "source_type": "station",
+            },
+        ]
+    )
+
+    result = pipeline_controller._append_model_spot_predictions(
+        observations, pd.DataFrame()
+    )
+
+    assert len(result) == 1
+    assert result.iloc[0]["source_type"] == "model_interpolated"
+    assert result.iloc[0]["lat_dd"] == 37.76
+    assert result.iloc[0]["temp_C"] == 18.0
