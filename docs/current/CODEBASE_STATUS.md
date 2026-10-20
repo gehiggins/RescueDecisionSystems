@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `27c3b38c425ee15bf608462f5ea6cabd4f4180d9`
+Baseline: `main` commit `666c75b95aed29a808bacef3655fa2fd8d804d97`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -117,8 +117,10 @@ Validated local satellite PNG overlays are loaded only with ordered, finite,
 in-range geographic bounds and non-symlinked image/sidecar files. The loader,
 map-input builder, and renderer apply the same boundary rule, so reversed or
 malformed coverage cannot reach the displayed map. Valid images are embedded
-into the generated HTML map as georeferenced satellite imagery. Satellite
-footprints, tracks, and pass markers share one orbit-layer classifier; explicit
+into the generated HTML map as georeferenced satellite imagery. Image opacity
+is finite and constrained from zero to one. Malformed or filesystem-rejected
+image paths are skipped without stopping valid alert layers from rendering.
+Satellite footprints, tracks, and pass markers share one orbit-layer classifier; explicit
 LEO, MEO, and GEO metadata is preserved, while missing or unknown types use the
 documented LEO default instead of being mislabeled as GEO.
 
@@ -247,6 +249,9 @@ bounded default.
 Meteostat station searches are capped at 100 candidates before provider access.
 Finite weather lookback values that exceed Python's supported datetime range
 fall back to the established six-hour window instead of aborting the alert.
+The standalone weather health check applies the same six-hour overflow fallback
+and the same 100-station provider ceiling, and reports the effective values it
+actually used.
 
 Weather policy is evaluated independently for every valid alert position.
 When A and B have identical coordinates, RDS performs one provider lookup but
@@ -319,7 +324,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 660 passed; 2 live tests deselected.
+- Default offline suite: 670 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
