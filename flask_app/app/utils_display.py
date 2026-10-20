@@ -63,12 +63,16 @@ def derive_local_tz(lat: float, lon: float, op_tz_env: str | None = None) -> str
         # hard fallback
         return "UTC"
 
-def to_dual_time(ts_utc: Union[str, datetime], local_tz: str) -> Tuple[str, str]:
+def to_dual_time(
+    ts_utc: Union[str, datetime], local_tz: str
+) -> Tuple[Optional[str], Optional[str]]:
     """
     Convert a UTC timestamp to both UTC and local time ISO strings.
     Ensures input is tz-aware UTC, then converts to local_tz using zoneinfo (preferred) or dateutil (fallback).
     """
-    ts = pd.to_datetime(ts_utc, utc=True)
+    ts = pd.to_datetime(ts_utc, utc=True, errors="coerce")
+    if pd.isna(ts):
+        return None, None
     ts_utc_iso = ts.isoformat()
     try:
         try:
