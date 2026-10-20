@@ -172,3 +172,43 @@ def test_invalid_map_coordinates_and_radii_are_removed():
 
     assert result["layer"].tolist() == ["alert_position"]
     assert result.iloc[0]["geometry"]["coordinates"] == [-75.0, 37.0]
+
+
+def test_weather_and_station_rows_accept_pandas_missing_values():
+    wx_df = pd.DataFrame(
+        [
+            {
+                "station_id": pd.NA,
+                "source_type": pd.NA,
+                "lat_dd": 37.0,
+                "lon_dd": -75.0,
+                "wave_height_m": pd.NA,
+                "wind_ms": pd.NA,
+                "temp_C": pd.NA,
+            }
+        ]
+    )
+    stations_df = pd.DataFrame(
+        [
+            {
+                "station_id": pd.NA,
+                "name": pd.NA,
+                "type": pd.NA,
+                "lat_dd": 37.0,
+                "lon_dd": -75.0,
+            }
+        ]
+    )
+
+    result = build_gis_map_inputs_df(
+        make_positions_df(), wx_df, stations_df, op_tz_env="UTC"
+    )
+
+    weather = result[result["layer"] == "weather"].iloc[0]
+    station = result[result["layer"] == "station"].iloc[0]
+    assert weather["source_id"] == ""
+    assert weather["wave_height_display"] == "None"
+    assert weather["wind_display"] == "None"
+    assert weather["temp_display"] == "None"
+    assert station["source_id"] == ""
+    assert station["label"] == "Station"
