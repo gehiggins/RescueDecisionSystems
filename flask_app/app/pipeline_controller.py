@@ -153,6 +153,20 @@ def _coerce_range_ring(value):
     return value if math.isfinite(value) and value > 0 else 0.0
 
 
+def _weather_target_from_position(row):
+    """Carry map position and uncertainty into the per-point weather policy."""
+    target = {
+        "site_id": row.get("site_id"),
+        "target": row.get("role"),
+        "lat": float(row["lat_dd"]),
+        "lon": float(row["lon_dd"]),
+    }
+    range_ring_meters = _coerce_range_ring(row.get("range_ring_meters"))
+    if range_ring_meters > 0:
+        target["error_radius_km"] = range_ring_meters / 1000.0
+    return target
+
+
 def _get_existing_alerts_for_sequence():
     """Return prior alert sequence data when a database is configured.
 
@@ -488,12 +502,7 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
         wx_targets = []
         for _, r in positions_df.iterrows():
             if pd.notna(r.get("lat_dd")) and pd.notna(r.get("lon_dd")):
-                wx_targets.append({
-                    "site_id": r.get("site_id"),
-                    "target": r.get("role"),
-                    "lat": float(r["lat_dd"]),
-                    "lon": float(r["lon_dd"]),
-                })
+                wx_targets.append(_weather_target_from_position(r))
         wx_targets_df = pd.DataFrame(wx_targets)
 
         # Fetch unified weather observations (policy handled inside wx sub-pipeline)

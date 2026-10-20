@@ -273,9 +273,68 @@ def test_weather_pipeline_discards_invalid_targets_and_keeps_valid_target(
 
     result = wx_pipeline.run_wx_pipeline(targets)
 
-    assert captured["ref_points"] == [(37.5, -75.5)]
+    assert captured["ref_points"] == [{"lat": 37.5, "lon": -75.5}]
     assert result["source_id"].tolist() == ["TEST-STATION"]
     assert "Discarded 2 invalid weather target coordinate" in caplog.text
+
+
+def test_weather_pipeline_preserves_per_point_policy_metadata(monkeypatch):
+    captured = {}
+
+    def capture_targets(**kwargs):
+        captured.update(kwargs)
+        return _station_observation()
+
+    monkeypatch.setattr(wx_pipeline, "build_wx_obs_for_area", capture_targets)
+    targets = pd.DataFrame(
+        [
+            {
+                "lat": 37.5,
+                "lon": -75.5,
+                "error_radius_km": 12.5,
+                "coast_distance_km": "unknown",
+            }
+        ]
+    )
+
+    result = wx_pipeline.run_wx_pipeline(targets, include_marine=None)
+
+    assert result["source_id"].tolist() == ["TEST-STATION"]
+    assert captured["ref_points"] == [
+        {
+            "lat": 37.5,
+            "lon": -75.5,
+            "error_radius_km": 12.5,
+            "coast_distance_km": "unknown",
+        }
+    ]
+    assert captured["include_marine"] is None
+
+
+def test_weather_pipeline_applies_existing_marine_policy_per_point(monkeypatch):
+    captured = []
+
+    def capture_open_meteo(_lat, _lon, _start, _end, **kwargs):
+        captured.append(kwargs["include_marine"])
+        return pd.DataFrame()
+
+    monkeypatch.setattr(wx_obs, "fetch_open_meteo_obs", capture_open_meteo)
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_meteostat_obs_near",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
+    targets = pd.DataFrame(
+        [
+            {"lat": 37.5, "lon": -75.5, "error_radius_km": 12.5},
+            {"lat": 38.0, "lon": -75.0, "error_radius_km": 1.0},
+        ]
+    )
+
+    result = wx_pipeline.run_wx_pipeline(targets, include_marine=None)
+
+    assert result.empty
+    assert captured == [True, False]
 
 
 @pytest.mark.parametrize("targets", [None, pd.DataFrame(), [], "not-a-table"])
