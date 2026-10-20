@@ -7,7 +7,8 @@ import math
 import app.setup_imports  # noqa: F401
 
 from app.utils_time import (
-    ensure_utc, ensure_utc_index, window_slice, coerce_utc_range, now_utc
+    ensure_utc, ensure_utc_index, window_slice, coerce_utc_range, now_utc,
+    clamp_index_to_range,
 )
 from app.utils_geo import haversine_km, haversine_nm
 from app.utils_weather import dewpoint_magnus_c
@@ -50,4 +51,59 @@ def test_dewpoint_magnus_c_reasonable():
 def test_now_utc_monotonic():
     t1 = now_utc(); t2 = now_utc()
     assert t2 >= t1
+
+
+def test_scalar_utc_helper_rejects_array_like_input():
+    assert ensure_utc(["2025-01-01", "2025-01-02"]) is None
+
+
+def test_utc_index_accepts_mixed_offsets_and_invalid_values():
+    idx = pd.Index(
+        [
+            "2025-01-01T00:00:00-08:00",
+            "2025-07-01T00:00:00-07:00",
+            "invalid",
+        ]
+    )
+
+    result = ensure_utc_index(idx)
+
+    assert str(result.tz) == "UTC"
+    assert result[0] == pd.Timestamp("2025-01-01T08:00:00Z")
+    assert result[1] == pd.Timestamp("2025-07-01T07:00:00Z")
+    assert pd.isna(result[2])
+
+
+def test_window_slice_normalizes_naive_boundaries():
+    frame = pd.DataFrame(
+        {"value": [1, 2, 3]},
+        index=pd.date_range("2025-01-01", periods=3, freq="h", tz="UTC"),
+    )
+
+    result = window_slice(frame, "2025-01-01 01:00", "2025-01-01 02:00")
+
+    assert result["value"].tolist() == [2, 3]
+
+
+def test_invalid_window_boundaries_are_treated_as_open():
+    frame = pd.DataFrame(
+        {"value": [1, 2]},
+        index=pd.date_range("2025-01-01", periods=2, freq="h", tz="UTC"),
+    )
+
+    result = window_slice(frame, "invalid", ["not", "scalar"])
+
+    assert result["value"].tolist() == [1, 2]
+
+
+def test_clamp_index_normalizes_naive_boundaries():
+    idx = pd.date_range("2025-01-01", periods=4, freq="h", tz="UTC")
+
+    result = clamp_index_to_range(
+        idx,
+        "2025-01-01 01:00",
+        "2025-01-01 02:00",
+    )
+
+    assert result.tolist() == idx[1:3].tolist()
 
