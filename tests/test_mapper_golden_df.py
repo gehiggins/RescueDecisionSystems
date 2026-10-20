@@ -235,6 +235,45 @@ def test_renderer_preserves_zero_coordinates_for_map_center(tmp_path):
     assert "center: [0.0, 0.0]" in html
 
 
+def test_renderer_centers_on_active_parser_coordinate_fields(tmp_path):
+    output_path = tmp_path / "parser-center.html"
+
+    generate_gis_map_html_from_dfs(
+        pd.DataFrame(columns=["layer"]),
+        alert_row={
+            "site_id": "PARSER",
+            "latitude_a": 12.25,
+            "longitude_a": 145.75,
+        },
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert "center: [12.25, 145.75]" in html
+
+
+def test_renderer_centers_on_first_valid_alert_geometry(tmp_path):
+    output_path = tmp_path / "geometry-center.html"
+    inputs = pd.DataFrame(
+        [
+            {
+                "layer": "alert_position",
+                "geometry": {"type": "Point", "coordinates": [-122.4, 37.8]},
+                "label": "Alert B",
+            }
+        ]
+    )
+
+    generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row={"site_id": "GEOMETRY"},
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert "center: [37.8, -122.4]" in html
+
+
 def test_renderer_escapes_site_id_in_map_title(tmp_path):
     output_path = tmp_path / "escaped-title.html"
     unsafe_site_id = '<script>alert("map")</script>'
