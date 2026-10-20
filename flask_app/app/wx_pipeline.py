@@ -1,9 +1,10 @@
 ﻿from app.setup_imports import *
 from datetime import datetime, timezone, timedelta
-from .wx_obs import build_wx_obs_for_area
+from .wx_obs import build_wx_obs_for_area, _empty_wx_obs
 from rds_engine.context import classify_zone_context
 from rds_engine.policy_wx import make_wx_data_plan
 import os
+import math
 import pandas as pd
 from app.utils_time import now_utc
 
@@ -23,10 +24,29 @@ def run_wx_pipeline(alert_targets_df: pd.DataFrame,
 
     # Unique A/B coordinates for the case
     pts = []
+    rejected_points = 0
     for _, r in alert_targets_df.iterrows():
-        if pd.notna(r.get("lat")) and pd.notna(r.get("lon")):
-            pts.append((float(r["lat"]), float(r["lon"])))
+        try:
+            lat = float(r.get("lat"))
+            lon = float(r.get("lon"))
+        except (TypeError, ValueError):
+            rejected_points += 1
+            continue
+        if (
+            not math.isfinite(lat)
+            or not math.isfinite(lon)
+            or not -90.0 <= lat <= 90.0
+            or not -180.0 <= lon <= 180.0
+        ):
+            rejected_points += 1
+            continue
+        pts.append((lat, lon))
     pts = list(dict.fromkeys(pts))  # unique order-preserving
+    if rejected_points:
+        LOG.warning("Discarded %s invalid weather target coordinate(s)", rejected_points)
+    if not pts:
+        LOG.warning("No valid weather target coordinates; wx pipeline skipped.")
+        return _empty_wx_obs()
 
     end_ts = datetime.now(timezone.utc)
     start_ts = end_ts - timedelta(hours=hours_back)
