@@ -123,6 +123,37 @@ def test_satellite_popup_escapes_provider_display_values():
     assert "<b>" in popup
 
 
+def test_satellite_popup_tolerates_nullable_and_malformed_provider_values():
+    popup = sat_pipeline._build_sat_popup(
+        {
+            "sat_name": pd.NA,
+            "norad_id": "not-a-number",
+            "role": pd.NA,
+            "tle_epoch_utc": ["not", "a", "scalar"],
+            "tle_age_hours": "unknown",
+            "at_time_utc": pd.NaT,
+            "next_pass_marker": pd.NA,
+        }
+    )
+
+    assert popup == "<b>Unknown</b><br/>Role: <b></b>"
+    assert "not-a-number" not in popup
+
+
+def test_satellite_popup_preserves_numeric_text_norad_id():
+    popup = sat_pipeline._build_sat_popup(
+        {
+            "sat_name": "NOAA 15",
+            "norad_id": "25338",
+            "role": "reported",
+            "at_time_utc": "2026-10-20T12:00:00Z",
+        }
+    )
+
+    assert "NOAA 15</b> (25338)" in popup
+    assert "Time@alert: 2026-10-20 12:00Z" in popup
+
+
 def test_stale_tle_is_not_used_for_historical_alert(monkeypatch):
     monkeypatch.setenv("RDS_SAT_MAX_TLE_AGE_HOURS", "72")
     stale_tle = pd.DataFrame(
