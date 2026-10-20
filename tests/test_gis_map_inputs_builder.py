@@ -215,3 +215,26 @@ def test_weather_and_station_rows_accept_pandas_missing_values():
     assert pd.isna(weather["ts_local"])
     assert station["source_id"] == ""
     assert station["label"] == "Station"
+
+
+@pytest.mark.parametrize(
+    "ring_value", [pd.NA, None, "bad", float("nan"), float("inf"), -5, 0]
+)
+def test_invalid_range_ring_values_are_ignored(ring_value):
+    positions_df = make_positions_df()
+    positions_df["range_ring_meters"] = pd.Series([ring_value], dtype=object)
+
+    result = build_gis_map_inputs_df(positions_df, op_tz_env="UTC")
+
+    assert result["layer"].tolist() == ["alert_position"]
+
+
+def test_numeric_text_range_ring_is_normalized():
+    positions_df = make_positions_df()
+    positions_df["range_ring_meters"] = "1000"
+
+    result = build_gis_map_inputs_df(positions_df, op_tz_env="UTC")
+
+    ring = result[result["layer"] == "range_ring"].iloc[0]
+    assert ring["range_ring_meters"] == 1000.0
+    assert ring["geometry"]["radius_m"] == 1000.0

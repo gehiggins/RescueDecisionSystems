@@ -133,7 +133,7 @@ def build_gis_map_inputs_df(
                 "popup_html": popup_html,
                 "style_hint": {"weight": 3, "opacity": 0.9},
                 "source_table": "positions",
-                "source_id": r.get("site_id") or "",
+                "source_id": _coalesce(r.get("site_id"), default=""),
                 "is_maritime": maritime_flag,
                 "range_ring_meters": None,
                 "wave_height_m": None,
@@ -150,7 +150,11 @@ def build_gis_map_inputs_df(
             ring_m = r.get("range_ring_meters")
             lat = r.get("lat_dd")
             lon = r.get("lon_dd")
-            if ring_m is None or np.isnan(ring_m):
+            try:
+                ring_m = float(ring_m)
+            except (TypeError, ValueError):
+                continue
+            if not math.isfinite(ring_m) or ring_m <= 0:
                 continue
             label = f"Range Ring {_fmt_num(ring_m, 0)} m"
             radius_line = f"Radius: {int(ring_m)} m" if ring_m is not None else "Radius: —"
@@ -167,7 +171,7 @@ def build_gis_map_inputs_df(
                 "popup_html": popup_html,
                 "style_hint": {"weight": 2, "opacity": 0.5, "dash": "2,6"},
                 "source_table": "positions",
-                "source_id": r.get("site_id") or "",
+                "source_id": _coalesce(r.get("site_id"), default=""),
                 "is_maritime": maritime_flag,
                 "range_ring_meters": ring_m,
                 "wave_height_m": None,
