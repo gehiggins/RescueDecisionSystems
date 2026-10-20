@@ -1,49 +1,80 @@
+"""Generate a satellite-aware GIS map without requiring network access."""
+
+import argparse
 from pathlib import Path
+
 import pandas as pd
-from datetime import datetime, timezone
 
-from flask_app.app.sat_pipeline import build_sat_overlay_df
+from flask_app.app.gis_map_inputs_builder import build_gis_map_inputs_df
 from flask_app.app.gis_mapping import generate_gis_map_html_from_dfs
+from flask_app.app.sat_pipeline import build_sat_overlay_df
 
-# Minimal alert row (edit time/site/coords as needed)
-alert_row = {
-    "alert_id": "TEST001",
-    "alert_time_utc": pd.Timestamp(datetime(2025, 9, 23, 2, 34, tzinfo=timezone.utc)),
-    # Optional: put a known A-side to see next-pass marker logic
-    "alert_lat_dd": 35.42,
-    "alert_lon_dd": -76.61,
-    "position_lat_dd_a": 35.42,
-    "position_lon_dd_a": -76.61,
-    "norad_id": 33591,  # NOAA-19 (test)
-}
-alert_df = pd.DataFrame([alert_row])
 
-# Build sat overlays (MVP = reporting scope; LEO first; TLE on)
-sat_overlay_df = build_sat_overlay_df(
-    alert_df,
-    types=("LEO",),
-    use_tle=True
+DEFAULT_OUTPUT = (
+    Path(__file__).resolve().parent / "data" / "maps" / "tests" / "sat_gis_smoke.html"
 )
-#sat_overlay_df = build_sat_overlay_df(alert_df, scope="reporting", types=("LEO",), use_tle=True)
 
-print("sat_overlay_df rows:", len(sat_overlay_df))
-print(sat_overlay_df[["sat_name","lat_dd","lon_dd","alt_km","footprint_radius_km","tle_age_hours"]].head().to_string(index=False))
 
-sat_overlay_df = build_sat_overlay_df(alert_df, types=("LEO",), use_tle=True, fallback_to_nearest=True)
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Smoke-test satellite GIS integration")
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="contact the configured TLE provider for orbital propagation",
+    )
+    args = parser.parse_args(argv)
 
-out_html = Path("data/maps/tests/sat_smoketest.html")
-generate_gis_map_html_from_dfs(sat_overlay_df, alert_row, str(out_html))
-print(f"[OK] Wrote {out_html}")
+    alert_time = pd.Timestamp.now(tz="UTC")
+    alert_df = pd.DataFrame(
+        [
+            {
+                "alert_id": "SAT-GIS-SMOKE",
+                "alert_time_utc": alert_time,
+                "satellite_name": "NOAA 19",
+                "norad_id": 33591,
+                "alert_lat_dd": 35.42,
+                "alert_lon_dd": -76.61,
+            }
+        ]
+    )
+    positions_df = pd.DataFrame(
+        [
+            {
+                "site_id": "SAT-GIS-SMOKE",
+                "role": "A",
+                "lat_dd": 35.42,
+                "lon_dd": -76.61,
+                "ts_utc": alert_time,
+                "range_ring_meters": 5000,
+            }
+        ]
+    )
+    satellite_df = build_sat_overlay_df(
+        alert_df,
+        types=("LEO",),
+        use_tle=args.live,
+        fallback_to_nearest=args.live,
+    )
+    map_inputs = build_gis_map_inputs_df(
+        positions_df,
+        sat_overlays=satellite_df,
+    )
 
-# 1) Reporting sat only
-s1 = build_sat_overlay_df(alert_df, types=("LEO",), use_tle=True)
-print("reporting-only rows:", len(s1))
-print("cols:", list(s1.columns))
-print("has_track:", isinstance(s1.iloc[0].get("track_coords"), (list, tuple)) and len(s1.iloc[0]["track_coords"]) > 1 if len(s1) else False)
-print("has_nextpass:", isinstance(s1.iloc[0].get("next_pass_marker"), dict) if len(s1) else False)
-generate_gis_map_html_from_dfs(s1, alert_row, "data/maps/tests/sat_reporting.html")
+    output = args.output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    generated = generate_gis_map_html_from_dfs(
+        map_inputs,
+        alert_df.iloc[0],
+        str(output),
+    )
+    if generated is None or not output.is_file() or output.stat().st_size == 0:
+        raise SystemExit("Satellite GIS smoke failed: no map HTML was generated")
 
-# 2) Reporting + nearest suggested LEOs
-s2 = build_sat_overlay_df(alert_df, types=("LEO",), use_tle=True, fallback_to_nearest=True)
-print("with-nearest rows:", len(s2))
-generate_gis_map_html_from_dfs(s2, alert_row, "data/maps/tests/sat_with_nearest.html")
+    mode = "live" if args.live else "offline contract"
+    print(f"Satellite GIS {mode} smoke passed: {output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
