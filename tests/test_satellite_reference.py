@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+import requests
 
 from flask_app.app import sat_fetch_tle
 from flask_app.app import sat_pipeline
@@ -120,3 +121,61 @@ def test_positive_tle_age_configuration_is_preserved(monkeypatch):
     monkeypatch.setenv("RDS_SAT_MAX_TLE_AGE_HOURS", "72")
 
     assert sat_pipeline._max_tle_age_hours() == 72.0
+
+
+def test_tle_provider_timeout_stops_retry_cascade(monkeypatch):
+    calls = []
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_CATNR", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_GROUP", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_PROVIDER_UNAVAILABLE_UNTIL", 0.0)
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_PROVIDER_BACKOFF_SECONDS", 60.0)
+
+    def time_out(url, **_kwargs):
+        calls.append(url)
+        raise requests.ConnectTimeout("provider unavailable")
+
+    monkeypatch.setattr(sat_fetch_tle.requests, "get", time_out)
+
+    first = sat_fetch_tle.load_tle_snapshot(["25338", "28654"])
+    second = sat_fetch_tle.load_tle_snapshot(["33591"])
+
+    assert first.empty
+    assert second.empty
+    assert len(calls) == 1
+    assert list(first.columns) == [
+        "name",
+        "norad_id",
+        "tle_line1",
+        "tle_line2",
+        "epoch_utc",
+        "provider",
+        "lookup_method",
+        "cache_hit",
+    ]
+
+
+def test_tle_backoff_keeps_cached_satellites_available(monkeypatch):
+    cached = {
+        "name": "NOAA 15",
+        "norad_id": 25338,
+        "tle_line1": "line 1",
+        "tle_line2": "line 2",
+        "epoch_utc": "2026-10-20T00:00:00Z",
+        "provider": "celestrak",
+        "lookup_method": "catnr",
+        "cache_hit": False,
+    }
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_CATNR", {25338: cached})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_GROUP", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_PROVIDER_UNAVAILABLE_UNTIL", float("inf"))
+    monkeypatch.setattr(
+        sat_fetch_tle.requests,
+        "get",
+        lambda *_args, **_kwargs: pytest.fail("network called during provider backoff"),
+    )
+
+    snapshot = sat_fetch_tle.load_tle_snapshot(["25338", "28654"])
+
+    assert len(snapshot) == 1
+    assert snapshot.iloc[0]["norad_id"] == 25338
+    assert bool(snapshot.iloc[0]["cache_hit"]) is True
