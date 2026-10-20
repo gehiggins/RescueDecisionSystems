@@ -1,17 +1,16 @@
-# tests/test_mapper_golden_df.py
-try:
-    from app.gis_mapping import generate_gis_map_html_from_dfs
-except ModuleNotFoundError:
-    import os, sys
-    REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    FLASK_APP_DIR = os.path.join(REPO_ROOT, "flask_app")
-    if FLASK_APP_DIR not in sys.path:
-        sys.path.insert(0, FLASK_APP_DIR)
-    from app.gis_mapping import generate_gis_map_html_from_dfs
-    
-    import pandas as pd
+"""Generate the representative GIS input fixture and its rendered map."""
+
+import argparse
 from pathlib import Path
-from app.gis_mapping import generate_gis_map_html_from_dfs
+
+import pandas as pd
+
+from flask_app.app.gis_mapping import generate_gis_map_html_from_dfs
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CSV = REPOSITORY_ROOT / "data" / "debugging" / "golden_gis_map_inputs_df.csv"
+DEFAULT_MAP = REPOSITORY_ROOT / "data" / "maps" / "TEST" / "gis_map_TEST.html"
 
 def build_golden_df():
     # Structure reused from tests/test_mapper_golden_df.py
@@ -86,18 +85,27 @@ def build_golden_df():
     df = pd.DataFrame(data)
     return df
 
-if __name__ == "__main__":
-    df = build_golden_df()
-    out_csv = Path("data/debugging/golden_gis_map_inputs_df.csv")
-    out_csv.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out_csv, index=False)
-    print(f"Golden GIS DataFrame written to: {out_csv}")
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Generate the representative RDS GIS fixture and HTML map"
+    )
+    parser.add_argument("--csv", type=Path, default=DEFAULT_CSV)
+    parser.add_argument("--map", dest="map_path", type=Path, default=DEFAULT_MAP)
+    args = parser.parse_args(argv)
 
-    # Call the mapper
+    df = build_golden_df()
+    args.csv.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(args.csv, index=False)
+    print(f"Golden GIS DataFrame written to: {args.csv}")
+
     result = generate_gis_map_html_from_dfs(
         gis_map_inputs_df=df,
-        out_dir="data/maps/TEST",
-        site_id="TEST"
+        alert_row={"site_id": "TEST"},
+        out_path=str(args.map_path),
     )
-    print("Mapper result:")
-    print(result)
+    print(f"Golden GIS map written to: {result['map_html_path']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
