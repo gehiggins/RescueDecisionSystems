@@ -7,6 +7,8 @@ from __future__ import annotations
 from app.setup_imports import *
 from datetime import datetime, timezone
 
+NDBC_REQUEST_TIMEOUT_SECONDS = 15
+
 def log_error_and_continue(context: str, exc: Exception | None = None):
     """
     Logs an error with optional exception details, keeping callsites consistent.
@@ -28,17 +30,25 @@ def calculate_distance_nm(lat1, lon1, lat2, lon2):
         log_error_and_continue(f"Error calculating distance: {e}")
         return None
 
-def parse_realtime2_data(station_id):
+def parse_realtime2_data(
+    station_id, request_timeout=NDBC_REQUEST_TIMEOUT_SECONDS
+):
     """
     Parses the latest row of Realtime2 data for the given station.
     """
     try:
         url = f"https://www.ndbc.noaa.gov/data/realtime2/{station_id}.txt"
-        response = requests.get(url)
+        response = requests.get(
+            url,
+            timeout=request_timeout,
+            headers={"User-Agent": "RDS-WEATHER/1.0"},
+        )
         response.raise_for_status()
 
         lines = response.text.strip().split("\n")
-        header_line = lines[1].strip().split()  # Line 2 is the header
+        # NDBC standard meteorological files put field names on line 1 and
+        # units on line 2. Using the units as names silently loses all values.
+        header_line = [field.lstrip("#") for field in lines[0].strip().split()]
         data_lines = [line.strip().split() for line in lines[2:]]
 
         best_row = _select_best_data_row(data_lines)
@@ -53,17 +63,21 @@ def parse_realtime2_data(station_id):
         log_error_and_continue(f"Failed to fetch or parse Realtime2 data for {station_id}: {e}")
         return None
 
-def parse_5day2_data(station_id):
+def parse_5day2_data(station_id, request_timeout=NDBC_REQUEST_TIMEOUT_SECONDS):
     """
     Parses the latest row of 5day2 data for the given station.
     """
     try:
         url = f"https://www.ndbc.noaa.gov/data/5day2/{station_id}_5day.txt"
-        response = requests.get(url)
+        response = requests.get(
+            url,
+            timeout=request_timeout,
+            headers={"User-Agent": "RDS-WEATHER/1.0"},
+        )
         response.raise_for_status()
 
         lines = response.text.strip().split("\n")
-        header_line = lines[1].strip().split()  # Line 2 is the header
+        header_line = [field.lstrip("#") for field in lines[0].strip().split()]
         data_lines = [line.strip().split() for line in lines[2:]]
 
         best_row = _select_best_data_row(data_lines)
