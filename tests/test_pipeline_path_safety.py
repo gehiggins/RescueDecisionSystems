@@ -4,7 +4,11 @@ import pandas as pd
 import pytest
 
 from flask_app.app import pipeline_controller
-from flask_app.app.pipeline_controller import _map_output_path, _safe_map_site_id
+from flask_app.app.pipeline_controller import (
+    _fallback_map_id,
+    _map_output_path,
+    _safe_map_site_id,
+)
 
 
 @pytest.mark.parametrize(
@@ -23,6 +27,15 @@ def test_map_site_id_is_safe_filename_component(raw_value, expected):
 
 def test_map_site_id_length_is_bounded():
     assert len(_safe_map_site_id("A" * 200)) == 80
+
+
+def test_fallback_map_ids_are_stable_and_separate_different_alerts():
+    first = _fallback_map_id("first alert", 1)
+
+    assert first == _fallback_map_id("first alert", 1)
+    assert first != _fallback_map_id("second alert", 1)
+    assert first.startswith("ALERT_1_")
+    assert len(first.rsplit("_", 1)[1]) == 12
 
 
 def test_satellite_overlay_site_symlink_cannot_escape_root(monkeypatch, tmp_path):
@@ -223,7 +236,8 @@ def test_pipeline_handles_nullable_identifiers_and_uses_legacy_position(
     )
 
     assert result["status"] == "ok"
-    assert Path(result["map_html_path"]).parent.name == "ALERT_7"
+    fallback_directory = Path(result["map_html_path"]).parent.name
+    assert fallback_directory == _fallback_map_id("alert", 7)
     position = captured["positions"].iloc[0]
     assert position["lat_dd"] == 37.5
     assert position["lon_dd"] == -75.5
