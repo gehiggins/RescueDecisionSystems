@@ -92,6 +92,31 @@ def test_buoy_fetch_enriches_nearest_station_observation(monkeypatch):
     )
 
 
+def test_buoy_fetch_honors_station_limit(monkeypatch):
+    metadata = pd.DataFrame(
+        [
+            {
+                "station_id": station_id,
+                "latitude": 37.5 + offset,
+                "longitude": -74.5,
+            }
+            for offset, station_id in enumerate(("ONE", "TWO", "THREE"))
+        ]
+    )
+    monkeypatch.setattr(fetcher_ndbc_buoy, "load_buoy_metadata", lambda: metadata)
+    monkeypatch.setattr(
+        fetcher_ndbc_buoy,
+        "fetch_single_buoy",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
+
+    result = fetcher_ndbc_buoy.fetch_ndbc_buoy_data(
+        37.5, -74.5, "A", max_buoys=2
+    )
+
+    assert result["station_id"].tolist() == ["ONE", "TWO"]
+
+
 @pytest.mark.parametrize(
     ("latitude", "longitude"),
     [(91, 0), (0, 181), (float("nan"), 0), ("bad", 0)],
