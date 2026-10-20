@@ -1,13 +1,20 @@
 ﻿#database.py
 
 from app.setup_imports import *
-from flask_app.app.sql_models import SARSATAlert, WeatherData, SessionLocal
+from flask_app.app import sql_models
+from flask_app.app.sql_models import SARSATAlert, WeatherData
+
+
+def _new_session():
+    if sql_models.SessionLocal is None:
+        sql_models.configure_database()
+    return sql_models.SessionLocal()
 
 def save_alert_to_db(df):
     """
     Saves parsed SARSAT alert data to the PostgreSQL database.
     """
-    session = SessionLocal()
+    session = _new_session()
     try:
         alert = SARSATAlert(
             beacon_id=df.iloc[0]["beacon_id"],
@@ -43,7 +50,7 @@ def save_weather_to_db(alert_id, weather_df, position):
     """
     Saves fetched weather data for a specific alert ID and position (A/B) to PostgreSQL.
     """
-    session = SessionLocal()
+    session = _new_session()
     try:
         for _, row in weather_df.iterrows():
             weather = WeatherData(
@@ -64,7 +71,6 @@ def save_weather_to_db(alert_id, weather_df, position):
                 current_speed=row.get("current_speed"),
                 current_direction=row.get("current_direction"),
                 observation_time=pd.to_datetime(row.get("observation_time"), errors='coerce'),
-                position_label=position  # New field (ensure schema supports this)
             )
             session.add(weather)
         session.commit()
@@ -80,7 +86,7 @@ def get_existing_alerts():
     Fetches existing alerts from the database to determine previous sequence numbers.
     Returns a Pandas DataFrame with site_id and alert_sequence_number.
     """
-    session = SessionLocal()
+    session = _new_session()
     try:
         query = session.query(SARSATAlert.site_id, SARSATAlert.alert_sequence_number).all()
         existing_alerts_df = pd.DataFrame(query, columns=["site_id", "alert_sequence_number"])
