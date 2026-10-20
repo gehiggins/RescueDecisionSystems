@@ -72,6 +72,22 @@ def _safe_map_site_id(value):
     return normalized[:_MAP_ID_MAX_CHARS] or "unknown"
 
 
+def _map_output_path(maps_root, site_id):
+    """Create a site map directory without following a site-level symlink."""
+    resolved_root = Path(maps_root).resolve()
+    resolved_root.mkdir(parents=True, exist_ok=True)
+    candidate = resolved_root / _safe_map_site_id(site_id)
+    if candidate.is_symlink():
+        raise ValueError("Map output site directory cannot be a symbolic link")
+    candidate.mkdir(parents=False, exist_ok=True)
+    resolved_candidate = candidate.resolve()
+    try:
+        resolved_candidate.relative_to(resolved_root)
+    except ValueError as exc:
+        raise ValueError("Map output directory is outside the configured root") from exc
+    return resolved_candidate / f"gis_map_{_safe_map_site_id(site_id)}.html"
+
+
 def _present_scalar(value):
     """Return a non-missing scalar without evaluating ``pd.NA`` as boolean."""
     if value is None or not pd.api.types.is_scalar(value):
@@ -569,9 +585,7 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
         site_id = site_id_safe
         if maps_root is None:
             maps_root = Path(__file__).resolve().parents[2] / "data" / "maps"
-        out_dir = Path(maps_root) / site_id
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_html = out_dir / f"gis_map_{site_id}.html"
+        out_html = _map_output_path(maps_root, site_id)
 
         result = generate_gis_map_html_from_dfs(
             gis_map_inputs_df,
