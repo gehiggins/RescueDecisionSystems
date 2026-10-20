@@ -1,6 +1,21 @@
 from __future__ import annotations
 
+import math
+
 from .types import Context
+
+
+def _optional_distance_km(value) -> float | None:
+    """Normalize optional context distances; invalid or negative means unknown."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(normalized) or normalized < 0:
+        return None
+    return normalized
 
 def classify_zone_context(
     lat: float,
@@ -18,6 +33,8 @@ def classify_zone_context(
       - "inland": coast_distance_km > 15
       - "unknown": coast_distance_km not provided
     """
+    error_radius_km = _optional_distance_km(error_radius_km)
+    coast_distance_km = _optional_distance_km(coast_distance_km)
     ctx = Context(
         lat=lat,
         lon=lon,
