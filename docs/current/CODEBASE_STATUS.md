@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `029152452c49b4f32dd6e17510d08b416b2cc30d`
+Baseline: `main` commit `d1d1486bbebf6061768386703062edc9cd9a8467`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -204,7 +204,8 @@ Non-finite and malformed numeric provider tokens remain absent rather than
 becoming temperature, wind, direction, or wave measurements. A read-only live
 check of station 44009 on 2026-10-20 returned a current observation and
 populated temperature, wind speed, and wind direction through the repaired
-parser.
+parser. Negative wind speeds and wave heights, and directions outside 0–360
+degrees, are also excluded from the shared weather schema.
 
 The optional NOAA shore adapter no longer returns Seattle's KSEA station for
 every alert. It discovers NWS observation stations around the requested point,
@@ -235,6 +236,9 @@ configuration boundaries instead of being interpreted as zero or one. NOAA and
 NDBC station-count controls require finite positive whole numbers and retain
 their existing upper bounds; malformed NDBC limits use the ten-buoy default,
 while invalid NOAA limits skip the provider request.
+NOAA station, NOAA alert, and NDBC observation request timeouts require finite
+positive values; invalid settings fall back to each provider's established
+bounded default.
 
 Weather policy is evaluated independently for every valid alert position.
 When A and B have identical coordinates, RDS performs one provider lookup but
@@ -253,7 +257,11 @@ converted to the shared m/s schema, invalid station metadata is filtered per
 row, and valid stations remain available. Invalid provider time windows are
 rejected before network lookup. Shared weather calculations accept finite
 scalar numeric strings and reject malformed, array-like, and non-finite
-values.
+values. Open-Meteo atmospheric and marine values are range-checked before
+entering the shared schema: negative wind, gust, pressure, precipitation,
+wave-height, and wave-period values are omitted, as are percentages and
+directions outside their physical ranges. Invalid humidity cannot produce a
+derived dew point.
 
 Satellite context enrichment isolates visible-satellite, upcoming-pass, and
 nearest-satellite failures. Empty provider results preserve the overlay schema;
@@ -296,7 +304,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 565 passed; 2 live tests deselected.
+- Default offline suite: 604 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
