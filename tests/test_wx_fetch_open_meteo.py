@@ -49,6 +49,52 @@ def test_open_meteo_requests_and_preserves_metres_per_second(monkeypatch):
     assert result.loc[0, "wind_gust_ms"] == 18.0
 
 
+@pytest.mark.parametrize("include_marine", ["0", "false", " no ", "OFF"])
+def test_open_meteo_does_not_treat_false_text_as_true(
+    monkeypatch, include_marine
+):
+    calls = []
+
+    def fake_get(url, params, timeout):
+        calls.append(url)
+        return _Response({"hourly": {}})
+
+    monkeypatch.setattr(wx_fetch_open_meteo.requests, "get", fake_get)
+
+    wx_fetch_open_meteo.fetch_open_meteo_obs(
+        37.5,
+        -75.5,
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T12:00:00Z",
+        include_marine=include_marine,
+    )
+
+    assert len(calls) == 1
+    assert "marine-api" not in calls[0]
+
+
+def test_open_meteo_defaults_invalid_marine_flag(monkeypatch, caplog):
+    calls = []
+
+    def fake_get(url, params, timeout):
+        calls.append(url)
+        return _Response({"hourly": {}})
+
+    monkeypatch.setattr(wx_fetch_open_meteo.requests, "get", fake_get)
+
+    wx_fetch_open_meteo.fetch_open_meteo_obs(
+        37.5,
+        -75.5,
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T12:00:00Z",
+        include_marine="sometimes",
+    )
+
+    assert len(calls) == 2
+    assert "marine-api" in calls[1]
+    assert "Invalid Open-Meteo include_marine" in caplog.text
+
+
 def test_open_meteo_uses_historical_forecast_service_for_old_alert(monkeypatch):
     calls = []
     target = pd.Timestamp.now(tz="UTC").floor("h") - pd.Timedelta(days=93)

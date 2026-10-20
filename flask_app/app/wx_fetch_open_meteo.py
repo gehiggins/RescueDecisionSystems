@@ -33,6 +33,22 @@ _HISTORICAL_FORECAST_START = pd.Timestamp("2022-01-01T00:00:00Z")
 _LIVE_FORECAST_PAST_DAYS = 92
 
 
+def _normalize_include_marine(value):
+    """Return a boolean without treating non-empty false strings as true."""
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    LOG.warning(
+        "Invalid Open-Meteo include_marine=%r; using default True", value
+    )
+    return True
+
+
 def _atmosphere_url(end_utc, current_utc=None):
     """Select the provider service whose documented range covers the date."""
     if end_utc < _HISTORICAL_FORECAST_START:
@@ -68,6 +84,7 @@ def _numeric_at(mapping, key, index, minimum=None, maximum=None):
 def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_marine: bool = True) -> pd.DataFrame:
     start_utc = _to_utc(start_utc)
     end_utc = _to_utc(end_utc)
+    include_marine = _normalize_include_marine(include_marine)
 
     # optional: if start/end may arrive swapped
     if start_utc and end_utc and start_utc > end_utc:
