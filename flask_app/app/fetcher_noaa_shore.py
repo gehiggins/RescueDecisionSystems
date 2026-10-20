@@ -97,6 +97,31 @@ def _direction_degrees(measurement):
         return np.nan
     return value if 0 <= value <= 360 else np.nan
 
+
+def _station_coordinates(geometry):
+    """Return one valid ``(latitude, longitude)`` pair from GeoJSON."""
+    if not isinstance(geometry, dict):
+        return None
+    coordinates = geometry.get("coordinates")
+    if not isinstance(coordinates, (list, tuple)) or len(coordinates) < 2:
+        return None
+    if isinstance(coordinates[0], (bool, np.bool_)) or isinstance(
+        coordinates[1], (bool, np.bool_)
+    ):
+        return None
+    try:
+        station_lon, station_lat = float(coordinates[0]), float(coordinates[1])
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if (
+        not math.isfinite(station_lat)
+        or not math.isfinite(station_lon)
+        or not -90 <= station_lat <= 90
+        or not -180 <= station_lon <= 180
+    ):
+        return None
+    return station_lat, station_lon
+
 def fetch_noaa_shore_data(lat, lon, position_label):
     try:
         logging.info(f"{get_current_utc_timestamp()} ðŸŒ Fetching NOAA shore data for Position {position_label}")
@@ -184,24 +209,18 @@ def query_nearest_noaa_stations(
 
     stations = []
     features = payload.get("features", []) if isinstance(payload, dict) else []
+    if not isinstance(features, list):
+        return pd.DataFrame()
     for feature in features:
         if not isinstance(feature, dict):
             continue
-        properties = feature.get("properties") or {}
-        geometry = feature.get("geometry") or {}
-        coordinates = geometry.get("coordinates") or []
-        if len(coordinates) < 2:
+        properties = feature.get("properties")
+        coordinates = _station_coordinates(feature.get("geometry"))
+        if not isinstance(properties, dict) or coordinates is None:
             continue
-        try:
-            station_lon, station_lat = float(coordinates[0]), float(coordinates[1])
-        except (TypeError, ValueError, OverflowError):
-            continue
+        station_lat, station_lon = coordinates
         station_id = _station_id(properties.get("stationIdentifier"))
-        if (
-            station_id is None
-            or not -90 <= station_lat <= 90
-            or not -180 <= station_lon <= 180
-        ):
+        if station_id is None:
             continue
         stations.append(
             {
