@@ -2,8 +2,15 @@
 
 from app.setup_imports import *
 from pathlib import Path
+import math
+import re
 
-from flask_app.app.utils import log_error_and_continue, get_current_utc_timestamp
+from flask_app.app.utils import (
+    get_current_utc_timestamp,
+    log_error_and_continue,
+    parse_5day2_data,
+    parse_realtime2_data,
+)
 from flask_app.app.utils_geo import haversine_nm
 from flask_app.app.utils_weather import calculate_timelate
 
@@ -28,11 +35,143 @@ def load_buoy_metadata():
         log_error_and_continue(f"{get_current_utc_timestamp()} âŒ Failed to load buoy metadata: {e}")
         return pd.DataFrame()
 
+
+def _coordinates_from_metadata(row):
+    """Return coordinates from columns or embedded NDBC station text."""
+    try:
+        latitude = float(row.get("latitude"))
+        longitude = float(row.get("longitude"))
+        if (
+            math.isfinite(latitude)
+            and math.isfinite(longitude)
+            and -90 <= latitude <= 90
+            and -180 <= longitude <= 180
+        ):
+            return latitude, longitude
+    except (TypeError, ValueError):
+        pass
+
+    metadata_text = "\n".join(
+        str(row.get(field, ""))
+        for field in ("name", "owner", "deployment_notes")
+    )
+    match = re.search(
+        r"(?<![\d.])(\d{1,2}(?:\.\d+)?)\s*([NS])\s+"
+        r"(\d{1,3}(?:\.\d+)?)\s*([EW])(?![A-Za-z])",
+        metadata_text,
+        re.IGNORECASE,
+    )
+    if not match:
+        return None
+    latitude = float(match.group(1)) * (-1 if match.group(2).upper() == "S" else 1)
+    longitude = float(match.group(3)) * (-1 if match.group(4).upper() == "W" else 1)
+    if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+        return None
+    return latitude, longitude
+
+
+def _metadata_with_coordinates(metadata_df):
+    """Normalize usable station coordinates without mutating caller data."""
+    if not isinstance(metadata_df, pd.DataFrame) or metadata_df.empty:
+        return pd.DataFrame()
+    rows = []
+    for _, station in metadata_df.iterrows():
+        coordinates = _coordinates_from_metadata(station)
+        station_id = station.get("station_id")
+        if coordinates is None or pd.isna(station_id):
+            continue
+        normalized = station.copy()
+        normalized["station_id"] = str(station_id).strip()
+        normalized["latitude"], normalized["longitude"] = coordinates
+        rows.append(normalized)
+    return pd.DataFrame(rows)
+
+
+def fetch_single_buoy(station_id, preferred_data_source="none"):
+    """Fetch one recent NDBC observation using the preferred source first."""
+    station_id = str(station_id).strip()
+    preferred = str(preferred_data_source or "none").strip().lower()
+    parsers = (
+        ("5day2", parse_5day2_data),
+        ("realtime2", parse_realtime2_data),
+    ) if preferred == "5day2" else (
+        ("realtime2", parse_realtime2_data),
+        ("5day2", parse_5day2_data),
+    )
+    for source, parser in parsers:
+        observation = parser(station_id)
+        if isinstance(observation, dict):
+            observation = dict(observation)
+            observation["source"] = source
+            return pd.DataFrame([observation])
+    return pd.DataFrame()
+
+
+def create_placeholder_row(station, position_label, source="metadata_only"):
+    """Keep nearby station context when no recent observation is available."""
+    return {
+        "station_id": str(station.get("station_id", "")),
+        "station_name": station.get("name", "N/A"),
+        "latitude": station.get("latitude"),
+        "longitude": station.get("longitude"),
+        "observation_time": pd.NaT,
+        "temperature": np.nan,
+        "wind_speed": np.nan,
+        "wind_direction": np.nan,
+        "wave_height": np.nan,
+        "source": source,
+        "timelate": np.nan,
+        "distance_nm": station.get("distance_nm", np.nan),
+        "position_label": position_label,
+        "owner": station.get("owner", "Unknown"),
+        "deployment_notes": station.get("deployment_notes", ""),
+    }
+
+
+def enrich_observation_with_metadata(station, observation, position_label):
+    """Combine one provider observation with its station metadata."""
+    observation_time = pd.to_datetime(
+        observation.get("observation_time"), utc=True, errors="coerce"
+    )
+    timelate = observation.get("timelate")
+    if pd.isna(timelate):
+        timelate = calculate_timelate(observation_time)
+    return {
+        "station_id": str(station.get("station_id", "")),
+        "station_name": station.get("name", "N/A"),
+        "latitude": station.get("latitude"),
+        "longitude": station.get("longitude"),
+        "observation_time": observation_time,
+        "temperature": observation.get("temperature"),
+        "wind_speed": observation.get("wind_speed"),
+        "wind_direction": observation.get("wind_direction"),
+        "wave_height": observation.get("wave_height"),
+        "source": observation.get("source", "NDBC"),
+        "timelate": timelate,
+        "distance_nm": station.get("distance_nm", np.nan),
+        "position_label": position_label,
+        "owner": station.get("owner", "Unknown"),
+        "deployment_notes": station.get("deployment_notes", ""),
+    }
+
 def fetch_ndbc_buoy_data(lat, lon, position_label):
     try:
-        metadata_df = load_buoy_metadata()
+        lat, lon = float(lat), float(lon)
+        if (
+            not math.isfinite(lat)
+            or not math.isfinite(lon)
+            or not -90 <= lat <= 90
+            or not -180 <= lon <= 180
+        ):
+            logging.warning("Invalid NDBC reference coordinates; returning no data")
+            return pd.DataFrame()
+
+        metadata_df = _metadata_with_coordinates(load_buoy_metadata())
         if metadata_df.empty:
-            logging.error(f"{get_current_utc_timestamp()} âš ï¸ No buoy metadata available â€” returning empty DataFrame.")
+            logging.warning(
+                "%s No buoy metadata with usable coordinates; returning empty DataFrame.",
+                get_current_utc_timestamp(),
+            )
             return pd.DataFrame()
 
         metadata_df['distance_nm'] = metadata_df.apply(
@@ -74,6 +213,4 @@ def fetch_ndbc_buoy_data(lat, lon, position_label):
     except Exception as e:
         log_error_and_continue(f"{get_current_utc_timestamp()} âŒ Error fetching buoy data for Position {position_label}: {e}")
         return pd.DataFrame()
-
-# fetch_single_buoy and enrich_observation_with_metadata remain unchanged
 
