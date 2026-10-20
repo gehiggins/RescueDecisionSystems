@@ -100,6 +100,29 @@ def test_satellite_pipeline_rejects_non_dataframe_alert_input():
     assert "at_time_utc" in overlay.columns
 
 
+def test_satellite_popup_escapes_provider_display_values():
+    unsafe_name = '<img src=x onerror="alert(1)">'
+    unsafe_role = '<script>alert("role")</script>'
+
+    popup = sat_pipeline._build_sat_popup(
+        {
+            "sat_name": unsafe_name,
+            "norad_id": 25338,
+            "role": unsafe_role,
+            "tle_epoch_utc": pd.NaT,
+            "tle_age_hours": float("nan"),
+            "at_time_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+            "next_pass_marker": None,
+        }
+    )
+
+    assert unsafe_name not in popup
+    assert unsafe_role not in popup
+    assert '&lt;img src=x onerror=&quot;alert(1)&quot;&gt;' in popup
+    assert '&lt;script&gt;alert(&quot;role&quot;)&lt;/script&gt;' in popup
+    assert "<b>" in popup
+
+
 def test_stale_tle_is_not_used_for_historical_alert(monkeypatch):
     monkeypatch.setenv("RDS_SAT_MAX_TLE_AGE_HOURS", "72")
     stale_tle = pd.DataFrame(
