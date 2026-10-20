@@ -125,6 +125,41 @@ def test_positive_tle_age_configuration_is_preserved(monkeypatch):
     assert sat_pipeline._max_tle_age_hours() == 72.0
 
 
+@pytest.mark.parametrize("configured", ["bad", "nan", "inf", "-1", "0"])
+def test_invalid_tle_request_timeout_uses_safe_default(monkeypatch, configured):
+    monkeypatch.setenv("RDS_SAT_REQUEST_TIMEOUT_SECONDS", configured)
+
+    assert sat_fetch_tle._request_timeout_seconds() == 10.0
+
+
+def test_tle_request_timeout_is_configurable(monkeypatch):
+    monkeypatch.setenv("RDS_SAT_REQUEST_TIMEOUT_SECONDS", "2.5")
+
+    assert sat_fetch_tle._request_timeout_seconds() == 2.5
+
+
+def test_tle_fetch_uses_configured_request_timeout(monkeypatch):
+    captured = {}
+    monkeypatch.setenv("RDS_SAT_REQUEST_TIMEOUT_SECONDS", "2.5")
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_CATNR", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_GROUP", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_PROVIDER_UNAVAILABLE_UNTIL", 0.0)
+
+    class Response:
+        status_code = 404
+        text = ""
+
+    def fake_get(_url, **kwargs):
+        captured.update(kwargs)
+        return Response()
+
+    monkeypatch.setattr(sat_fetch_tle.requests, "get", fake_get)
+
+    sat_fetch_tle.load_tle_snapshot(["25338"])
+
+    assert captured["timeout"] == 2.5
+
+
 def test_tle_provider_timeout_stops_retry_cascade(monkeypatch):
     calls = []
     monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_CATNR", {})
