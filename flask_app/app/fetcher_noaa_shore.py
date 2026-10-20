@@ -13,6 +13,21 @@ from flask_app.app.utils_weather import calculate_timelate
 
 NOAA_REQUEST_TIMEOUT_SECONDS = 15
 NOAA_REQUEST_HEADERS = {"User-Agent": "RDS-WEATHER/1.0"}
+NOAA_DEFAULT_MAX_STATIONS = 5
+NOAA_MAX_STATIONS = 20
+
+
+def _station_limit(value):
+    """Return a bounded positive whole-number station limit, or ``None``."""
+    if isinstance(value, (bool, np.bool_)):
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(numeric) or numeric < 1 or not numeric.is_integer():
+        return None
+    return min(int(numeric), NOAA_MAX_STATIONS)
 
 
 def _measurement(measurement):
@@ -105,16 +120,19 @@ def fetch_noaa_shore_data(lat, lon, position_label):
         return pd.DataFrame()
 
 def query_nearest_noaa_stations(
-    lat, lon, max_stations=5, request_timeout=NOAA_REQUEST_TIMEOUT_SECONDS
+    lat,
+    lon,
+    max_stations=NOAA_DEFAULT_MAX_STATIONS,
+    request_timeout=NOAA_REQUEST_TIMEOUT_SECONDS,
 ):
     """Return the nearest NWS observation stations for one valid point."""
     if isinstance(lat, (bool, np.bool_)) or isinstance(lon, (bool, np.bool_)):
         return pd.DataFrame()
-    if isinstance(max_stations, (bool, np.bool_)):
+    max_stations = _station_limit(max_stations)
+    if max_stations is None:
         return pd.DataFrame()
     try:
         lat, lon = float(lat), float(lon)
-        max_stations = int(max_stations)
     except (TypeError, ValueError, OverflowError):
         return pd.DataFrame()
     if (
@@ -122,7 +140,6 @@ def query_nearest_noaa_stations(
         or not math.isfinite(lon)
         or not -90 <= lat <= 90
         or not -180 <= lon <= 180
-        or max_stations < 1
     ):
         return pd.DataFrame()
 
@@ -177,7 +194,7 @@ def query_nearest_noaa_stations(
     return (
         pd.DataFrame(stations)
         .sort_values("distance_nm")
-        .head(min(max_stations, 20))
+        .head(max_stations)
         .reset_index(drop=True)
     )
 
