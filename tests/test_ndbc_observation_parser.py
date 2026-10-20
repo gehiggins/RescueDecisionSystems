@@ -129,3 +129,45 @@ def test_ndbc_numeric_lookup_rejects_nonfinite_and_missing_values(value):
 
 def test_ndbc_numeric_lookup_preserves_finite_values():
     assert utils._safe_float_lookup(["WSPD"], ["5.5"], "WSPD") == 5.5
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("WSPD", "-0.1"),
+        ("WDIR", "-1"),
+        ("WDIR", "361"),
+        ("WVHT", "-0.1"),
+    ],
+)
+def test_ndbc_parser_rejects_physically_invalid_measurements(field, value):
+    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    header = ["YY", "MM", "DD", "hh", "mm", "WDIR", "WSPD", "WVHT", "ATMP"]
+    row = [
+        str(now.year),
+        f"{now.month:02d}",
+        f"{now.day:02d}",
+        f"{now.hour:02d}",
+        f"{now.minute:02d}",
+        "180",
+        "5.5",
+        "1.2",
+        "20.3",
+    ]
+    row[header.index(field)] = value
+
+    result = utils._parse_data_row(header, row)
+
+    output_field = {
+        "WSPD": "wind_speed",
+        "WDIR": "wind_direction",
+        "WVHT": "wave_height",
+    }[field]
+    assert result[output_field] is None
+
+
+@pytest.mark.parametrize("direction", ["0", "360"])
+def test_ndbc_parser_preserves_direction_boundaries(direction):
+    assert utils._safe_float_lookup(
+        ["WDIR"], [direction], "WDIR", minimum=0, maximum=360
+    ) == float(direction)
