@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from flask_app.app import wx_obs, wx_pipeline
 
@@ -201,6 +202,92 @@ def test_weather_pipeline_skips_providers_when_all_targets_invalid(
     assert result.empty
     assert list(result.columns) == wx_obs._WX_OBS_COLS
     assert "No valid weather target coordinates" in caplog.text
+
+
+@pytest.mark.parametrize(
+    "hours_back", [None, "bad", float("nan"), float("inf"), -1, 0]
+)
+def test_weather_pipeline_defaults_invalid_time_window(
+    monkeypatch, caplog, hours_back
+):
+    captured = {}
+
+    def capture_window(**kwargs):
+        captured.update(kwargs)
+        return _station_observation()
+
+    monkeypatch.setattr(wx_pipeline, "build_wx_obs_for_area", capture_window)
+
+    result = wx_pipeline.run_wx_pipeline(
+        pd.DataFrame([{"lat": 37.5, "lon": -75.5}]),
+        hours_back=hours_back,
+    )
+
+    assert result["source_id"].tolist() == ["TEST-STATION"]
+    assert captured["end_utc"] - captured["start_utc"] == pd.Timedelta(hours=6)
+    assert "Invalid weather hours_back" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("radius_km", "max_stations"),
+    [
+        ("bad", 5),
+        (float("inf"), 5),
+        (0, 5),
+        (50, "bad"),
+        (50, float("nan")),
+        (50, 0),
+        (50, 2.5),
+    ],
+)
+def test_weather_pipeline_defaults_invalid_station_search_parameters(
+    monkeypatch, caplog, radius_km, max_stations
+):
+    captured = {}
+
+    def capture_parameters(**kwargs):
+        captured.update(kwargs)
+        return _station_observation()
+
+    monkeypatch.setattr(wx_pipeline, "build_wx_obs_for_area", capture_parameters)
+
+    result = wx_pipeline.run_wx_pipeline(
+        pd.DataFrame([{"lat": 37.5, "lon": -75.5}]),
+        radius_km=radius_km,
+        max_stations=max_stations,
+    )
+
+    assert result["source_id"].tolist() == ["TEST-STATION"]
+    assert captured["radius_km"] == 50.0
+    assert captured["max_stations"] == 5
+    assert "Invalid weather" in caplog.text
+
+
+def test_weather_aggregator_normalizes_direct_search_parameters(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_open_meteo_obs",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
+
+    def capture_meteostat(*_args, **kwargs):
+        captured.update(kwargs)
+        return pd.DataFrame()
+
+    monkeypatch.setattr(wx_obs, "fetch_meteostat_obs_near", capture_meteostat)
+
+    result = wx_obs.build_wx_obs_for_area(
+        [(37.5, -75.5)],
+        pd.Timestamp("2026-10-19T12:00:00Z"),
+        pd.Timestamp("2026-10-19T18:00:00Z"),
+        radius_km=-1,
+        max_stations=2.5,
+    )
+
+    assert result.empty
+    assert captured["radius_km"] == 50.0
+    assert captured["max_stations"] == 5
 
 
 def test_weather_aggregator_filters_invalid_reference_points(

@@ -1,6 +1,10 @@
 ﻿from app.setup_imports import *
 from datetime import datetime, timezone, timedelta
-from .wx_obs import build_wx_obs_for_area, _empty_wx_obs
+from .wx_obs import (
+    build_wx_obs_for_area,
+    _empty_wx_obs,
+    _normalize_search_parameters,
+)
 from rds_engine.context import classify_zone_context
 from rds_engine.policy_wx import make_wx_data_plan
 import os
@@ -9,6 +13,23 @@ import pandas as pd
 from app.utils_time import now_utc
 
 LOG = logging.getLogger(__name__)
+
+_DEFAULT_HOURS_BACK = 6.0
+
+
+def _normalize_hours_back(hours_back):
+    try:
+        normalized = float(hours_back)
+    except (TypeError, ValueError):
+        normalized = float("nan")
+    if not math.isfinite(normalized) or normalized <= 0:
+        LOG.warning(
+            "Invalid weather hours_back=%r; using default %.1f",
+            hours_back,
+            _DEFAULT_HOURS_BACK,
+        )
+        return _DEFAULT_HOURS_BACK
+    return normalized
 
 def run_wx_pipeline(alert_targets_df: pd.DataFrame,
                     hours_back: int = 6,
@@ -48,6 +69,10 @@ def run_wx_pipeline(alert_targets_df: pd.DataFrame,
         LOG.warning("No valid weather target coordinates; wx pipeline skipped.")
         return _empty_wx_obs()
 
+    hours_back = _normalize_hours_back(hours_back)
+    radius_km, max_stations = _normalize_search_parameters(
+        radius_km, max_stations
+    )
     end_ts = datetime.now(timezone.utc)
     start_ts = end_ts - timedelta(hours=hours_back)
 
