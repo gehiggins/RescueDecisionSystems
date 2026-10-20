@@ -69,3 +69,10 @@ def test_satellite_gis_smoke_generates_map_without_network(tmp_path):
     assert "Satellite GIS offline contract smoke passed" in result.stdout
     assert output.is_file()
     assert "leaflet" in output.read_text(encoding="utf-8").lower()
+
+
+def test_offshore_weather_smoke_defaults_to_offline_contract_check():
+    result = _run_script("test_fetch_offshore_buoys.py")
+
+    assert result.returncode == 0, result.stderr
+    assert "Offshore weather offline contract smoke passed" in result.stdout
