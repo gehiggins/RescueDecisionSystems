@@ -19,12 +19,24 @@ _DEFAULT_RADIUS_KM = 50.0
 _DEFAULT_MAX_STATIONS = 5
 
 
-def _kmh_to_ms(value):
-    """Convert one finite Meteostat wind value from km/h to m/s."""
+def _measurement(value, minimum=None, maximum=None):
+    """Return one finite in-range Meteostat value, or NaN."""
     try:
         numeric = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return np.nan
+    if not np.isfinite(numeric):
+        return np.nan
+    if minimum is not None and numeric < minimum:
+        return np.nan
+    if maximum is not None and numeric > maximum:
+        return np.nan
+    return numeric
+
+
+def _kmh_to_ms(value):
+    """Convert one non-negative Meteostat wind value from km/h to m/s."""
+    numeric = _measurement(value, minimum=0)
     return numeric / 3.6 if np.isfinite(numeric) else np.nan
 
 
@@ -208,15 +220,23 @@ def fetch_meteostat_obs_near(lat: float, lon: float, start_utc, end_utc,
                     "source_type": "station",      # Ensure stable value
                     "provider": "Meteostat",       # Ensure stable value
                     "lat": slat, "lon": slon,
-                    "temp_c": r.get("temp", np.nan),
-                    "dewpoint_c": r.get("dwpt", np.nan),
-                    "rh_pct": r.get("rhum", np.nan),
+                    "temp_c": _measurement(r.get("temp", np.nan)),
+                    "dewpoint_c": _measurement(r.get("dwpt", np.nan)),
+                    "rh_pct": _measurement(
+                        r.get("rhum", np.nan), minimum=0, maximum=100
+                    ),
                     # Meteostat's default metric response reports wind in km/h.
                     "wind_ms": _kmh_to_ms(r.get("wspd", np.nan)),
-                    "wind_dir_deg": r.get("wdir", np.nan),
+                    "wind_dir_deg": _measurement(
+                        r.get("wdir", np.nan), minimum=0, maximum=360
+                    ),
                     "wind_gust_ms": _kmh_to_ms(r.get("wpgt", np.nan)),
-                    "pressure_hpa": r.get("pres", np.nan),
-                    "precip_mmhr": r.get("prcp", np.nan),
+                    "pressure_hpa": _measurement(
+                        r.get("pres", np.nan), minimum=0
+                    ),
+                    "precip_mmhr": _measurement(
+                        r.get("prcp", np.nan), minimum=0
+                    ),
                     "visibility_km": np.nan,
                     "cloud_cover_pct": np.nan,
                     "wave_height_m": np.nan, "wave_period_s": np.nan, "wave_dir_deg": np.nan,
