@@ -5,6 +5,19 @@ import math
 from .types import Context
 
 
+def _coordinate(value, *, name: str, minimum: float, maximum: float) -> float:
+    """Return one finite Earth coordinate or reject the context input."""
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a finite number")
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be a finite number") from exc
+    if not math.isfinite(normalized) or not minimum <= normalized <= maximum:
+        raise ValueError(f"{name} is outside valid Earth bounds")
+    return normalized
+
+
 def _optional_distance_km(value) -> float | None:
     """Normalize optional context distances; invalid or negative means unknown."""
     if value is None or isinstance(value, bool):
@@ -33,6 +46,8 @@ def classify_zone_context(
       - "inland": coast_distance_km > 15
       - "unknown": coast_distance_km not provided
     """
+    lat = _coordinate(lat, name="lat", minimum=-90.0, maximum=90.0)
+    lon = _coordinate(lon, name="lon", minimum=-180.0, maximum=180.0)
     error_radius_km = _optional_distance_km(error_radius_km)
     coast_distance_km = _optional_distance_km(coast_distance_km)
     ctx = Context(
