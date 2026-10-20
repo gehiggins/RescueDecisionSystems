@@ -128,9 +128,15 @@ def finalize_alert_df(alert_df, existing_alerts_db):
     if "detect_time" not in alert_df.columns:
         alert_df["detect_time"] = pd.NaT
     original_missing = alert_df["detect_time"].isna()
-    normalized_detect_time = alert_df["detect_time"].map(_coerce_detect_time)
-    alert_df["detect_time"] = pd.Series(
-        normalized_detect_time, index=alert_df.index, dtype="datetime64[ns, UTC]"
+    normalized_detect_time = [
+        _coerce_detect_time(value) for value in alert_df["detect_time"]
+    ]
+    # Build an object series first because pandas 3 rejects a direct cast from
+    # an all-NaT, timezone-naive datetime array to a timezone-aware dtype.
+    alert_df["detect_time"] = pd.to_datetime(
+        pd.Series(normalized_detect_time, index=alert_df.index, dtype="object"),
+        utc=True,
+        errors="coerce",
     )
     missing_detect_time = alert_df["detect_time"].isna()
     invalid_detect_time = missing_detect_time & ~original_missing
