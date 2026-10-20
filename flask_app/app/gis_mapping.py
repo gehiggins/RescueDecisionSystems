@@ -839,10 +839,9 @@ def generate_gis_map_html_from_dfs(
             if gtype == "ImageOverlay":
                 bounds = geom.get("bounds")
                 image_path = geom.get("image_path")
-                try:
-                    opacity = float(geom.get("opacity", 0.6))
-                except (TypeError, ValueError):
-                    opacity = 0.6
+                opacity = _style_number(
+                    geom.get("opacity"), 0.6, minimum=0.0, maximum=1.0
+                )
                 if (
                     is_valid_overlay_bounds(bounds)
                     and image_path
@@ -858,7 +857,7 @@ def generate_gis_map_html_from_dfs(
                     folium.raster_layers.ImageOverlay(
                         image=str(image_path),
                         bounds=bounds,
-                        opacity=min(max(opacity, 0.0), 1.0),
+                        opacity=opacity,
                         name=_safe_display_text(overlay_name, default="Satellite overlay"),
                     ).add_to(fg_image)
 
