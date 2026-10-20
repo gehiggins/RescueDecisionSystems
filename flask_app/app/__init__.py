@@ -3,7 +3,7 @@
 from pathlib import Path
 import sys
 
-from flask import Flask
+from flask import Flask, request
 
 
 # Older RDS modules import ``app.*`` because the application was originally run
@@ -36,6 +36,17 @@ def create_app(config=None):
     from .routes import main_bp
 
     application.register_blueprint(main_bp)
+
+    @application.after_request
+    def set_response_safety_headers(response):
+        # Generated maps are embedded by the same RDS origin, so SAMEORIGIN
+        # prevents third-party framing without breaking the analysis page.
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        if request.endpoint in {"main.process_alert", "main.serve_map"}:
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     @application.errorhandler(413)
     def request_too_large(_error):
