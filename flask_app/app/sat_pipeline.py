@@ -261,7 +261,11 @@ def build_sat_overlay_df(
                 )
         except Exception as exc:
             LOG.warning("Nearest-satellite fallback skipped: %s", exc)
-            overlay = pd.DataFrame()
+            overlay = pd.DataFrame(columns=COLS)
+        # The nearest lookup can legitimately return no rows when the provider
+        # is unavailable. Keep the overlay contract intact so the independent
+        # visible/upcoming enrichment paths can still run safely.
+        overlay = overlay.reindex(columns=COLS)
         if not overlay.empty:
             # A proximity fallback is contextual guidance, not the reporting
             # satellite asserted by the incoming alert.
