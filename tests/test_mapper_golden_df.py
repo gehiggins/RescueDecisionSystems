@@ -170,8 +170,8 @@ def test_renderer_embeds_local_satellite_image_overlay(tmp_path):
     image_path = tmp_path / "coverage.png"
     image_path.write_bytes(
         base64.b64decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
-            "/x8AAusB9Wl2nWQAAAAASUVORK5CYII="
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4"
+            "z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
         )
     )
     output_path = tmp_path / "map.html"
@@ -212,8 +212,8 @@ def test_renderer_defaults_malformed_image_overlay_opacity(tmp_path, opacity):
     image_path = tmp_path / "coverage.png"
     image_path.write_bytes(
         base64.b64decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
-            "/x8AAusB9Wl2nWQAAAAASUVORK5CYII="
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4"
+            "z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
         )
     )
     output_path = tmp_path / "map.html"
@@ -297,8 +297,8 @@ def test_renderer_handles_malformed_image_overlay_name(
     image_path = tmp_path / "coverage.png"
     image_path.write_bytes(
         base64.b64decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
-            "/x8AAusB9Wl2nWQAAAAASUVORK5CYII="
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4"
+            "z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
         )
     )
     output_path = tmp_path / "map.html"
@@ -335,12 +335,54 @@ def test_renderer_handles_malformed_image_overlay_name(
     assert "bad" not in html
 
 
+def test_renderer_skips_unreadable_image_overlay_content(tmp_path, caplog):
+    image_path = tmp_path / "coverage.png"
+    image_path.write_bytes(b"not a valid image")
+    output_path = tmp_path / "map.html"
+    inputs = pd.DataFrame(
+        [
+            {
+                "site_id": "TEST",
+                "layer": "satellite_overlay",
+                "geometry": {
+                    "type": "ImageOverlay",
+                    "image_path": str(image_path),
+                    "bounds": [[35.0, -78.0], [40.0, -72.0]],
+                },
+                "label": "Broken coverage image",
+            },
+            {
+                "site_id": "TEST",
+                "layer": "alert_position",
+                "geometry": {"type": "Point", "coordinates": [-75.0, 37.5]},
+                "label": "Alert A",
+            },
+        ]
+    )
+
+    result = generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row={
+            "site_id": "TEST",
+            "position_lat_dd_a": 37.5,
+            "position_lon_dd_a": -75.0,
+        },
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["status"] == "ok"
+    assert "Alert A" in html
+    assert "data:image/png;base64" not in html
+    assert "Skipping unreadable satellite image overlay" in caplog.text
+
+
 def test_renderer_skips_image_overlay_with_reversed_bounds(tmp_path):
     image_path = tmp_path / "coverage.png"
     image_path.write_bytes(
         base64.b64decode(
-            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
-            "/x8AAusB9Wl2nWQAAAAASUVORK5CYII="
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4"
+            "z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
         )
     )
     output_path = tmp_path / "map.html"
