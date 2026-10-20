@@ -323,6 +323,27 @@ def test_map_generation_rejects_site_id_path_traversal(tmp_path):
     assert not (tmp_path / "outside").exists()
 
 
+def test_map_generation_rejects_overlong_site_id(monkeypatch, tmp_path):
+    application = create_app(
+        {"TESTING": True, "RDS_MAPS_DIR": str(tmp_path / "maps")}
+    )
+    renderer_called = False
+
+    def generate_map(_alert_row, _output_path):
+        nonlocal renderer_called
+        renderer_called = True
+
+    monkeypatch.setattr("flask_app.app.routes.generate_gis_map", generate_map)
+
+    response = application.test_client().get(
+        f"/generate_gis_map/37.5/-75.5/{'A' * 81}"
+    )
+
+    assert response.status_code == 400
+    assert renderer_called is False
+    assert not (tmp_path / "maps").exists()
+
+
 def test_direct_map_generation_returns_json_when_renderer_raises(
     monkeypatch, caplog, tmp_path
 ):

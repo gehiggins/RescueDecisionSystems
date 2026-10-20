@@ -24,6 +24,8 @@ from .pipeline_controller import process_sarsat_alert as run_alert_pipeline
 
 main_bp = Blueprint("main", __name__)
 
+_MAX_MAP_SITE_ID_CHARS = 80
+
 
 def _json_compatible(value):
     """Convert pandas/NumPy scalar values returned by the parser to JSON types."""
@@ -43,11 +45,15 @@ def _serialize_parsed_alert(parsed):
 
 
 def _map_path(site_id):
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", str(site_id)):
+    normalized_site_id = str(site_id)
+    if (
+        len(normalized_site_id) > _MAX_MAP_SITE_ID_CHARS
+        or not re.fullmatch(r"[A-Za-z0-9_-]+", normalized_site_id)
+    ):
         abort(400, description="Invalid site ID")
     maps_dir = Path(current_app.config["RDS_MAPS_DIR"])
     maps_dir.mkdir(parents=True, exist_ok=True)
-    output_path = maps_dir / f"gis_map_{site_id}.html"
+    output_path = maps_dir / f"gis_map_{normalized_site_id}.html"
     if output_path.is_symlink():
         raise ValueError("Map output file cannot be a symbolic link")
     return output_path
