@@ -158,6 +158,28 @@ def _mark_provider_unavailable() -> None:
         time.monotonic() + _TLE_PROVIDER_BACKOFF_SECONDS
     )
 
+
+def _tle_catalog_token(line: str, expected_prefix: str) -> str | None:
+    """Extract a TLE catalog token only from the expected numbered line."""
+    if not isinstance(line, str) or not line.startswith(expected_prefix):
+        return None
+    token = line[2:7].strip()
+    return token if token and token.isalnum() else None
+
+
+def _valid_tle_pair(line1: str, line2: str, expected_norad_id=None) -> bool:
+    """Require matching line numbers/catalog fields before caching provider data."""
+    catalog1 = _tle_catalog_token(line1, "1 ")
+    catalog2 = _tle_catalog_token(line2, "2 ")
+    if catalog1 is None or catalog1 != catalog2:
+        return False
+    if expected_norad_id is None:
+        return True
+    try:
+        return int(catalog1) == int(expected_norad_id)
+    except (TypeError, ValueError):
+        return False
+
 def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
     """
     Fetch TLEs for a list of satellites by norad_id or by group (constellation).
@@ -186,7 +208,8 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
     # E1. LEO/GEO by NORAD (preferred)
     for norad_id in ids:
         if norad_id in _TLE_CACHE_CATNR:
-            tle = _TLE_CACHE_CATNR[norad_id]
+            # Cache-hit metadata belongs to this response, not the stored record.
+            tle = _TLE_CACHE_CATNR[norad_id].copy()
             tle["cache_hit"] = True
             rows.append(tle)
             continue
@@ -201,7 +224,9 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
             )
             if resp.status_code == 200:
                 lines = [l.strip() for l in resp.text.splitlines() if l.strip()]
-                if len(lines) >= 3:
+                if len(lines) >= 3 and _valid_tle_pair(
+                    lines[1], lines[2], expected_norad_id=norad_id
+                ):
                     tle = {
                         "name": lines[0],
                         "norad_id": norad_id,
@@ -225,6 +250,10 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
                         pass
                     _TLE_CACHE_CATNR[norad_id] = tle
                     rows.append(tle)
+                elif lines:
+                    LOG.warning(
+                        "Ignoring malformed TLE response for NORAD %s", norad_id
+                    )
             elif resp.status_code == 429 or resp.status_code >= 500:
                 _mark_provider_unavailable()
                 LOG.warning(
@@ -264,6 +293,11 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
                     name = lines[i]
                     tle1 = lines[i+1]
                     tle2 = lines[i+2]
+                    if not _valid_tle_pair(tle1, tle2):
+                        LOG.warning(
+                            "Ignoring malformed TLE record in group %s", group
+                        )
+                        continue
                     norad_id = None
                     try:
                         norad_id = int(tle1[2:7])
