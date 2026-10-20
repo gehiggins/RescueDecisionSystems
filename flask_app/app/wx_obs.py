@@ -112,6 +112,7 @@ _WX_OBS_COLS = [
 
 _DEFAULT_RADIUS_KM = 50.0
 _DEFAULT_MAX_STATIONS = 5
+_MAX_STATIONS = 100
 
 
 def _normalize_search_parameters(radius_km, max_stations):
@@ -156,7 +157,9 @@ def _normalize_search_parameters(radius_km, max_stations):
             )
             normalized_max_stations = _DEFAULT_MAX_STATIONS
         else:
-            normalized_max_stations = int(numeric_max_stations)
+            normalized_max_stations = min(
+                int(numeric_max_stations), _MAX_STATIONS
+            )
 
     return normalized_radius, normalized_max_stations
 
