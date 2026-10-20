@@ -1,5 +1,6 @@
-import requests
 import json
+
+import requests
 
 # NOAA API requires a User-Agent
 HEADERS = {
@@ -68,5 +69,10 @@ def fetch_weather_stations(lat, lon):
     except requests.exceptions.RequestException as e:
         print(f"❌ ERROR: Request failed - {e}")
 
-# ✅ Run the test for an offshore location
-fetch_weather_stations(latitude, longitude)
+def main():
+    """Run the live NOAA diagnostic only when explicitly requested."""
+    fetch_weather_stations(latitude, longitude)
+
+
+if __name__ == "__main__":
+    main()
