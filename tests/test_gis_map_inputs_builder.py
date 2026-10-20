@@ -140,6 +140,29 @@ def test_satellite_overlay_uses_alert_detection_time(monkeypatch):
     assert captured["alert_time_utc"] == pd.Timestamp("2025-03-02T13:32:17Z")
 
 
+@pytest.mark.parametrize(
+    "missing_time",
+    [None, pd.NaT, "not-a-time", 12345, ["2025-03-02T13:32:17Z"]],
+)
+def test_satellite_overlay_is_skipped_without_valid_alert_time(
+    monkeypatch, missing_time
+):
+    sat_pipeline = importlib.import_module("app.sat_pipeline")
+
+    def unexpected_satellite_fetch(*_args, **_kwargs):
+        pytest.fail("satellite pipeline ran without a valid alert timestamp")
+
+    monkeypatch.setattr(
+        sat_pipeline, "build_sat_overlay_df", unexpected_satellite_fetch
+    )
+
+    result = build_gis_map_inputs_df(
+        make_positions_df(), alert_time_utc=missing_time, op_tz_env="UTC"
+    )
+
+    assert "satellite_overlay" not in result["layer"].tolist()
+
+
 def test_invalid_map_coordinates_and_radii_are_removed():
     positions_df = pd.DataFrame(
         [

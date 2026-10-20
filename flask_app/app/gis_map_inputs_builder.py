@@ -526,9 +526,18 @@ def build_gis_map_inputs_df(
         # Build minimal alert_df for SAT pipeline from available context
         _lat = positions_df.iloc[0]['lat_dd'] if positions_df is not None and not positions_df.empty else None
         _lon = positions_df.iloc[0]['lon_dd'] if positions_df is not None and not positions_df.empty else None
-        _alert_time = pd.to_datetime(alert_time_utc, utc=True, errors="coerce")
-        if pd.isna(_alert_time):
-            _alert_time = pd.Timestamp.now(tz="UTC")
+        # Satellite geometry is time-dependent. Never substitute the current
+        # time for a missing or malformed alert timestamp because that would
+        # present a plausible-looking position for the wrong instant.
+        if not pd.api.types.is_scalar(alert_time_utc) or isinstance(
+            alert_time_utc, (bool, int, float, np.number)
+        ):
+            _alert_time = pd.NaT
+        else:
+            _alert_time = pd.to_datetime(
+                alert_time_utc, utc=True, errors="coerce"
+            )
+        _has_alert_time = not pd.isna(_alert_time)
         _alert = pd.DataFrame([{
             'alert_id': site_id,
             'alert_time_utc': _alert_time,
@@ -548,7 +557,7 @@ def build_gis_map_inputs_df(
         # A satellite position is only meaningful for a known alert time. It
         # also keeps this transform offline for callers that are only building
         # provided position/weather/station layers.
-        if alert_time_utc is None:
+        if not _has_alert_time:
             _sat_df = pd.DataFrame()
         else:
             _sat_df = build_sat_overlay_df(_alert,  # [updated]
