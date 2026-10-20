@@ -688,6 +688,7 @@ def generate_gis_map_html_from_dfs(
         fg_foot = folium.FeatureGroup(name="Satellite footprints", show=True)
         fg_track = folium.FeatureGroup(name="Satellite tracks", show=True)
         fg_next  = folium.FeatureGroup(name="Next-pass markers", show=True)
+        fg_image = folium.FeatureGroup(name="Satellite imagery", show=True)
 
         fg_sat_leo = folium.FeatureGroup(name="Satellites • LEO", show=True)  # [updated]
         fg_sat_meo = folium.FeatureGroup(name="Satellites • MEO", show=True)  # [updated]
@@ -709,8 +710,34 @@ def generate_gis_map_html_from_dfs(
                 continue
             gtype = geom.get("type")
 
+            # Georeferenced local image produced by the satellite pipeline.
+            if gtype == "ImageOverlay":
+                bounds = geom.get("bounds")
+                image_path = geom.get("image_path")
+                try:
+                    opacity = float(geom.get("opacity", 0.6))
+                    valid_bounds = (
+                        len(bounds) == 2
+                        and all(len(point) == 2 for point in bounds)
+                        and all(
+                            math.isfinite(float(value))
+                            for point in bounds
+                            for value in point
+                        )
+                    )
+                except (TypeError, ValueError):
+                    valid_bounds = False
+                    opacity = 0.6
+                if valid_bounds and image_path and Path(image_path).is_file():
+                    folium.raster_layers.ImageOverlay(
+                        image=str(image_path),
+                        bounds=bounds,
+                        opacity=min(max(opacity, 0.0), 1.0),
+                        name=str(geom.get("name") or sat.get("label") or "Satellite overlay"),
+                    ).add_to(fg_image)
+
             # Circle (footprint)
-            if gtype == "Circle":
+            elif gtype == "Circle":
                 center = geom.get("center")
                 rad_m  = geom.get("radius_m")
                 if (isinstance(center, (list, tuple)) and len(center) == 2
@@ -784,7 +811,7 @@ def generate_gis_map_html_from_dfs(
                             else (fg_sat_meo if "meo" in str(sat.get("sat_type") or "").lower() else fg_sat_geo)
                         )  # [updated]
 
-        fg_foot.add_to(m); fg_track.add_to(m); fg_next.add_to(m)
+        fg_foot.add_to(m); fg_track.add_to(m); fg_next.add_to(m); fg_image.add_to(m)
 
         from folium import LayerControl
         LayerControl(collapsed=True).add_to(m)
