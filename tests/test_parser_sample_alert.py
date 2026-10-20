@@ -20,6 +20,22 @@ def test_sample_alert_parses_exact_beacon_and_detection_time():
     assert parsed["detect_time"] == pd.Timestamp("2025-03-02T13:32:17Z")
 
 
+def test_parser_retains_two_positions_when_they_share_one_line():
+    message = (
+        "BEACON ID: ABC123 SITE ID: 42\n"
+        "POSITIONS: A 37 45.600N 075 30.200W "
+        "B 38 15.300N 070 12.500W"
+    )
+
+    parsed = parse_sarsat_message(message, pre_scan_for_coordinates(message))
+
+    assert parsed is not None
+    assert parsed["latitude_a"] == pytest.approx(37.76)
+    assert parsed["longitude_a"] == pytest.approx(-75.50333333333333)
+    assert parsed["latitude_b"] == pytest.approx(38.255)
+    assert parsed["longitude_b"] == pytest.approx(-70.20833333333333)
+
+
 def _coordinate_scan(**metadata):
     row = {
         "is_valid": True,
