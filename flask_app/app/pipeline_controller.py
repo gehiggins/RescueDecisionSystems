@@ -72,6 +72,52 @@ def _safe_map_site_id(value):
     return normalized[:_MAP_ID_MAX_CHARS] or "unknown"
 
 
+def _present_scalar(value):
+    """Return a non-missing scalar without evaluating ``pd.NA`` as boolean."""
+    if value is None or not pd.api.types.is_scalar(value):
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+def _first_present(*values):
+    for value in values:
+        normalized = _present_scalar(value)
+        if normalized is not None:
+            return normalized
+    return None
+
+
+def _coerce_position(lat, lon):
+    """Return a finite in-range latitude/longitude pair, or ``None``."""
+    try:
+        lat, lon = float(lat), float(lon)
+    except (TypeError, ValueError):
+        return None
+    if (
+        not math.isfinite(lat)
+        or not math.isfinite(lon)
+        or not -90.0 <= lat <= 90.0
+        or not -180.0 <= lon <= 180.0
+    ):
+        return None
+    return lat, lon
+
+
+def _coerce_range_ring(value):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return value if math.isfinite(value) and value > 0 else 0.0
+
+
 def _get_existing_alerts_for_sequence():
     """Return prior alert sequence data when a database is configured.
 
@@ -316,12 +362,13 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
         site_id_safe = None
         fallback_reason = None
         # Priority logic for site_id_safe
-        if site_id_raw and str(site_id_raw).lower() not in ["none", "nan", ""]:
-            site_id_safe = str(site_id_raw)
-        elif alert_row.get('beacon_id'):
+        site_id_value = _present_scalar(site_id_raw)
+        if site_id_value is not None and str(site_id_value).strip().lower() not in ["none", "nan"]:
+            site_id_safe = str(site_id_value)
+        elif _present_scalar(alert_row.get('beacon_id')) is not None:
             site_id_safe = f"BEACON_{str(alert_row.get('beacon_id'))}"
             fallback_reason = "site_id missing; using beacon_id"
-        elif alert_row.get('alert_sequence_number'):
+        elif _present_scalar(alert_row.get('alert_sequence_number')) is not None:
             try:
                 site_id_safe = f"ALERT_{int(alert_row.get('alert_sequence_number'))}"
                 fallback_reason = "site_id missing; using alert_sequence_number"
@@ -343,31 +390,49 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
         # Build ephemeral positions_df (A row, and B row if present)
         rows = []
         # A
-        lat_a = alert_row.get('position_lat_dd_a', alert_row.get('latitude_a'))
-        lon_a = alert_row.get('position_lon_dd_a', alert_row.get('longitude_a'))
+        lat_a = _first_present(
+            alert_row.get('position_lat_dd_a'), alert_row.get('latitude_a')
+        )
+        lon_a = _first_present(
+            alert_row.get('position_lon_dd_a'), alert_row.get('longitude_a')
+        )
         rr_a  = alert_row.get('range_ring_meters_a')
-        if pd.notna(lat_a) and pd.notna(lon_a):
+        position_a = _coerce_position(lat_a, lon_a)
+        if position_a is not None:
+            lat_a, lon_a = position_a
             rows.append({
                 'site_id': site_id_safe, 'role': 'A',
-                'lat_dd': float(lat_a), 'lon_dd': float(lon_a),
-                'range_ring_meters': float(rr_a) if pd.notna(rr_a) else 0.0,
+                'lat_dd': lat_a, 'lon_dd': lon_a,
+                'range_ring_meters': _coerce_range_ring(rr_a),
                 'position_status': alert_row.get('position_status_a'),
-                'method': alert_row.get('position_method') or alert_row.get('position_method_a'),
+                'method': _first_present(
+                    alert_row.get('position_method'),
+                    alert_row.get('position_method_a'),
+                ),
                 'range_ring_source': alert_row.get('range_ring_source_a'),
                 'ee_nm': alert_row.get('expected_error_nm')
             })
 
         # B (optional)
-        lat_b = alert_row.get('position_lat_dd_b', alert_row.get('latitude_b'))
-        lon_b = alert_row.get('position_lon_dd_b', alert_row.get('longitude_b'))
+        lat_b = _first_present(
+            alert_row.get('position_lat_dd_b'), alert_row.get('latitude_b')
+        )
+        lon_b = _first_present(
+            alert_row.get('position_lon_dd_b'), alert_row.get('longitude_b')
+        )
         rr_b  = alert_row.get('range_ring_meters_b')
-        if pd.notna(lat_b) and pd.notna(lon_b):
+        position_b = _coerce_position(lat_b, lon_b)
+        if position_b is not None:
+            lat_b, lon_b = position_b
             rows.append({
                 'site_id': site_id_safe, 'role': 'B',
-                'lat_dd': float(lat_b), 'lon_dd': float(lon_b),
-                'range_ring_meters': float(rr_b) if pd.notna(rr_b) else 0.0,
+                'lat_dd': lat_b, 'lon_dd': lon_b,
+                'range_ring_meters': _coerce_range_ring(rr_b),
                 'position_status': alert_row.get('position_status_b'),
-                'method': alert_row.get('position_method') or alert_row.get('position_method_b'),
+                'method': _first_present(
+                    alert_row.get('position_method'),
+                    alert_row.get('position_method_b'),
+                ),
                 'range_ring_source': alert_row.get('range_ring_source_b'),
                 'ee_nm': alert_row.get('expected_error_nm')
             })
@@ -436,13 +501,18 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
 
         # Existing stations skeleton (ID/Name/Type/lat/lon)
         st_rows = []
-        if df_wx_obs is not None and not df_wx_obs.empty:
-            ms = df_wx_obs[df_wx_obs.get("source_type") == "station"]
+        if isinstance(df_wx_obs, pd.DataFrame) and not df_wx_obs.empty:
+            if "source_type" in df_wx_obs.columns:
+                ms = df_wx_obs[df_wx_obs["source_type"] == "station"]
+            else:
+                ms = df_wx_obs
             for _, s in ms.iterrows():
                 st_rows.append({
-                    "station_id": s.get("station_id") or s.get("source_id") or s.get("id"),
+                    "station_id": _first_present(
+                        s.get("station_id"), s.get("source_id"), s.get("id")
+                    ),
                     "name": s.get("name"),
-                    "type": s.get("provider") or "station",
+                    "type": _first_present(s.get("provider")) or "station",
                     "lat_dd": s.get("lat"),
                     "lon_dd": s.get("lon"),
                 })
