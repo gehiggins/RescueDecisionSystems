@@ -204,7 +204,7 @@ def build_gis_map_inputs_df(
             temp_C = w.get("temp_C")
             # Weather observations may arrive in long form (obs_type/value) or
             # wide form (one measurement per column); normalize both here.
-            obs_type = w.get("obs_type")
+            obs_type = str(_coalesce(w.get("obs_type"), default=""))
             obs_value = w.get("obs_value")
             if _is_missing(wave_m) and obs_type == "wave_height_m":
                 wave_m = obs_value
@@ -388,8 +388,11 @@ def build_gis_map_inputs_df(
             sat_items = list(sat_overlays)
 
         for o in sat_items:
+            if not isinstance(o, dict):
+                LOG.warning("Skipping malformed satellite overlay entry: %r", o)
+                continue
             # ImageOverlay passthrough
-            if o.get("type") == "ImageOverlay" and o.get("bounds"):
+            if o.get("type") == "ImageOverlay" and not _is_missing(o.get("bounds")):
                 rows.append({
                     "site_id": positions_df["site_id"].iloc[0] if positions_df is not None and not positions_df.empty else None,
                     "layer": "satellite_overlay",
@@ -408,7 +411,13 @@ def build_gis_map_inputs_df(
                 continue
 
             # Circle footprint
-            if o.get("type") == "Circle" and o.get("center") and o.get("radius_m"):
+            center = o.get("center")
+            if (
+                o.get("type") == "Circle"
+                and isinstance(center, (list, tuple))
+                and len(center) == 2
+                and not _is_missing(o.get("radius_m"))
+            ):
                 rows.append({
                     "site_id": positions_df["site_id"].iloc[0] if positions_df is not None and not positions_df.empty else None,
                     "layer": "satellite_overlay",
@@ -423,12 +432,17 @@ def build_gis_map_inputs_df(
                     "label": o.get("label",""),
                     "popup_html": o.get("popup_html"),
                     "icon_key": o.get("icon_key"),                      # [updated]
-                    "sat_type": (str(o.get("sat_type") or "")).lower()  # [updated]
+                    "sat_type": str(_coalesce(o.get("sat_type"), default="")).lower()  # [updated]
                 })
                 continue
 
             # Track line
-            if o.get("type") == "LineString" and o.get("coordinates"):
+            coordinates = o.get("coordinates")
+            if (
+                o.get("type") == "LineString"
+                and isinstance(coordinates, (list, tuple))
+                and len(coordinates) > 1
+            ):
                 rows.append({
                     "site_id": positions_df["site_id"].iloc[0] if positions_df is not None and not positions_df.empty else None,
                     "layer": "satellite_overlay",
@@ -442,12 +456,17 @@ def build_gis_map_inputs_df(
                     "label": o.get("label",""),
                     "popup_html": o.get("popup_html"),
                     "icon_key": o.get("icon_key"),                      # [updated]
-                    "sat_type": (str(o.get("sat_type") or "")).lower()  # [updated]
+                    "sat_type": str(_coalesce(o.get("sat_type"), default="")).lower()  # [updated]
                 })
                 continue
 
             # Next-pass marker
-            if o.get("type") == "Point" and o.get("coordinates"):
+            coordinates = o.get("coordinates")
+            if (
+                o.get("type") == "Point"
+                and isinstance(coordinates, (list, tuple))
+                and len(coordinates) == 2
+            ):
                 rows.append({
                     "site_id": positions_df["site_id"].iloc[0] if positions_df is not None and not positions_df.empty else None,
                     "layer": "satellite_overlay",
@@ -457,7 +476,7 @@ def build_gis_map_inputs_df(
                     "label": o.get("label","Next pass"),
                     "popup_html": o.get("popup_html"),
                     "icon_key": o.get("icon_key"),                      # [updated]
-                    "sat_type": (str(o.get("sat_type") or "")).lower()  # [updated]
+                    "sat_type": str(_coalesce(o.get("sat_type"), default="")).lower()  # [updated]
                 })
 
     # --- Satellite overlay (footprint + short track + optional next-pass) ---
