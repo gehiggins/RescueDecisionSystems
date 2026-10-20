@@ -659,14 +659,29 @@ def generate_gis_map_html_from_dfs(
         out_path = str(Path(out_dir) / f"gis_map_{site_id}.html")
 
     # --- Center/Meta ---
-    lat0 = alert_row.get("position_lat_dd_a")
-    lon0 = alert_row.get("position_lon_dd_a")
-    # Zero is a valid coordinate, so fall back only for genuinely missing data.
-    if lat0 is None or pd.isna(lat0):
-        lat0 = alert_row.get("alert_lat_dd")
-    if lon0 is None or pd.isna(lon0):
-        lon0 = alert_row.get("alert_lon_dd")
-    center = _coerce_lon_lat([lon0, lat0])
+    # Accept both normalized fields and the legacy names emitted by the active
+    # SARSAT parser. Evaluate longitude/latitude as a pair so values from
+    # different candidate positions are never combined.
+    center = None
+    for lon_key, lat_key in (
+        ("position_lon_dd_a", "position_lat_dd_a"),
+        ("longitude_a", "latitude_a"),
+        ("alert_lon_dd", "alert_lat_dd"),
+        ("position_lon_dd_b", "position_lat_dd_b"),
+        ("longitude_b", "latitude_b"),
+    ):
+        center = _coerce_lon_lat([alert_row.get(lon_key), alert_row.get(lat_key)])
+        if center is not None:
+            break
+    if center is None:
+        alert_positions = gis_map_inputs_df[
+            gis_map_inputs_df["layer"] == "alert_position"
+        ]
+        for geometry in alert_positions.get("geometry", pd.Series(dtype="object")):
+            if isinstance(geometry, dict):
+                center = _coerce_lon_lat(geometry.get("coordinates"))
+            if center is not None:
+                break
     if center is None:
         lat0, lon0 = 38.255, -70.208333  # safe default
     else:
