@@ -24,6 +24,20 @@ from app.utils_weather import dewpoint_magnus_c
 
 LOG = logging.getLogger(__name__)
 
+
+def _numeric_at(mapping, key, index):
+    """Return one finite numeric provider value, or NaN when unavailable."""
+    if not isinstance(mapping, dict):
+        return np.nan
+    values = mapping.get(key)
+    if not isinstance(values, (list, tuple, np.ndarray, pd.Series)):
+        return np.nan
+    try:
+        value = float(values[index])
+    except (IndexError, TypeError, ValueError):
+        return np.nan
+    return value if np.isfinite(value) else np.nan
+
 def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_marine: bool = True) -> pd.DataFrame:
     start_utc = _to_utc(start_utc)
     end_utc = _to_utc(end_utc)
@@ -43,6 +57,10 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
     ]
     out = pd.DataFrame(columns=cols)
 
+    if start_utc is None or end_utc is None:
+        LOG.warning("Open-Meteo fetch skipped because the UTC window is invalid")
+        return out
+
     wx_params = {
         "latitude": lat, "longitude": lon,
         "hourly": ",".join([
@@ -61,12 +79,18 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
         r = requests.get("https://api.open-meteo.com/v1/forecast", params=wx_params, timeout=20)
         r.raise_for_status()
         j = r.json()
+        if not isinstance(j, dict):
+            j = {}
     except Exception as e:
         LOG.warning(f"Open-Meteo atmos fetch failed @({lat:.4f},{lon:.4f}): {e}")
         j = {}
 
     hourly = j.get("hourly", {})
+    if not isinstance(hourly, dict):
+        hourly = {}
     times = hourly.get("time") or []
+    if not isinstance(times, (list, tuple)):
+        times = []
     if not times:
         return out
     marine = {}
@@ -81,12 +105,26 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
                 "end_date": end_utc.strftime("%Y-%m-%d")
             }, timeout=20)
             rm.raise_for_status()
-            marine = rm.json().get("hourly", {})
-            m_times = [ _to_utc(t) for t in (marine.get("time") or []) ]
-            m_h = marine.get("wave_height", [])
-            m_p = marine.get("wave_period", [])
-            m_d = marine.get("wave_direction", [])
-            m_map = { m_times[i]: (m_h[i], m_p[i], m_d[i]) for i in range(len(m_times)) }
+            marine_payload = rm.json()
+            marine = (
+                marine_payload.get("hourly", {})
+                if isinstance(marine_payload, dict)
+                else {}
+            )
+            if not isinstance(marine, dict):
+                marine = {}
+            raw_m_times = marine.get("time") or []
+            if not isinstance(raw_m_times, (list, tuple)):
+                raw_m_times = []
+            for i, raw_time in enumerate(raw_m_times):
+                marine_time = _to_utc(raw_time)
+                if marine_time is None:
+                    continue
+                m_map[marine_time] = (
+                    _numeric_at(marine, "wave_height", i),
+                    _numeric_at(marine, "wave_period", i),
+                    _numeric_at(marine, "wave_direction", i),
+                )
         except Exception as e:
             LOG.info(f"Open-Meteo marine unavailable @({lat:.4f},{lon:.4f}): {e}")
             marine = {}
@@ -95,10 +133,12 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
     rows = []
     for i, t in enumerate(times):
         ts = _to_utc(t)
+        if ts is None:
+            continue
         if ts < start_utc or ts > end_utc:
             continue
-        temp_c = hourly.get("temperature_2m",[np.nan]*len(times))[i]
-        rh = hourly.get("relative_humidity_2m",[np.nan]*len(times))[i]
+        temp_c = _numeric_at(hourly, "temperature_2m", i)
+        rh = _numeric_at(hourly, "relative_humidity_2m", i)
         wh, wp, wd = m_map.get(ts, (np.nan, np.nan, np.nan))
         rows.append({
             "source_id": f"om:{lat:.4f},{lon:.4f}",
@@ -110,13 +150,13 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
             "temp_c": temp_c,
             "dewpoint_c": dewpoint_magnus_c(temp_c, rh),
             "rh_pct": rh,
-            "wind_ms": hourly.get("wind_speed_10m",[np.nan]*len(times))[i],
-            "wind_dir_deg": hourly.get("wind_direction_10m",[np.nan]*len(times))[i],
-            "wind_gust_ms": hourly.get("wind_gusts_10m",[np.nan]*len(times))[i],
-            "pressure_hpa": hourly.get("pressure_msl",[np.nan]*len(times))[i],
-            "precip_mmhr": hourly.get("precipitation",[np.nan]*len(times))[i],
+            "wind_ms": _numeric_at(hourly, "wind_speed_10m", i),
+            "wind_dir_deg": _numeric_at(hourly, "wind_direction_10m", i),
+            "wind_gust_ms": _numeric_at(hourly, "wind_gusts_10m", i),
+            "pressure_hpa": _numeric_at(hourly, "pressure_msl", i),
+            "precip_mmhr": _numeric_at(hourly, "precipitation", i),
             "visibility_km": np.nan,
-            "cloud_cover_pct": hourly.get("cloud_cover",[np.nan]*len(times))[i],
+            "cloud_cover_pct": _numeric_at(hourly, "cloud_cover", i),
             "wave_height_m": wh,
             "wave_period_s": wp,
             "wave_dir_deg": wd,
