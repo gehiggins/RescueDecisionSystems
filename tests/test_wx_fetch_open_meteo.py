@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 
 from flask_app.app import wx_fetch_open_meteo
 
@@ -92,6 +93,33 @@ def test_open_meteo_rejects_invalid_time_window_without_request(monkeypatch):
         37.5,
         -75.5,
         "invalid",
+        "2026-10-20T12:00:00Z",
+        include_marine=False,
+    )
+
+    assert result.empty
+    assert "valid_utc" in result.columns
+
+
+@pytest.mark.parametrize(
+    ("latitude", "longitude"),
+    [("bad", -75.5), (91.0, -75.5), (37.5, -181.0), (float("inf"), 0.0)],
+)
+def test_open_meteo_rejects_invalid_coordinates_without_request(
+    monkeypatch, latitude, longitude
+):
+    monkeypatch.setattr(
+        wx_fetch_open_meteo.requests,
+        "get",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("provider called with invalid coordinates")
+        ),
+    )
+
+    result = wx_fetch_open_meteo.fetch_open_meteo_obs(
+        latitude,
+        longitude,
+        "2026-10-20T12:00:00Z",
         "2026-10-20T12:00:00Z",
         include_marine=False,
     )
