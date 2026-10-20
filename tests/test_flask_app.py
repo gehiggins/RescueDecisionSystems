@@ -156,6 +156,27 @@ def test_process_alert_does_not_expose_pipeline_failure(monkeypatch, caplog):
     assert "weather failed" in caplog.text
 
 
+def test_process_alert_returns_json_when_pipeline_raises(monkeypatch, caplog):
+    application = create_app({"TESTING": True})
+
+    def raise_pipeline_error(_message, maps_root):
+        raise RuntimeError("private provider detail")
+
+    monkeypatch.setattr(
+        "flask_app.app.routes.run_alert_pipeline", raise_pipeline_error
+    )
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    assert response.status_code == 500
+    assert response.is_json
+    assert response.get_json() == {"error": "Alert processing failed"}
+    assert b"private provider detail" not in response.data
+    assert "private provider detail" in caplog.text
+
+
 def test_process_alert_rejects_invalid_success_payload(monkeypatch, caplog):
     application = create_app({"TESTING": True})
     monkeypatch.setattr(
