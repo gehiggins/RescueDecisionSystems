@@ -22,6 +22,23 @@ LOG = logging.getLogger(__name__)
 
 from typing import Optional, Union, Tuple, Dict
 from datetime import datetime
+import math
+
+
+def _finite_number(value) -> Optional[float]:
+    """Return a finite float for scalar numeric input, otherwise None."""
+    if value is None:
+        return None
+    try:
+        if bool(pd.isna(value)):
+            return None
+    except (TypeError, ValueError):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
 
 def _normalize_utc_like(tzname: str | None) -> str:
     if not tzname:
@@ -72,25 +89,22 @@ def m_to_ft(x: Optional[float]) -> Optional[float]:
     """
     Convert meters to feet. Returns None if input is None or NaN.
     """
-    if x is None or (isinstance(x, float) and np.isnan(x)):
-        return None
-    return float(x) * 3.28084
+    number = _finite_number(x)
+    return None if number is None else number * 3.28084
 
 def ms_to_kt(x: Optional[float]) -> Optional[float]:
     """
     Convert meters/second to knots. Returns None if input is None or NaN.
     """
-    if x is None or (isinstance(x, float) and np.isnan(x)):
-        return None
-    return float(x) * 1.94384
+    number = _finite_number(x)
+    return None if number is None else number * 1.94384
 
 def c_to_f(x: Optional[float]) -> Optional[float]:
     """
     Convert Celsius to Fahrenheit. Returns None if input is None or NaN.
     """
-    if x is None or (isinstance(x, float) and np.isnan(x)):
-        return None
-    return float(x) * 9.0 / 5.0 + 32.0
+    number = _finite_number(x)
+    return None if number is None else number * 9.0 / 5.0 + 32.0
 
 def format_us_display(
     wave_height_m: Optional[float] = None,
@@ -103,38 +117,25 @@ def format_us_display(
     Accepts either temp_c (preferred) or temp_C (legacy, for backward compatibility).
     Only includes keys for provided (non-None, non-NaN) inputs.
     """
-    # Prefer lower-case temp_c; fall back to legacy temp_C for backward compat
-    if temp_c is None and temp_C is not None:
-        temp_c = temp_C
-
-    def _is_num(x):
-        try:
-            return x is not None and not (isinstance(x, float) and (x != x))
-        except Exception:
-            return False
-
-    feet = m_to_ft(wave_height_m) if wave_height_m is not None else None
-    knots = ms_to_kt(wind_ms) if wind_ms is not None else None
-    F = c_to_f(temp_c) if temp_c is not None else None
-
-    has_wave = _is_num(feet)
-    has_wind = _is_num(knots)
-    has_tc  = _is_num(temp_c)
-    has_tf  = _is_num(F)
+    # Prefer lower-case temp_c; fall back to legacy temp_C for backward compat.
+    temp_value = _finite_number(temp_c)
+    if temp_value is None:
+        temp_value = _finite_number(temp_C)
+    wave_value = _finite_number(wave_height_m)
+    wind_value = _finite_number(wind_ms)
+    feet = m_to_ft(wave_value)
+    knots = ms_to_kt(wind_value)
+    fahrenheit = c_to_f(temp_value)
 
     # Omit unavailable measurements so callers can distinguish "not supplied"
     # from a value that was supplied and formatted.
     out = {}
-    if has_wave:
+    if feet is not None:
         out["wave_height_display"] = f"{feet:.1f} ft"
-    if has_wind:
+    if knots is not None:
         out["wind_display"] = f"{knots:.0f} kt"
-    if has_tf and has_tc:
-        out["temp_display"] = f"{F:.0f} °F / {temp_c:.1f} °C"
-    elif has_tf:
-        out["temp_display"] = f"{F:.0f} °F"
-    elif has_tc:
-        out["temp_display"] = f"{temp_c:.1f} °C"
+    if fahrenheit is not None and temp_value is not None:
+        out["temp_display"] = f"{fahrenheit:.0f} °F / {temp_value:.1f} °C"
     return out
 
 def is_maritime(lat: float, lon: float, shore_nm: float = 5.0) -> bool:

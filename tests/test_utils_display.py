@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import pandas as pd
 from app.utils_display import (
     derive_local_tz,
     to_dual_time,
@@ -53,6 +54,16 @@ def test_format_us_display_none_inputs():
     assert out == {}
     out2 = format_us_display(wave_height_m=None, wind_ms=None, temp_C=None)
     assert out2 == {}
+
+
+@pytest.mark.parametrize("missing", [pd.NA, np.nan, float("inf"), float("-inf")])
+def test_display_conversions_omit_missing_and_non_finite_values(missing):
+    assert m_to_ft(missing) is None
+    assert ms_to_kt(missing) is None
+    assert c_to_f(missing) is None
+    assert format_us_display(
+        wave_height_m=missing, wind_ms=missing, temp_C=missing
+    ) == {}
 
 def test_is_maritime_stub():
     assert is_maritime(37.77, -122.42) is False

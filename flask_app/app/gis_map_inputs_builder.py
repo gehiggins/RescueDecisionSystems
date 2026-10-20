@@ -18,7 +18,19 @@ from app.utils_display import format_us_display, to_dual_time, derive_local_tz
 LOG = logging.getLogger(__name__)
 
 def _is_missing(v):
-    return v is None or (isinstance(v, float) and np.isnan(v))
+    if v is None:
+        return True
+    try:
+        return bool(pd.isna(v))
+    except (TypeError, ValueError):
+        return False
+
+
+def _coalesce(*values, default=None):
+    for value in values:
+        if not _is_missing(value):
+            return value
+    return default
 
 def _fmt(v, fmt=None, dash="—"):
     if _is_missing(v):
@@ -199,13 +211,14 @@ def build_gis_map_inputs_df(
             if ts_local: popup_fields.append(f"Local: {ts_local}")
             popup_fields += [f"Waves: {wave_display}", f"Wind: {wind_display}", f"Temp: {temp_display}"]
             popup_html = "<br>".join(popup_fields)
+            source_type = _coalesce(w.get("source_type"), default="")
             rows.append({
                 "site_id": site_id,
                 "layer": "weather",
                 "geom_type": "Point",
                 "geometry": {"type": "Point", "coordinates": [lon, lat]},
                 # If model/interpolated, treat as “spot”; else let renderer default
-                "icon_key": "wx_spot" if (str(w.get("source_type") or "").lower() == "model_interpolated") else "wx_station",
+                "icon_key": "wx_spot" if str(source_type).lower() == "model_interpolated" else "wx_station",
                 "ts_utc": ts_utc,
                 "ts_local": ts_local,
                 "local_tz": local_tz,
@@ -213,7 +226,7 @@ def build_gis_map_inputs_df(
                 "popup_html": popup_html,
                 "style_hint": {"weight": 2, "opacity": 0.8},
                 "source_table": "weather",
-                "source_id": w.get("station_id") or "",
+                "source_id": _coalesce(w.get("station_id"), default=""),
                 "is_maritime": maritime_flag,
                 "range_ring_meters": None,
                 "wave_height_m": wave_m,
@@ -229,14 +242,15 @@ def build_gis_map_inputs_df(
         for _, s in stations_df.iterrows():
             lat = s.get("lat_dd")
             lon = s.get("lon_dd")
-            label = s.get("name", "Station")
+            label = _coalesce(s.get("name"), default="Station")
+            station_type = _coalesce(s.get("type"), default="N/A")
             wave_display = s.get("wave_height_display", "None")
             wind_display = s.get("wind_display", "None")
             temp_display = s.get("temp_display", "None")
             popup_fields = [
                 f"<b>{label}</b>",
                 _latlon_str(lat, lon),
-                f"Type: {s.get('type','N/A')}",
+                f"Type: {station_type}",
                 f"Waves: {wave_display}",
                 f"Wind: {wind_display}",
                 f"Temp: {temp_display}"
@@ -247,7 +261,7 @@ def build_gis_map_inputs_df(
                 "layer": "station",
                 "geom_type": "Point",
                 "geometry": {"type": "Point", "coordinates": [lon, lat]},
-                "icon_key": _icon_key_for_station(s.get("type")),
+                "icon_key": _icon_key_for_station(station_type),
                 "ts_utc": None,
                 "ts_local": None,
                 "local_tz": local_tz,
@@ -255,7 +269,9 @@ def build_gis_map_inputs_df(
                 "popup_html": popup_html,
                 "style_hint": {"weight": 2, "opacity": 0.7},
                 "source_table": "stations",
-                "source_id": s.get('station_id') or s.get('source_id') or s.get('id') or "",
+                "source_id": _coalesce(
+                    s.get("station_id"), s.get("source_id"), s.get("id"), default=""
+                ),
                 "is_maritime": maritime_flag,
                 "range_ring_meters": None,
                 "wave_height_m": None,
