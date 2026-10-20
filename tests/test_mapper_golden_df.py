@@ -1,6 +1,10 @@
 # tests/test_mapper_golden_df.py
 try:
-    from app.gis_mapping import _style_bool, generate_gis_map_html_from_dfs
+    from app.gis_mapping import (
+        _satellite_orbit_class,
+        _style_bool,
+        generate_gis_map_html_from_dfs,
+    )
 except ModuleNotFoundError:
     import os, sys
     from pathlib import Path
@@ -8,11 +12,16 @@ except ModuleNotFoundError:
     flask_app_dir = repo_root / "flask_app"
     if str(flask_app_dir) not in sys.path:
         sys.path.insert(0, str(flask_app_dir))
-    from app.gis_mapping import _style_bool, generate_gis_map_html_from_dfs
+    from app.gis_mapping import (
+        _satellite_orbit_class,
+        _style_bool,
+        generate_gis_map_html_from_dfs,
+    )
 
 import pandas as pd
 import os
 import base64
+import pytest
 
 
 def test_satellite_style_boolean_normalization():
@@ -22,6 +31,22 @@ def test_satellite_style_boolean_normalization():
     assert _style_bool(0) is False
     assert _style_bool(1) is True
     assert _style_bool("unexpected", default=True) is True
+
+
+@pytest.mark.parametrize(
+    ("sat_type", "label", "expected"),
+    [
+        ("LEO", "ignored", "leo"),
+        ("MEO", "ignored", "meo"),
+        ("GEO", "ignored", "geo"),
+        (None, "MEO rescue satellite", "meo"),
+        (pd.NA, "GEO coverage", "geo"),
+        ("", "unknown satellite", "leo"),
+        ("unknown", "GEO-looking label", "leo"),
+    ],
+)
+def test_satellite_orbit_layer_classification(sat_type, label, expected):
+    assert _satellite_orbit_class(sat_type, label) == expected
 
 def test_golden_gis_map_inputs_df():
     df = pd.DataFrame([
