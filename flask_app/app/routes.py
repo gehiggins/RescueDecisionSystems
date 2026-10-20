@@ -142,6 +142,11 @@ def process_alert():
                 "Alert pipeline returned a map outside RDS_MAPS_DIR: %s", map_path
             )
             return jsonify({"error": "Alert processing failed"}), 500
+        if not map_path.is_file():
+            current_app.logger.error(
+                "Alert pipeline did not create its reported map: %s", map_path
+            )
+            return jsonify({"error": "Alert processing failed"}), 500
         map_url = url_for(
             "main.serve_map", filename=relative_map_path.as_posix()
         )
