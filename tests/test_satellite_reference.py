@@ -179,3 +179,31 @@ def test_tle_backoff_keeps_cached_satellites_available(monkeypatch):
     assert len(snapshot) == 1
     assert snapshot.iloc[0]["norad_id"] == 25338
     assert bool(snapshot.iloc[0]["cache_hit"]) is True
+
+
+@pytest.mark.parametrize("group_name", ["galileo", "glonass", "beidou"])
+def test_tle_resolver_accepts_explicit_group_names(monkeypatch, group_name):
+    calls = []
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_CATNR", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_GROUP", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_PROVIDER_UNAVAILABLE_UNTIL", 0.0)
+
+    class Response:
+        status_code = 200
+        text = (
+            "TEST SATELLITE\n"
+            "1 43055U 17079A   26293.00000000  .00000000  00000-0  00000-0 0  9999\n"
+            "2 43055  56.0000 100.0000 0001000  10.0000 350.0000  2.00000000    00\n"
+        )
+
+    def fake_get(url, **_kwargs):
+        calls.append(url)
+        return Response()
+
+    monkeypatch.setattr(sat_fetch_tle.requests, "get", fake_get)
+
+    snapshot = sat_fetch_tle.load_tle_snapshot([group_name])
+
+    assert len(snapshot) == 1
+    assert snapshot.iloc[0]["lookup_method"] == "group"
+    assert f"GROUP={group_name.upper()}" in calls[0]
