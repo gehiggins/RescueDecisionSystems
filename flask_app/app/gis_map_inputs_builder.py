@@ -349,19 +349,32 @@ def build_gis_map_inputs_df(
                 # Track (optional)
                 tc = r.get("track_coords")
                 if isinstance(tc, (list, tuple)) and len(tc) > 1:
-                    sat_items.append({
-                        "type": "LineString",
-                        "coordinates": [[float(lon), float(lat)] for lon, lat in tc if pd.notna(lon) and pd.notna(lat)],
-                        "label": f"{label} – track",
-                        "style": {"color": "#0b84f3", "weight": 1, "opacity": 0.6, "dashArray": "2,6"},
-                        "sat_type": sat_type,  # [updated]
-                    })
+                    clean_track = []
+                    for point in tc:
+                        try:
+                            lon, lat = point
+                        except (TypeError, ValueError):
+                            continue
+                        if _valid_coordinate_pair(lon, lat):
+                            clean_track.append([float(lon), float(lat)])
+                    if len(clean_track) > 1:
+                        sat_items.append({
+                            "type": "LineString",
+                            "coordinates": clean_track,
+                            "label": f"{label} – track",
+                            "style": {"color": "#0b84f3", "weight": 1, "opacity": 0.6, "dashArray": "2,6"},
+                            "sat_type": sat_type,  # [updated]
+                        })
                 # Next-pass marker (optional)
                 npm = r.get("next_pass_marker")
                 if not isinstance(npm, dict):
                     npm = {}
                 coords = npm.get("coordinates")
-                if isinstance(coords, (list, tuple)) and len(coords) == 2 and all(pd.notna(v) for v in coords):
+                if (
+                    isinstance(coords, (list, tuple))
+                    and len(coords) == 2
+                    and _valid_coordinate_pair(coords[0], coords[1])
+                ):
                     sat_items.append({
                         "type": "Point",
                         "coordinates": [float(coords[0]), float(coords[1])],
@@ -533,7 +546,7 @@ def build_gis_map_inputs_df(
                     for pt in _track:
                         try:
                             lon, lat = pt  # stored as [lon, lat]
-                            if pd.notna(lon) and pd.notna(lat):
+                            if _valid_coordinate_pair(lon, lat):
                                 _clean.append((float(lon), float(lat)))
                         except Exception:
                             continue
@@ -559,7 +572,11 @@ def build_gis_map_inputs_df(
                 if not isinstance(npm, dict):
                     npm = {}
                 coords = npm.get("coordinates")
-                if isinstance(coords, (list, tuple)) and len(coords) == 2 and all(pd.notna(v) for v in coords):
+                if (
+                    isinstance(coords, (list, tuple))
+                    and len(coords) == 2
+                    and _valid_coordinate_pair(coords[0], coords[1])
+                ):
                     _sat_type = sat_type
                     _icon_key = "sat_geo" if "geo" in _sat_type else ("sat_meo" if "meo" in _sat_type else "sat_leo")
                     rows.append({
