@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `7eb43f3c1b557d5720def4024268286a59f09083`
+Baseline: `main` commit `9d529d335d59b143b1b3ebbc8c64fbf69397e35e`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -115,11 +115,25 @@ absent instead of aborting map generation. Invalid A/B and direct provider
 reference coordinates are rejected independently, while valid targets
 continue through the weather pipeline.
 
+Open-Meteo keeps usable timestamp rows when individual provider arrays are
+short or malformed. Meteostat's documented km/h wind and gust values are
+converted to the shared m/s schema, invalid station metadata is filtered per
+row, and valid stations remain available. Invalid provider time windows are
+rejected before network lookup. Shared weather calculations accept finite
+scalar numeric strings and reject malformed, array-like, and non-finite
+values.
+
 Satellite context enrichment isolates visible-satellite, upcoming-pass, and
 nearest-satellite failures. Empty provider results preserve the overlay schema;
 incomplete satellite metadata does not discard valid geometry. Satellite
 subpoints can render without a footprint radius, and malformed track vertices
-or next-pass coordinates are removed individually.
+or next-pass coordinates are removed individually. Missing, array-like, or
+malformed alert timestamps return an empty satellite overlay before reference
+or TLE-provider work begins.
+
+Coordinate source spans identify the exact matched DMS or decimal-degree token
+pair and preserve offsets across LF, CRLF, and CR line endings. Coordinate
+interpretation rules themselves were not changed by that maintenance.
 
 Map inputs accept only finite, in-range coordinates and positive finite range
 rings. Numeric range-ring text is normalized; malformed radii are omitted
@@ -143,7 +157,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 239 passed; 2 live tests deselected.
+- Default offline suite: 254 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
