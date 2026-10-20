@@ -13,23 +13,23 @@
 from app.setup_imports import *  # logging, pandas as pd, etc.
 from app.health_wx import run_wx_health_check
 
-def _get_env_float(name: str, default: float) -> float:
-    try:
-        return float(os.environ.get(name, default))
-    except Exception:
-        return default
+
+def _health_parameters_from_env():
+    """Read raw health settings; the health check performs safe normalization."""
+    return {
+        "lat": os.environ.get("RDS_HEALTH_LAT", "47.6062"),
+        "lon": os.environ.get("RDS_HEALTH_LON", "-122.3321"),
+        "hours": os.environ.get("RDS_HEALTH_HOURS", "6"),
+        "radius_km": os.environ.get("RDS_HEALTH_RADIUS_KM", "75"),
+        "max_stations": os.environ.get("RDS_HEALTH_MAX_STATIONS", "5"),
+        "include_marine": os.environ.get("RDS_HEALTH_INCLUDE_MARINE", "1")
+        .strip()
+        .lower()
+        not in ("0", "false", "no"),
+    }
 
 if __name__ == "__main__":
-    # Defaults: Seattle grid
-    lat = _get_env_float("RDS_HEALTH_LAT", 47.6062)
-    lon = _get_env_float("RDS_HEALTH_LON", -122.3321)
-    hours = int(os.environ.get("RDS_HEALTH_HOURS", "6"))
-    radius_km = float(os.environ.get("RDS_HEALTH_RADIUS_KM", "75"))
-    max_stations = int(os.environ.get("RDS_HEALTH_MAX_STATIONS", "5"))
-    include_marine = os.environ.get("RDS_HEALTH_INCLUDE_MARINE", "1") not in ("0", "false", "False")
-
-    summary = run_wx_health_check(lat, lon, hours=hours, radius_km=radius_km,
-                                  max_stations=max_stations, include_marine=include_marine)
+    summary = run_wx_health_check(**_health_parameters_from_env())
 
     # Exit non-zero if both providers returned zero rows (useful for CI/pipeline gating)
     if (summary["open_meteo"]["rows"] == 0) and (summary["meteostat"]["rows"] == 0):
