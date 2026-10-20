@@ -117,6 +117,8 @@ def build_sat_overlay_df(
     tle_epoch = pd.NaT
     tle_age_hours = np.nan
     track_coords = None
+    track_start_utc = None
+    track_end_utc = None
     next_pass_marker = None
 
     # TLE path
@@ -200,7 +202,16 @@ def build_sat_overlay_df(
         pass
 
     if extra:
-        extra_df = pd.concat([e for e in extra if isinstance(e, pd.DataFrame) and not e.empty], ignore_index=True) if any(isinstance(e, pd.DataFrame) for e in extra) else pd.DataFrame()
+        extra_frames = [
+            frame
+            for frame in extra
+            if isinstance(frame, pd.DataFrame) and not frame.empty
+        ]
+        extra_df = (
+            pd.concat(extra_frames, ignore_index=True)
+            if extra_frames
+            else pd.DataFrame()
+        )
         if not extra_df.empty:
             # Ensure same columns exist
             for c in set(overlay.columns) - set(extra_df.columns):

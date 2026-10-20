@@ -34,9 +34,9 @@ import numpy as np
 import requests
 import logging
 
-# --- RDS SAT BASELINES (no manifest) ---
 from pathlib import Path
-BASELINE_CSV_PATH = Path(r"C:\Users\gehig\Projects\RescueDecisionSystems\data\reference\sarsat_satellites_baseline.csv")
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+BASELINE_CSV_PATH = REPOSITORY_ROOT / "data" / "reference" / "sarsat_satellites_baseline.csv"
 # Expected columns: ['type','designator','common_name','norad_id','intl_designator']
 
 LOG = logging.getLogger(__name__)
@@ -49,35 +49,17 @@ REQUIRED_COLS = [
     "altitude_km","footprint_radius_km","is_active"
 ]
 
-# ---- Auto-seed defaults (core LEOSAR) ----
+# Core LEOSAR fallback used when a local reference file is not present. Catalog
+# numbers and international designators follow the public CelesTrak catalog.
 DEFAULT_REFERENCE_ROWS = [
-    # sat_id, name, type, owner, constellation, altitude_km, footprint_radius_km, is_active
-    ("NOAA-15", "NOAA-15", "LEO", "USA", "LEOSAR", 850.0, 2500.0, 1),
-    ("NOAA-18", "NOAA-18", "LEO", "USA", "LEOSAR", 850.0, 2500.0, 1),
-    ("NOAA-19", "NOAA-19", "LEO", "USA", "LEOSAR", 850.0, 2500.0, 1),
-    ("METOP-A", "MetOp-A", "LEO", "EU", "LEOSAR", 830.0, 2500.0, 1),
-    ("METOP-B", "MetOp-B", "LEO", "EU", "LEOSAR", 830.0, 2500.0, 1),
-    ("METOP-C", "MetOp-C", "LEO", "EU", "LEOSAR", 830.0, 2500.0, 1),
+    # type, designator, common_name, norad_id, intl_designator
+    ("LEO", "NOAA-15", "NOAA 15", 25338, "1998-030A"),
+    ("LEO", "NOAA-18", "NOAA 18", 28654, "2005-018A"),
+    ("LEO", "NOAA-19", "NOAA 19", 33591, "2009-005A"),
+    ("LEO", "METOP-A", "METOP-A", 29499, "2006-044A"),
+    ("LEO", "METOP-B", "SARSAT 13 (METOP-B)", 38771, "2012-049A"),
+    ("LEO", "METOP-C", "METOP-C", 43689, "2018-087A"),
 ]
-
-def _ensure_parent_dir(path: Path) -> None:
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
-        logging.warning(f"[sat_fetch_tle] Could not create parent dir for {path}: {e}")
-
-def create_default_sat_reference_csv(path: Path) -> None:
-    """Create a minimal reference CSV with core LEOSAR satellites."""
-    _ensure_parent_dir(path)
-    df = pd.DataFrame(
-        DEFAULT_REFERENCE_ROWS,
-        columns=["sat_id", "name", "type", "owner", "constellation", "altitude_km", "footprint_radius_km", "is_active"]
-    )
-    try:
-        df.to_csv(path, index=False)
-        logging.info(f"[sat_fetch_tle] Seeded default satellite reference at: {path}")
-    except Exception as e:
-        logging.error(f"[sat_fetch_tle] Failed to seed default reference CSV at {path}: {e}")
 
 def load_sat_reference() -> pd.DataFrame:
     """Load the SARSAT satellite baseline reference CSV."""
@@ -87,11 +69,10 @@ def load_sat_reference() -> pd.DataFrame:
         except UnicodeDecodeError:
             df = pd.read_csv(BASELINE_CSV_PATH, encoding="cp1252")
     else:
-        rel = Path("data/reference/sarsat_satellites_baseline.csv")
-        try:
-            df = pd.read_csv(rel, encoding="utf-8")
-        except UnicodeDecodeError:
-            df = pd.read_csv(rel, encoding="cp1252")
+        df = pd.DataFrame(
+            DEFAULT_REFERENCE_ROWS,
+            columns=["type", "designator", "common_name", "norad_id", "intl_designator"],
+        )
 
     required = ["type", "designator", "common_name", "norad_id", "intl_designator"]
     for col in required:
