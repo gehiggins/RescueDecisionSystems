@@ -39,6 +39,21 @@ def _fmt_num(v, decimals):
 def _latlon_str(lat, lon):
     return f"Lat: {_fmt_num(lat, 5)}, Lon: {_fmt_num(lon, 5)}"
 
+
+def _valid_coordinate_pair(lon, lat):
+    """Return whether values form a finite coordinate within Earth bounds."""
+    try:
+        lon_value = float(lon)
+        lat_value = float(lat)
+    except (TypeError, ValueError):
+        return False
+    return (
+        math.isfinite(lon_value)
+        and math.isfinite(lat_value)
+        and -180.0 <= lon_value <= 180.0
+        and -90.0 <= lat_value <= 90.0
+    )
+
 def build_gis_map_inputs_df(
     positions_df: pd.DataFrame,
     wx_df: Optional[pd.DataFrame] = None,
@@ -67,7 +82,7 @@ def build_gis_map_inputs_df(
     site_id = None
     if positions_df is not None and not positions_df.empty:
         for _, r in positions_df.iterrows():
-            if pd.notna(r.get("lat_dd")) and pd.notna(r.get("lon_dd")):
+            if _valid_coordinate_pair(r.get("lon_dd"), r.get("lat_dd")):
                 center_lat, center_lon = float(r["lat_dd"]), float(r["lon_dd"])
                 site_id = r.get("site_id")
                 break
@@ -517,9 +532,9 @@ def build_gis_map_inputs_df(
     def _valid_coords_pair(p):
         try:
             lon, lat = p
-            return pd.notna(lon) and pd.notna(lat)
-        except Exception:
+        except (TypeError, ValueError):
             return False
+        return _valid_coordinate_pair(lon, lat)
 
     def _is_valid_row(row):
         g = row.get("geometry") or {}
@@ -529,8 +544,16 @@ def build_gis_map_inputs_df(
             return isinstance(coords, (list, tuple)) and len(coords) == 2 and _valid_coords_pair(coords)
         if t == "Circle":
             center = g.get("center"); rad = g.get("radius_m")
-            return (isinstance(center, (list, tuple)) and len(center) == 2 and _valid_coords_pair(center)
-                    and pd.notna(rad))
+            try:
+                valid_radius = math.isfinite(float(rad)) and float(rad) > 0
+            except (TypeError, ValueError):
+                valid_radius = False
+            return (
+                isinstance(center, (list, tuple))
+                and len(center) == 2
+                and _valid_coords_pair(center)
+                and valid_radius
+            )
         if t == "LineString":
             coords = g.get("coordinates")
             if not isinstance(coords, (list, tuple)) or len(coords) < 2:
