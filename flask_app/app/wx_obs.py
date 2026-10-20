@@ -214,7 +214,11 @@ def build_wx_obs_for_area(ref_points: list[tuple[float,float]],
         _plan = make_wx_data_plan(_ctx, mode=os.getenv("RDS_WX_POLICY_MODE", "auto"))
 
         # Respect plan for provider params
-        _include_marine = _plan.include_marine
+        # ``None`` delegates to policy; an explicit caller choice must survive
+        # this per-point planning pass.
+        _include_marine = (
+            _plan.include_marine if include_marine is None else include_marine
+        )
         _radius_km = radius_km if radius_km is not None else _plan.spatial_radius_km
         _max_stations = max_stations if max_stations is not None else _plan.station_limit
 
