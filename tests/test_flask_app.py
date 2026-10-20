@@ -51,8 +51,8 @@ def test_analysis_page_has_existing_placeholder_and_processing_status():
     assert b"console.log" not in response.data
     assert b'contentType.includes("application/json")' in response.data
     assert b"The server returned an invalid response." in response.data
-    assert b'if (data.map_url)' in response.data
-    assert b'latitude != null' not in response.data
+    assert b'if (data.map_url && (hasPositionA || hasPositionB))' in response.data
+    assert b'parsedAlert.site_id' not in response.data
     assert b'mapFrame.removeAttribute("src")' in response.data
     assert b'id="gis-map-frame" src=""' not in response.data
 
