@@ -73,7 +73,10 @@ def test_detect_times_are_normalized_to_utc_without_mutating_input():
     result = finalize_alert_df(incoming, pd.DataFrame())
 
     assert incoming.loc[0, "detect_time"] == "2026-10-20T03:00:00-07:00"
-    assert str(result["detect_time"].dtype) == "datetime64[ns, UTC]"
+    # Pandas 2 and 3 may choose different internal timestamp resolutions;
+    # timezone awareness and values are the operational guarantees.
+    assert pd.api.types.is_datetime64_any_dtype(result["detect_time"])
+    assert str(result["detect_time"].dt.tz) == "UTC"
     assert result["detect_time"].tolist() == [
         pd.Timestamp("2026-10-20T10:00:00Z"),
         pd.Timestamp("2026-10-20T11:00:00Z"),
