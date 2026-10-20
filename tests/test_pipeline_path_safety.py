@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from flask_app.app import pipeline_controller
-from flask_app.app.pipeline_controller import _safe_map_site_id
+from flask_app.app.pipeline_controller import _map_output_path, _safe_map_site_id
 
 
 @pytest.mark.parametrize(
@@ -48,6 +48,23 @@ def test_satellite_overlay_site_symlink_cannot_escape_root(monkeypatch, tmp_path
     )
 
     assert pipeline_controller.load_sat_overlays_for_site("98372") == []
+
+
+def test_map_output_site_symlink_cannot_escape_root(tmp_path):
+    maps_root = tmp_path / "maps"
+    maps_root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    site_link = maps_root / "98372"
+    try:
+        site_link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory symlinks are unavailable on this platform")
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        _map_output_path(maps_root, "98372")
+
+    assert not (outside / "gis_map_98372.html").exists()
 
 
 def test_pipeline_uses_safe_site_id_for_final_map_path(monkeypatch, tmp_path):
