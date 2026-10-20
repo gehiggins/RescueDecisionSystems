@@ -19,6 +19,7 @@
 
 from app.setup_imports import *
 import logging
+import math
 from datetime import datetime, timedelta
 from typing import List, Tuple, Optional, Dict
 import numpy as np
@@ -30,6 +31,21 @@ except ImportError:
 
 # Project-wide rule: internal imports must use `from app.` prefix
 from app import __init__ as app_root  # noqa: F401
+
+
+def _sampling_number(value, name: str, *, allow_zero: bool = False) -> float:
+    """Validate finite sampling controls before allocating propagation timestamps."""
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be a finite number")
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite number") from exc
+    minimum_ok = normalized >= 0 if allow_zero else normalized > 0
+    if not math.isfinite(normalized) or not minimum_ok:
+        qualifier = "non-negative" if allow_zero else "positive"
+        raise ValueError(f"{name} must be a finite {qualifier} number")
+    return normalized
 
 def _make_sat(tle_line1: str, tle_line2: str) -> EarthSatellite:
     try:
@@ -67,6 +83,8 @@ def compute_short_track(
     Return (coords, start_utc, end_utc) where coords is a list of [lon,lat] points
     sampling center_utc → +forward_min at step_s. Handle anti-meridian (unwrap then wrap).
     """
+    forward_min = _sampling_number(forward_min, "forward_min", allow_zero=True)
+    step_s = _sampling_number(step_s, "step_s")
     sat = _make_sat(tle_line1, tle_line2)
     ts = load.timescale()
     n_steps = int(forward_min * 60 // step_s) + 1
@@ -105,10 +123,12 @@ def find_next_pass_marker(
     max_hours: int = 12
 ) -> Optional[Dict[str, object]]:
     """Return map-ready and legacy fields for the first pass above 0° LOS."""
+    max_hours = _sampling_number(max_hours, "max_hours")
     sat = _make_sat(tle_line1, tle_line2)
     ts = load.timescale()
     step_s = 60
-    n_steps = int(max_hours * 3600 // step_s)
+    # A positive sub-minute search window still needs the start-time sample.
+    n_steps = max(1, int(max_hours * 3600 // step_s))
     times = [start_utc + timedelta(seconds=k * step_s) for k in range(n_steps)]
     t_sf = ts.from_datetimes(times)
     # Observer at alert_latlon, sea level
