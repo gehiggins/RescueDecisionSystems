@@ -305,3 +305,29 @@ def test_renderer_handles_missing_layer_column(tmp_path):
 
     assert result["status"] == "ok"
     assert result["layers"] == []
+
+
+def test_renderer_escapes_external_station_tooltip(tmp_path):
+    output_path = tmp_path / "safe-station.html"
+    unsafe = '<img src=x onerror="alert(1)">'
+    inputs = pd.DataFrame(
+        [
+            {
+                "layer": "station",
+                "geometry": {"type": "Point", "coordinates": [-75.0, 37.5]},
+                "label": unsafe,
+                "popup_html": "Safe popup",
+            }
+        ]
+    )
+
+    result = generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row={"site_id": "SAFE", "position_lat_dd_a": 37.5, "position_lon_dd_a": -75.0},
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["status"] == "ok"
+    assert unsafe not in html
+    assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in html
