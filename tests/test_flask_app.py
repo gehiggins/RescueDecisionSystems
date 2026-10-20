@@ -165,6 +165,30 @@ def test_process_alert_returns_active_parser_shape(monkeypatch, tmp_path):
     assert body["weather_rows"] == 1
 
 
+def test_process_alert_serializes_pandas_missing_values(monkeypatch):
+    application = create_app({"TESTING": True})
+    monkeypatch.setattr(
+        "flask_app.app.routes.run_alert_pipeline",
+        lambda _message, maps_root: {
+            "status": "ok",
+            "parsed_data": {
+                "site_id": "123",
+                "latitude_b": pd.NA,
+                "detect_time": pd.NaT,
+            },
+        },
+    )
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    assert response.status_code == 200
+    parsed = response.get_json()["parsed_data"][0]
+    assert parsed["latitude_b"] is None
+    assert parsed["detect_time"] is None
+
+
 def test_process_alert_does_not_expose_pipeline_failure(monkeypatch, caplog):
     application = create_app({"TESTING": True})
     monkeypatch.setattr(

@@ -4,6 +4,8 @@ from pathlib import Path
 import math
 import re
 
+import pandas as pd
+
 from flask import (
     Blueprint,
     abort,
@@ -25,7 +27,7 @@ main_bp = Blueprint("main", __name__)
 
 def _json_compatible(value):
     """Convert pandas/NumPy scalar values returned by the parser to JSON types."""
-    if value is None:
+    if value is None or value is pd.NA or value is pd.NaT:
         return None
     if hasattr(value, "item"):
         value = value.item()
