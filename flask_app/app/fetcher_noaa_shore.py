@@ -4,10 +4,15 @@
 # fetcher_noaa_shore.py - Onshore NOAA Station Data Fetcher for Rescue Decision Systems
 # Updated with debugging and column enforcement - 2025-03-06
 
+import math
+
 from app.setup_imports import *
 from flask_app.app.utils import log_error_and_continue, get_current_utc_timestamp
-from flask_app.app.utils_geo import is_within_5nm
-from flask_app.app.utils_weather import calculate_timelate, celsius_to_fahrenheit, meters_per_second_to_knots
+from flask_app.app.utils_geo import haversine_nm
+from flask_app.app.utils_weather import calculate_timelate
+
+NOAA_REQUEST_TIMEOUT_SECONDS = 15
+NOAA_REQUEST_HEADERS = {"User-Agent": "RDS-WEATHER/1.0"}
 
 def fetch_noaa_shore_data(lat, lon, position_label):
     try:
@@ -50,17 +55,89 @@ def fetch_noaa_shore_data(lat, lon, position_label):
         log_error_and_continue(f"{get_current_utc_timestamp()} âŒ Error fetching NOAA shore data for Position {position_label}: {e}")
         return pd.DataFrame()
 
-# This is placeholder - you may already have better logic
-def query_nearest_noaa_stations(lat, lon):
-    stations = [
-        {'station_id': 'KSEA', 'latitude': 47.4447, 'longitude': -122.3133, 'station_type': 'ASOS', 'owner': 'NOAA', 'program': 'NWS'}
-    ]
-    return pd.DataFrame(stations)
+def query_nearest_noaa_stations(
+    lat, lon, max_stations=5, request_timeout=NOAA_REQUEST_TIMEOUT_SECONDS
+):
+    """Return the nearest NWS observation stations for one valid point."""
+    try:
+        lat, lon = float(lat), float(lon)
+        max_stations = int(max_stations)
+    except (TypeError, ValueError, OverflowError):
+        return pd.DataFrame()
+    if (
+        not math.isfinite(lat)
+        or not math.isfinite(lon)
+        or not -90 <= lat <= 90
+        or not -180 <= lon <= 180
+        or max_stations < 1
+    ):
+        return pd.DataFrame()
 
-def fetch_single_noaa_station(station_id):
+    url = f"https://api.weather.gov/points/{lat},{lon}/stations"
+    try:
+        response = requests.get(
+            url,
+            timeout=request_timeout,
+            headers=NOAA_REQUEST_HEADERS,
+        )
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        logging.warning(
+            "%s Failed to discover NOAA shore stations: %s",
+            get_current_utc_timestamp(),
+            exc,
+        )
+        return pd.DataFrame()
+
+    stations = []
+    features = payload.get("features", []) if isinstance(payload, dict) else []
+    for feature in features:
+        if not isinstance(feature, dict):
+            continue
+        properties = feature.get("properties") or {}
+        geometry = feature.get("geometry") or {}
+        coordinates = geometry.get("coordinates") or []
+        if len(coordinates) < 2:
+            continue
+        try:
+            station_lon, station_lat = float(coordinates[0]), float(coordinates[1])
+        except (TypeError, ValueError, OverflowError):
+            continue
+        station_id = properties.get("stationIdentifier")
+        if not station_id or not -90 <= station_lat <= 90 or not -180 <= station_lon <= 180:
+            continue
+        stations.append(
+            {
+                "station_id": str(station_id),
+                "station_name": properties.get("name", "N/A"),
+                "latitude": station_lat,
+                "longitude": station_lon,
+                "station_type": "NWS observation station",
+                "owner": "NOAA/NWS",
+                "program": "NWS",
+                "distance_nm": haversine_nm(lat, lon, station_lat, station_lon),
+            }
+        )
+    if not stations:
+        return pd.DataFrame()
+    return (
+        pd.DataFrame(stations)
+        .sort_values("distance_nm")
+        .head(min(max_stations, 20))
+        .reset_index(drop=True)
+    )
+
+def fetch_single_noaa_station(
+    station_id, request_timeout=NOAA_REQUEST_TIMEOUT_SECONDS
+):
     url = f"https://api.weather.gov/stations/{station_id}/observations/latest"
     try:
-        response = requests.get(url)
+        response = requests.get(
+            url,
+            timeout=request_timeout,
+            headers=NOAA_REQUEST_HEADERS,
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -71,8 +148,10 @@ def fetch_single_noaa_station(station_id):
 
         return pd.DataFrame([{
             'observation_time': obs_time,
-            'temperature': celsius_to_fahrenheit(temp_c),
-            'wind_speed': meters_per_second_to_knots(wind_speed_mps),
+            # NWS values are already Celsius and metres/second, matching the
+            # shared RDS weather schema used by the active map pipeline.
+            'temperature': temp_c,
+            'wind_speed': wind_speed_mps,
             'wind_direction': wind_dir,
             'timelate': calculate_timelate(obs_time),
             'source': 'NOAA'
