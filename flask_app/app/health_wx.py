@@ -47,7 +47,11 @@ _DEFAULT_MAX_STATIONS = 5
 
 def _bounded_float(value, *, default, minimum, maximum, name):
     try:
-        normalized = float("nan") if isinstance(value, bool) else float(value)
+        normalized = (
+            float("nan")
+            if isinstance(value, (bool, np.bool_))
+            else float(value)
+        )
     except (TypeError, ValueError, OverflowError):
         normalized = float("nan")
     if not math.isfinite(normalized) or not minimum <= normalized <= maximum:
@@ -58,7 +62,11 @@ def _bounded_float(value, *, default, minimum, maximum, name):
 
 def _positive_float(value, *, default, name):
     try:
-        normalized = float("nan") if isinstance(value, bool) else float(value)
+        normalized = (
+            float("nan")
+            if isinstance(value, (bool, np.bool_))
+            else float(value)
+        )
     except (TypeError, ValueError, OverflowError):
         normalized = float("nan")
     if not math.isfinite(normalized) or normalized <= 0:
