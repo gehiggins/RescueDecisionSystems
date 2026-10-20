@@ -11,7 +11,11 @@ from app.utils_time import (
     clamp_index_to_range,
 )
 from app.utils_geo import haversine_km, haversine_nm
-from app.utils_weather import dewpoint_magnus_c
+from app.utils_weather import (
+    celsius_to_fahrenheit,
+    dewpoint_magnus_c,
+    meters_per_second_to_knots,
+)
 
 
 def test_ensure_utc_and_index():
@@ -46,6 +50,22 @@ def test_dewpoint_magnus_c_reasonable():
     # ~9.3C for 20C @ 50% RH (allow tolerance)
     dp = dewpoint_magnus_c(20.0, 50.0)
     assert abs(dp - 9.3) < 1.0
+
+
+def test_weather_numeric_helpers_reject_malformed_and_nonfinite_values():
+    invalid_values = (None, "bad", np.inf, [20.0])
+
+    for value in invalid_values:
+        assert np.isnan(dewpoint_magnus_c(value, 50.0))
+        assert np.isnan(dewpoint_magnus_c(20.0, value))
+        assert np.isnan(celsius_to_fahrenheit(value))
+        assert np.isnan(meters_per_second_to_knots(value))
+
+
+def test_weather_numeric_helpers_accept_numeric_strings():
+    assert abs(dewpoint_magnus_c("20", "50") - 9.3) < 1.0
+    assert celsius_to_fahrenheit("20") == 68.0
+    assert meters_per_second_to_knots("10") == 19.4384
 
 
 def test_now_utc_monotonic():

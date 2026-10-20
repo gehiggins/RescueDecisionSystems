@@ -5,15 +5,31 @@ from app.setup_imports import *
 from datetime import datetime, timezone
 from app.utils_time import now_utc
 
+
+def _finite_float(value):
+    """Return a finite scalar float, or None for unusable numeric input."""
+    if not pd.api.types.is_scalar(value):
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if np.isfinite(numeric) else None
+
+
 def dewpoint_magnus_c(temp_c, rh_pct):
     """
     Calculates dew point in Celsius using the Magnus formula.
     """
-    if pd.isna(temp_c) or pd.isna(rh_pct):
+    temp_c = _finite_float(temp_c)
+    rh_pct = _finite_float(rh_pct)
+    # The Magnus denominator is undefined at -243.04 C.
+    if temp_c is None or rh_pct is None or temp_c <= -243.04:
         return np.nan
     a, b = 17.625, 243.04
     gamma = (a * temp_c) / (b + temp_c) + np.log(max(min(rh_pct, 100.0), 0.1) / 100.0)
-    return (b * gamma) / (a - gamma)
+    dewpoint = (b * gamma) / (a - gamma)
+    return dewpoint if np.isfinite(dewpoint) else np.nan
 
 def calculate_timelate(observation_time):
     """
@@ -68,15 +84,13 @@ def celsius_to_fahrenheit(c):
     """
     Converts Celsius to Fahrenheit.
     """
-    if c is None or pd.isna(c):
-        return np.nan
-    return (c * 9 / 5) + 32
+    c = _finite_float(c)
+    return np.nan if c is None else (c * 9 / 5) + 32
 
 def meters_per_second_to_knots(mps):
     """
     Converts meters/second to knots.
     """
-    if mps is None or pd.isna(mps):
-        return np.nan
-    return mps * 1.94384
+    mps = _finite_float(mps)
+    return np.nan if mps is None else mps * 1.94384
 
