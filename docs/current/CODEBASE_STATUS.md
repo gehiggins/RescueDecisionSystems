@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `5b61688a1af09bcf3d806ce93f5c9af71744d5ca`
+Baseline: `main` commit `71138265ab6312db159b862834514192b2ff6d02`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -19,7 +19,8 @@ Submitting a message to `POST /process_alert` now runs the integrated alert
 pipeline:
 
 1. pre-scan and validate A/B coordinates;
-2. parse beacon, site, detection time, error radius, and position fields;
+2. parse beacon, site, detection time, reporting satellite, operational
+   metadata, error radius, and position fields;
 3. finalize the alert sequence data;
 4. retrieve and normalize available weather observations;
 5. build satellite overlays only when suitable TLE data is available;
@@ -38,9 +39,23 @@ returns:
 - beacon ID `2DCE6 12345 ABCFF`;
 - site ID `98372`;
 - detection time `2025-03-02T13:32:17Z`;
+- reporting satellite `GOES-16` (NORAD catalog 41866 / international
+  designator `2016-071A` in the fallback reference);
+- detection frequency `406.0285 MHz` and LUT `US LUT - Wallops Island`;
+- position device `INTERNAL` and resolution `4 SECONDS`;
+- message type `STANDARD LOCATION PROTOCOL` and national location protocol
+  `US`;
 - both A and B positions;
 - 2 NM / 3,704 metre error rings; and
 - a served HTML map.
+
+An offline end-to-end regression now submits that committed sample through the
+real `POST /process_alert` route, while replacing only external providers and
+diagnostic writes. It verifies the parser output, reporting-satellite handoff,
+map layers, generated map URL, served Leaflet HTML, and no-store response
+behavior together. The ambiguous `PROBABILITY: 95 A 5 B` source line is not
+mapped to distress probability because the repository does not yet establish
+that interpretation.
 
 Live historical Open-Meteo retrieval was exercised for both sample positions
 on 2026-10-20 after alert-time weather selection was connected. The full
@@ -202,7 +217,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 420 passed; 2 live tests deselected.
+- Default offline suite: 433 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
