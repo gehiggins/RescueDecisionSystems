@@ -118,3 +118,26 @@ def test_coordinate_prescan_excludes_signed_cardinal_pair():
     result = pre_scan_for_coordinates("POSITION: -37.500S -075.500W")
 
     assert result.empty
+
+
+def test_dms_pair_reports_exact_source_span():
+    line = 'POSITION: 37° 30\' 00"N 075° 30\' 00"W TRAILER'
+    expected = '37° 30\' 00"N 075° 30\' 00"W'
+
+    result = validate_and_extract_coordinate_pair(
+        "coordinate_pair", line, {}, None
+    )
+
+    assert result["valid"] is True
+    assert line[result["start_pos"] : result["end_pos"]] == expected
+
+
+def test_coordinate_prescan_preserves_offsets_after_crlf_lines():
+    expected = '37° 30\' 00"N 075° 30\' 00"W'
+    message = f"HEADER\r\nPOSITION: {expected} TRAILER\r\nEND"
+
+    result = pre_scan_for_coordinates(message)
+
+    assert len(result) == 1
+    row = result.iloc[0]
+    assert message[int(row["start_pos"]) : int(row["end_pos"])] == expected
