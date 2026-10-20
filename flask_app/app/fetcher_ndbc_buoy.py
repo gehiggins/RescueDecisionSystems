@@ -156,6 +156,11 @@ def enrich_observation_with_metadata(station, observation, position_label):
 
 def fetch_ndbc_buoy_data(lat, lon, position_label, max_buoys=10):
     try:
+        if isinstance(lat, (bool, np.bool_)) or isinstance(
+            lon, (bool, np.bool_)
+        ):
+            logging.warning("Invalid NDBC reference coordinates; returning no data")
+            return pd.DataFrame()
         lat, lon = float(lat), float(lon)
         if (
             not math.isfinite(lat)
