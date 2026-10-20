@@ -56,6 +56,9 @@ def test_analysis_page_has_existing_placeholder_and_processing_status():
     assert b'parsedAlert.site_id' not in response.data
     assert b'mapFrame.removeAttribute("src")' in response.data
     assert b'id="gis-map-frame" src=""' not in response.data
+    assert b"Parsed Alert Summary" in response.data
+    assert b"Distress Probability Report" not in response.data
+    assert b"nearest RCCs" not in response.data
 
 
 def test_process_alert_rejects_non_json_request():
