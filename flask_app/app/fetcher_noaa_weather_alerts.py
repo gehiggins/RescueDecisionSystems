@@ -10,6 +10,16 @@ from flask_app.app.utils import (
 
 NOAA_ALERT_TIMEOUT_SECONDS = 10
 NOAA_ALERT_HEADERS = {"User-Agent": "RDS-WEATHER/1.0"}
+NOAA_ALERT_COLUMNS = [
+    "zone_id",
+    "headline",
+    "event",
+    "severity",
+    "certainty",
+    "urgency",
+    "effective",
+    "expires",
+]
 
 
 def fetch_weather_alert_features(
@@ -46,6 +56,8 @@ def fetch_weather_alert_features(
         if isinstance(point_payload, dict)
         else {}
     )
+    if not isinstance(properties, dict):
+        properties = {}
     zone_url = properties.get("forecastZone")
     if not isinstance(zone_url, str) or not zone_url.strip():
         return None, None, []
@@ -117,7 +129,7 @@ def fetch_weather_alerts_zone(
         else:
             logging.info(f"{get_current_utc_timestamp()} âœ… No active weather alerts for zone {zone_url}")
 
-        return pd.DataFrame(alerts)
+        return pd.DataFrame(alerts, columns=NOAA_ALERT_COLUMNS)
 
     except Exception as e:
         log_error_and_continue(f"{get_current_utc_timestamp()} âŒ Error fetching weather alerts for ({lat}, {lon}): {e}")
@@ -125,8 +137,7 @@ def fetch_weather_alerts_zone(
 
 def create_empty_alerts_df():
     """Creates an empty DataFrame with the correct schema for weather alerts."""
-    columns = ['zone_id', 'headline', 'event', 'severity', 'certainty', 'urgency', 'effective', 'expires']
-    return pd.DataFrame(columns=columns)
+    return pd.DataFrame(columns=NOAA_ALERT_COLUMNS)
 
 if __name__ == '__main__':
     sample_lat = 47.6062
