@@ -171,3 +171,20 @@ def test_renderer_embeds_local_satellite_image_overlay(tmp_path):
     assert "Satellite imagery" in html
     assert "[[35.0, -78.0], [40.0, -72.0]]" in html
     assert "data:image/png;base64" in html
+
+
+def test_renderer_preserves_zero_coordinates_for_map_center(tmp_path):
+    output_path = tmp_path / "zero-center.html"
+
+    generate_gis_map_html_from_dfs(
+        pd.DataFrame(columns=["layer"]),
+        alert_row={
+            "site_id": "ZERO",
+            "position_lat_dd_a": 0.0,
+            "position_lon_dd_a": 0.0,
+        },
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert "center: [0.0, 0.0]" in html
