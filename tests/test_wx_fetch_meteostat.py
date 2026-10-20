@@ -30,6 +30,22 @@ class _HourlyQuery:
         )
 
 
+class _PartiallyMalformedStationsQuery:
+    def nearby(self, lat, lon):
+        assert (lat, lon) == (37.5, -75.5)
+        return self
+
+    def fetch(self, limit):
+        assert limit == 3
+        return pd.DataFrame(
+            [
+                {"latitude": "bad", "longitude": -75.5, "name": "Bad Station"},
+                {"latitude": 37.5, "longitude": -75.5, "name": "Test Station"},
+            ],
+            index=pd.Index(["KBAD", "KTEST"], name="id"),
+        )
+
+
 def test_meteostat_converts_metric_wind_and_gust_to_metres_per_second(monkeypatch):
     monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
     monkeypatch.setattr(wx_fetch_meteostat, "Stations", _StationsQuery, raising=False)
@@ -76,3 +92,26 @@ def test_meteostat_rejects_invalid_time_window_without_station_lookup(monkeypatc
 
     assert result.empty
     assert "valid_utc" in result.columns
+
+
+def test_meteostat_preserves_valid_stations_when_one_coordinate_is_bad(monkeypatch):
+    monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
+    monkeypatch.setattr(
+        wx_fetch_meteostat,
+        "Stations",
+        _PartiallyMalformedStationsQuery,
+        raising=False,
+    )
+    monkeypatch.setattr(wx_fetch_meteostat, "Hourly", _HourlyQuery, raising=False)
+
+    result = wx_fetch_meteostat.fetch_meteostat_obs_near(
+        37.5,
+        -75.5,
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T12:00:00Z",
+        radius_km=50.0,
+        max_stations=1,
+    )
+
+    assert len(result) == 1
+    assert result.iloc[0]["source_id"] == "KTEST"
