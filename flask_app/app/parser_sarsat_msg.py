@@ -83,7 +83,12 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
         parsed_data = {
             'beacon_id': None,
             'site_id': None,
+            'satellite_id': None,
             'satellite_name': None,
+            'detection_frequency': None,
+            'lut_id': None,
+            'message_type': None,
+            'national_location_protocol': None,
             'latitude_a': None,
             'longitude_a': None,
             'latitude_b': None,
@@ -117,7 +122,33 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
             re.IGNORECASE | re.MULTILINE,
         )
         if satellite_match:
-            parsed_data["satellite_name"] = satellite_match.group(1).strip()
+            satellite_id = satellite_match.group(1).strip()
+            parsed_data["satellite_id"] = satellite_id
+            parsed_data["satellite_name"] = satellite_id
+
+        frequency_match = re.search(
+            r"^\s*DETECTION\s+FREQUENCY\s*:\s*"
+            r"([0-9]+(?:\.[0-9]+)?)\s*MHZ\s*$",
+            message_text,
+            re.IGNORECASE | re.MULTILINE,
+        )
+        if frequency_match:
+            frequency_mhz = float(frequency_match.group(1))
+            if math.isfinite(frequency_mhz) and frequency_mhz > 0:
+                parsed_data["detection_frequency"] = frequency_mhz
+
+        for field_name, label in (
+            ("lut_id", r"LUT\s+ID"),
+            ("message_type", r"MESSAGE\s+TYPE"),
+            ("national_location_protocol", r"NATIONAL\s+LOCATION\s+PROTOCOL"),
+        ):
+            field_match = re.search(
+                rf"^\s*{label}\s*:\s*([^\r\n]+?)\s*$",
+                message_text,
+                re.IGNORECASE | re.MULTILINE,
+            )
+            if field_match:
+                parsed_data[field_name] = field_match.group(1).strip()
 
         position_device_match = re.search(
             r"^\s*POSITION\s+DEVICE\s*:\s*([^\r\n]+?)\s*$",

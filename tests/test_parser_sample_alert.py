@@ -19,6 +19,11 @@ def test_sample_alert_parses_exact_beacon_and_detection_time():
     assert parsed["site_id"] == "98372"
     assert parsed["detect_time"] == pd.Timestamp("2025-03-02T13:32:17Z")
     assert parsed["satellite_name"] == "GOES-16"
+    assert parsed["satellite_id"] == "GOES-16"
+    assert parsed["detection_frequency"] == pytest.approx(406.0285)
+    assert parsed["lut_id"] == "US LUT - Wallops Island"
+    assert parsed["message_type"] == "STANDARD LOCATION PROTOCOL"
+    assert parsed["national_location_protocol"] == "US"
     assert parsed["position_device"] == "INTERNAL"
     assert parsed["position_resolution"] == "4 SECONDS"
 
@@ -49,6 +54,25 @@ def test_position_metadata_requires_its_own_labeled_lines():
 
     assert parsed["position_device"] == "INTERNAL"
     assert parsed["position_resolution"] == "4 SECONDS"
+
+
+def test_operational_metadata_requires_labeled_lines():
+    message = (
+        "BEACON ID: ABC123 SITE ID: 42\n"
+        "NOTE: LUT ID: WRONG\n"
+        "DETECTION FREQUENCY: 406.0285 MHZ\n"
+        "LUT ID: US LUT - Wallops Island\n"
+        "MESSAGE TYPE: STANDARD LOCATION PROTOCOL\n"
+        "NATIONAL LOCATION PROTOCOL: US\n"
+        "A 37 45.600N 075 30.200W"
+    )
+
+    parsed = parse_sarsat_message(message, pre_scan_for_coordinates(message))
+
+    assert parsed["detection_frequency"] == pytest.approx(406.0285)
+    assert parsed["lut_id"] == "US LUT - Wallops Island"
+    assert parsed["message_type"] == "STANDARD LOCATION PROTOCOL"
+    assert parsed["national_location_protocol"] == "US"
 
 
 def test_parser_retains_two_positions_when_they_share_one_line():
