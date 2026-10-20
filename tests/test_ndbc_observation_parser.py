@@ -99,3 +99,12 @@ def test_row_selection_returns_none_when_no_current_observation(
     assert utils._select_best_data_row(
         [_ndbc_row(observation_time, 5.5)]
     ) is None
+
+
+@pytest.mark.parametrize("value", ["NaN", "inf", "-inf", "MM", "bad"])
+def test_ndbc_numeric_lookup_rejects_nonfinite_and_missing_values(value):
+    assert utils._safe_float_lookup(["WSPD"], [value], "WSPD") is None
+
+
+def test_ndbc_numeric_lookup_preserves_finite_values():
+    assert utils._safe_float_lookup(["WSPD"], ["5.5"], "WSPD") == 5.5
