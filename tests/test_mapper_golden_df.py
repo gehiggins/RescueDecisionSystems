@@ -243,6 +243,33 @@ def test_renderer_skips_image_overlay_with_reversed_bounds(tmp_path):
     assert "data:image/png;base64" not in html
 
 
+def test_renderer_omits_empty_satellite_layer_controls(tmp_path):
+    output_path = tmp_path / "satellite-layers.html"
+    inputs = pd.DataFrame(
+        [
+            {
+                "layer": "satellite_overlay",
+                "geom_type": "Point",
+                "geometry": {"type": "Point", "coordinates": [-75.0, 37.5]},
+                "label": "LEO next pass",
+                "sat_type": "LEO",
+            }
+        ]
+    )
+
+    generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row={"site_id": "TEST", "latitude_a": 37.5, "longitude_a": -75.0},
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert r"Satellites \u2022 LEO" in html
+    assert "Satellite footprints" not in html
+    assert "Satellite tracks" not in html
+    assert "Next-pass markers" not in html
+
+
 def test_renderer_preserves_zero_coordinates_for_map_center(tmp_path):
     output_path = tmp_path / "zero-center.html"
 
