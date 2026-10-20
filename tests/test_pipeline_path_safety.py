@@ -67,6 +67,24 @@ def test_map_output_site_symlink_cannot_escape_root(tmp_path):
     assert not (outside / "gis_map_98372.html").exists()
 
 
+def test_map_output_file_symlink_cannot_escape_root(tmp_path):
+    maps_root = tmp_path / "maps"
+    site_dir = maps_root / "98372"
+    site_dir.mkdir(parents=True)
+    outside_map = tmp_path / "outside.html"
+    outside_map.write_text("preserve me", encoding="utf-8")
+    output_link = site_dir / "gis_map_98372.html"
+    try:
+        output_link.symlink_to(outside_map)
+    except OSError:
+        pytest.skip("file symlinks are unavailable on this platform")
+
+    with pytest.raises(ValueError, match="output file"):
+        _map_output_path(maps_root, "98372")
+
+    assert outside_map.read_text(encoding="utf-8") == "preserve me"
+
+
 def test_pipeline_uses_safe_site_id_for_final_map_path(monkeypatch, tmp_path):
     parsed = {
         "site_id": "../../outside",
