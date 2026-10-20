@@ -47,7 +47,10 @@ def _map_path(site_id):
         abort(400, description="Invalid site ID")
     maps_dir = Path(current_app.config["RDS_MAPS_DIR"])
     maps_dir.mkdir(parents=True, exist_ok=True)
-    return maps_dir / f"gis_map_{site_id}.html"
+    output_path = maps_dir / f"gis_map_{site_id}.html"
+    if output_path.is_symlink():
+        raise ValueError("Map output file cannot be a symbolic link")
+    return output_path
 
 
 def _coordinates_are_valid(latitude, longitude):
@@ -188,7 +191,11 @@ def gis_map(latitude, longitude, site_id):
         "range_ring_meters_a": 0.0,
         "range_ring_meters_b": 0.0,
     }
-    output_path = _map_path(site_id)
+    try:
+        output_path = _map_path(site_id)
+    except ValueError:
+        current_app.logger.exception("Direct GIS map output path is unsafe")
+        return jsonify({"error": "Map generation failed"}), 500
     try:
         generate_gis_map(alert_row, str(output_path))
     except Exception:
