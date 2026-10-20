@@ -198,6 +198,7 @@ def test_meteostat_skips_invalid_station_identifier(monkeypatch):
         (True, False, (50.0, 5)),
         (np.bool_(True), np.bool_(False), (50.0, 5)),
         (float("inf"), float("nan"), (50.0, 5)),
+        (50, 1_000_000, (50.0, 100)),
     ],
 )
 def test_meteostat_normalizes_direct_search_parameters(
