@@ -33,6 +33,7 @@ import pandas as pd
 import numpy as np
 import requests
 import logging
+import time
 
 from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -120,6 +121,19 @@ def resolve_reporting_sat(alert_df: pd.DataFrame) -> pd.Series | None:
 # In-memory cache for TLEs
 _TLE_CACHE_CATNR: dict[int, dict] = {}
 _TLE_CACHE_GROUP: dict[str, list] = {}
+_TLE_PROVIDER_UNAVAILABLE_UNTIL = 0.0
+_TLE_PROVIDER_BACKOFF_SECONDS = 60.0
+
+
+def _provider_is_available() -> bool:
+    return time.monotonic() >= _TLE_PROVIDER_UNAVAILABLE_UNTIL
+
+
+def _mark_provider_unavailable() -> None:
+    global _TLE_PROVIDER_UNAVAILABLE_UNTIL
+    _TLE_PROVIDER_UNAVAILABLE_UNTIL = (
+        time.monotonic() + _TLE_PROVIDER_BACKOFF_SECONDS
+    )
 
 def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
     """
@@ -151,6 +165,8 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
             tle["cache_hit"] = True
             rows.append(tle)
             continue
+        if not _provider_is_available():
+            break
         url = f"https://celestrak.org/NORAD/elements/gp.php?CATNR={norad_id}&FORMAT=TLE"
         try:
             resp = requests.get(url, timeout=10, headers={"User-Agent": "RDS-SAT/1.0"})
@@ -180,8 +196,20 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
                         pass
                     _TLE_CACHE_CATNR[norad_id] = tle
                     rows.append(tle)
-        except Exception as e:
+            elif resp.status_code == 429 or resp.status_code >= 500:
+                _mark_provider_unavailable()
+                LOG.warning(
+                    "TLE provider unavailable (HTTP %s); pausing requests for %.0f seconds",
+                    resp.status_code,
+                    _TLE_PROVIDER_BACKOFF_SECONDS,
+                )
+                break
+        except requests.RequestException as e:
+            _mark_provider_unavailable()
             LOG.warning(f"TLE fetch failed for NORAD {norad_id}: {e}")
+            break
+        except Exception as e:
+            LOG.warning(f"TLE response handling failed for NORAD {norad_id}: {e}")
 
     # E2. MEO (GNSS) by GROUP
     for group in groups:
@@ -191,6 +219,8 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
                 tle["cache_hit"] = True
                 rows.append(tle)
             continue
+        if not _provider_is_available():
+            break
         url = f"https://celestrak.org/NORAD/elements/gp.php?GROUP={group.upper()}&FORMAT=TLE"
         try:
             resp = requests.get(url, timeout=10, headers={"User-Agent": "RDS-SAT/1.0"})
@@ -230,8 +260,20 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
                     tles.append(tle)
                     rows.append(tle)
                 _TLE_CACHE_GROUP[group] = tles
-        except Exception as e:
+            elif resp.status_code == 429 or resp.status_code >= 500:
+                _mark_provider_unavailable()
+                LOG.warning(
+                    "TLE provider unavailable (HTTP %s); pausing requests for %.0f seconds",
+                    resp.status_code,
+                    _TLE_PROVIDER_BACKOFF_SECONDS,
+                )
+                break
+        except requests.RequestException as e:
+            _mark_provider_unavailable()
             LOG.warning(f"TLE fetch failed for group {group}: {e}")
+            break
+        except Exception as e:
+            LOG.warning(f"TLE response handling failed for group {group}: {e}")
 
     df = pd.DataFrame(rows, columns=["name","norad_id","tle_line1","tle_line2","epoch_utc","provider","lookup_method","cache_hit"])
     if "epoch_utc" in df.columns:
