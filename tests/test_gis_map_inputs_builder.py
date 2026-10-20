@@ -243,6 +243,30 @@ def test_prebuilt_satellite_overlays_skip_malformed_nullable_entries(caplog):
     assert "Skipping malformed satellite overlay entry" in caplog.text
 
 
+def test_external_station_display_values_are_escaped_in_popup_html():
+    unsafe = '<img src=x onerror="alert(1)">'
+    stations = pd.DataFrame(
+        [
+            {
+                "station_id": "UNSAFE",
+                "name": unsafe,
+                "type": unsafe,
+                "lat_dd": 37.0,
+                "lon_dd": -75.0,
+                "wave_height_display": unsafe,
+            }
+        ]
+    )
+
+    result = build_gis_map_inputs_df(
+        make_positions_df(), stations_df=stations, op_tz_env="UTC"
+    )
+
+    popup = result[result["layer"] == "station"].iloc[0]["popup_html"]
+    assert unsafe not in popup
+    assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in popup
+
+
 @pytest.mark.parametrize(
     "ring_value", [pd.NA, None, "bad", float("nan"), float("inf"), -5, 0]
 )
