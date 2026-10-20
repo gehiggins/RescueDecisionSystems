@@ -42,6 +42,7 @@ import sys
 import os
 import logging
 import json
+import hashlib
 import math
 import re
 from pathlib import Path
@@ -70,6 +71,21 @@ def _safe_map_site_id(value):
     """Return a bounded filename component for generated-map directories."""
     normalized = re.sub(r"[^A-Za-z0-9_-]+", "_", str(value)).strip("_-")
     return normalized[:_MAP_ID_MAX_CHARS] or "unknown"
+
+
+def _fallback_map_id(raw_alert_message, sequence_number=None):
+    """Build a stable map ID when the alert has no site or beacon ID."""
+    message_bytes = str(raw_alert_message).encode("utf-8", errors="replace")
+    fingerprint = hashlib.sha256(message_bytes).hexdigest()[:12]
+    try:
+        sequence = int(sequence_number)
+    except (TypeError, ValueError, OverflowError):
+        sequence = None
+    return (
+        f"ALERT_{sequence}_{fingerprint}"
+        if sequence is not None
+        else f"ALERT_{fingerprint}"
+    )
 
 
 def _map_output_path(maps_root, site_id):
@@ -396,14 +412,17 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
             fallback_reason = "site_id missing; using beacon_id"
         elif _present_scalar(alert_row.get('alert_sequence_number')) is not None:
             try:
-                site_id_safe = f"ALERT_{int(alert_row.get('alert_sequence_number'))}"
-                fallback_reason = "site_id missing; using alert_sequence_number"
+                site_id_safe = _fallback_map_id(
+                    raw_alert_message, alert_row.get('alert_sequence_number')
+                )
+                fallback_reason = (
+                    "site_id missing; using alert sequence and message fingerprint"
+                )
             except Exception:
                 pass
         if not site_id_safe:
-            from datetime import datetime
-            site_id_safe = f"SMOKE_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
-            fallback_reason = "site_id missing; using UTC fallback"
+            site_id_safe = _fallback_map_id(raw_alert_message)
+            fallback_reason = "site_id missing; using message fingerprint"
         site_id_safe = _safe_map_site_id(site_id_safe)
         if fallback_reason:
             logging.warning(f"[RDS] GIS map step fallback: {fallback_reason} (site_id_safe={site_id_safe})")
