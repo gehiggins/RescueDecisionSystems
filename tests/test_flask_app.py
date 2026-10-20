@@ -177,6 +177,25 @@ def test_process_alert_returns_json_when_pipeline_raises(monkeypatch, caplog):
     assert "private provider detail" in caplog.text
 
 
+@pytest.mark.parametrize("invalid_result", [None, [], "unexpected"])
+def test_process_alert_rejects_non_mapping_pipeline_result(
+    monkeypatch, caplog, invalid_result
+):
+    application = create_app({"TESTING": True})
+    monkeypatch.setattr(
+        "flask_app.app.routes.run_alert_pipeline",
+        lambda _message, maps_root: invalid_result,
+    )
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Alert processing failed"}
+    assert "instead of a result mapping" in caplog.text
+
+
 def test_process_alert_rejects_invalid_success_payload(monkeypatch, caplog):
     application = create_app({"TESTING": True})
     monkeypatch.setattr(

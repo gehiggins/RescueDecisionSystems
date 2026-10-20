@@ -113,8 +113,14 @@ def process_alert():
         # expected by the browser and avoiding disclosure of internal details.
         current_app.logger.exception("Alert pipeline raised an exception")
         return jsonify({"error": "Alert processing failed"}), 500
-    if not result or result.get("status") != "ok":
-        error = (result or {}).get("error", "Alert processing failed")
+    if not isinstance(result, dict):
+        current_app.logger.error(
+            "Alert pipeline returned %s instead of a result mapping",
+            type(result).__name__,
+        )
+        return jsonify({"error": "Alert processing failed"}), 500
+    if result.get("status") != "ok":
+        error = result.get("error", "Alert processing failed")
         if error == "Message parsing failed":
             return jsonify({"error": error}), 422
         current_app.logger.error("Alert pipeline failed: %s", error)
