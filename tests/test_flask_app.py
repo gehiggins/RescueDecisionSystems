@@ -14,6 +14,16 @@ def test_application_factory_serves_home_page():
     assert b"Rescue Decision Systems" in response.data
 
 
+def test_analysis_page_has_existing_placeholder_and_processing_status():
+    application = create_app({"TESTING": True})
+
+    response = application.test_client().get("/sarsat-analysis")
+
+    assert response.status_code == 200
+    assert b"images/alerts_map.webp" in response.data
+    assert b'id="processing-status"' in response.data
+
+
 def test_process_alert_rejects_non_json_request():
     application = create_app({"TESTING": True})
 
