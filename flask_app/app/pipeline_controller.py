@@ -589,6 +589,7 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
             shore_nm=shore_nm,
             sat_overlays=sat_overlays,
             alert_time_utc=alert_row.get("detect_time"),
+            satellite_alert_df=alert_df,
         )
 
         try:
