@@ -3,10 +3,26 @@ import pytest
 from flask_app.app.utils_coordinates import (
     coordinate_pair_to_dd,
     convert_lat_lon_to_decimal,
+    is_valid_overlay_bounds,
     is_valid_coordinate,
     parse_any_coordinate,
     to_latlon_polyline,
 )
+
+
+@pytest.mark.parametrize(
+    ("bounds", "expected"),
+    [
+        ([[35.0, -78.0], [40.0, -72.0]], True),
+        ([[-91.0, -78.0], [40.0, -72.0]], False),
+        ([[40.0, -78.0], [35.0, -72.0]], False),
+        ([[35.0, -72.0], [40.0, -78.0]], False),
+        ([[35.0, -78.0], [40.0, float("inf")]], False),
+        (None, False),
+    ],
+)
+def test_overlay_bounds_require_ordered_finite_earth_coordinates(bounds, expected):
+    assert is_valid_overlay_bounds(bounds) is expected
 
 
 @pytest.mark.parametrize(
