@@ -1,29 +1,22 @@
-# preview_fix_app_imports.py
-import os
+"""Compatibility entry point for previewing the deferred import migration."""
 
-PROJECT_ROOT = os.path.join(os.getcwd(), 'flask_app')
-REPLACE_FROM = 'from app.'
-REPLACE_WITH = 'from flask_app.app.'
+import argparse
+from pathlib import Path
 
-def preview_import_fixes():
-    print("🔍 Scanning for 'from app.' import statements...\n")
-    for foldername, subfolders, filenames in os.walk(PROJECT_ROOT):
-        for filename in filenames:
-            if filename.endswith('.py'):
-                filepath = os.path.join(foldername, filename)
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    lines = f.readlines()
+from fix_app_imports import DEFAULT_PROJECT_ROOT, fix_imports
 
-                found = False
-                for i, line in enumerate(lines):
-                    if REPLACE_FROM in line:
-                        if not found:
-                            print(f"\n📄 File: {filepath}")
-                            found = True
-                        print(f"  Line {i+1}: {line.strip()}")
-                        print(f"   👉 Would become: {line.replace(REPLACE_FROM, REPLACE_WITH).strip()}")
 
-    print("\n✅ Preview complete. No files were changed.")
+def preview_import_fixes(project_root=DEFAULT_PROJECT_ROOT, output=print):
+    return fix_imports(project_root, apply=False, output=output)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Preview app import namespace changes")
+    parser.add_argument("--root", type=Path, default=DEFAULT_PROJECT_ROOT)
+    args = parser.parse_args(argv)
+    preview_import_fixes(args.root)
+    return 0
+
 
 if __name__ == "__main__":
-    preview_import_fixes()
+    raise SystemExit(main())
