@@ -7,8 +7,10 @@ from __future__ import annotations
 from app.setup_imports import *
 from datetime import datetime, timezone
 import math
+import re
 
 NDBC_REQUEST_TIMEOUT_SECONDS = 15
+NDBC_STATION_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,20}\Z")
 
 
 def normalize_request_timeout(value, default):
@@ -20,6 +22,19 @@ def normalize_request_timeout(value, default):
     except (TypeError, ValueError, OverflowError):
         return default
     return timeout if math.isfinite(timeout) and timeout > 0 else default
+
+
+def normalize_ndbc_station_id(value):
+    """Return one provider-safe NDBC station identifier, or ``None``."""
+    if value is None or isinstance(value, (bool, np.bool_)):
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return None
+    normalized = str(value).strip()
+    return normalized if NDBC_STATION_ID_PATTERN.fullmatch(normalized) else None
 
 
 def log_error_and_continue(context: str, exc: Exception | None = None):
@@ -49,6 +64,10 @@ def parse_realtime2_data(
     """
     Parses the latest row of Realtime2 data for the given station.
     """
+    station_id = normalize_ndbc_station_id(station_id)
+    if station_id is None:
+        logging.warning("Invalid NDBC station identifier; skipping provider request")
+        return None
     request_timeout = normalize_request_timeout(
         request_timeout, NDBC_REQUEST_TIMEOUT_SECONDS
     )
@@ -83,6 +102,10 @@ def parse_5day2_data(station_id, request_timeout=NDBC_REQUEST_TIMEOUT_SECONDS):
     """
     Parses the latest row of 5day2 data for the given station.
     """
+    station_id = normalize_ndbc_station_id(station_id)
+    if station_id is None:
+        logging.warning("Invalid NDBC station identifier; skipping provider request")
+        return None
     request_timeout = normalize_request_timeout(
         request_timeout, NDBC_REQUEST_TIMEOUT_SECONDS
     )
