@@ -317,27 +317,35 @@ def build_gis_map_inputs_df(
                 popup_html = _coalesce(r.get("popup_html"), default=None)
                 sat_type = _satellite_type(r)
 
-                # Footprint circle (if center+radius)
-                if pd.notna(r.get("lat_dd")) and pd.notna(r.get("lon_dd")) and pd.notna(r.get("footprint_radius_km")):
-                    sat_items.append({
-                        "type": "Circle",
-                        "center": [float(r["lon_dd"]), float(r["lat_dd"])],
-                        "radius_m": float(r["footprint_radius_km"]) * 1000.0,
-                        "label": label,
-                        "style": style,
-                        "popup_html": popup_html
-                    })
+                # A valid subpoint remains useful even when footprint radius
+                # metadata is missing or malformed.
+                lat = r.get("lat_dd")
+                lon = r.get("lon_dd")
+                if _valid_coordinate_pair(lon, lat):
+                    lat = float(lat)
+                    lon = float(lon)
+                    try:
+                        radius_km = float(r.get("footprint_radius_km"))
+                    except (TypeError, ValueError):
+                        radius_km = float("nan")
+                    if math.isfinite(radius_km) and radius_km > 0:
+                        sat_items.append({
+                            "type": "Circle",
+                            "center": [lon, lat],
+                            "radius_m": radius_km * 1000.0,
+                            "label": label,
+                            "style": style,
+                            "popup_html": popup_html,
+                        })
 
-                    # Subpoint marker (always place a SAT icon at the footprint center)  # [updated]
-                    if pd.notna(r.get("lat_dd")) and pd.notna(r.get("lon_dd")):          # [updated]
-                        sat_items.append({                                               # [updated]
-                            "type": "Point",                                            # [updated]
-                            "coordinates": [float(r["lon_dd"]), float(r["lat_dd"])],    # [updated]
-                            "label": f"{label} – subpoint",                             # [updated]
-                            "popup_html": popup_html,                                    # [updated]
-                            "icon_key": _icon_key_for_sat(r),                            # [updated]
-                            "sat_type": sat_type                                          # [updated]
-                        })                                                               # [updated]
+                    sat_items.append({
+                        "type": "Point",
+                        "coordinates": [lon, lat],
+                        "label": f"{label} – subpoint",
+                        "popup_html": popup_html,
+                        "icon_key": _icon_key_for_sat(r),
+                        "sat_type": sat_type,
+                    })
                 # Track (optional)
                 tc = r.get("track_coords")
                 if isinstance(tc, (list, tuple)) and len(tc) > 1:
