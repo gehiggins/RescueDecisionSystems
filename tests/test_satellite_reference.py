@@ -490,3 +490,35 @@ def test_satellite_pipeline_does_not_fetch_context_when_tle_disabled(monkeypatch
     overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=False)
 
     assert overlay.empty
+
+
+def test_empty_nearest_fallback_preserves_overlay_contract(monkeypatch):
+    monkeypatch.setattr(
+        sat_pipeline, "resolve_reporting_sat", lambda _alert: None
+    )
+    monkeypatch.setattr(
+        sat_pipeline, "_fallback_nearest_leo", lambda *_a, **_k: pd.DataFrame()
+    )
+    monkeypatch.setattr(
+        sat_pipeline, "_visible_candidates", lambda *_a, **_k: pd.DataFrame()
+    )
+    monkeypatch.setattr(
+        sat_pipeline, "_upcoming_passes", lambda *_a, **_k: pd.DataFrame()
+    )
+    alert = pd.DataFrame(
+        [
+            {
+                "alert_id": "98372",
+                "alert_time_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+                "alert_lat_dd": 37.5,
+                "alert_lon_dd": -75.0,
+            }
+        ]
+    )
+
+    overlay = sat_pipeline.build_sat_overlay_df(
+        alert, use_tle=True, fallback_to_nearest=True
+    )
+
+    assert overlay.empty
+    assert "norad_id" in overlay.columns
