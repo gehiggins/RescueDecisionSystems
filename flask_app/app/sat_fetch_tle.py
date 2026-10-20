@@ -372,7 +372,11 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
                         pass
                     tles.append(tle)
                     rows.append(tle)
-                _TLE_CACHE_GROUP[group] = tles
+                # Do not turn a malformed or empty provider response into a
+                # process-lifetime cache hit. A later request must be able to
+                # retry the constellation lookup after the provider recovers.
+                if tles:
+                    _TLE_CACHE_GROUP[group] = tles
             elif resp.status_code == 429 or resp.status_code >= 500:
                 _mark_provider_unavailable()
                 LOG.warning(
