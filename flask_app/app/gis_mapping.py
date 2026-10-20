@@ -39,7 +39,7 @@ import geopandas as gpd
 from folium import DivIcon
 import traceback
 import matplotlib.pyplot as plt
-from app.utils_coordinates import to_latlon_polyline
+from app.utils_coordinates import is_valid_overlay_bounds, to_latlon_polyline
 
 
 try:
@@ -814,19 +814,13 @@ def generate_gis_map_html_from_dfs(
                 image_path = geom.get("image_path")
                 try:
                     opacity = float(geom.get("opacity", 0.6))
-                    valid_bounds = (
-                        len(bounds) == 2
-                        and all(len(point) == 2 for point in bounds)
-                        and all(
-                            math.isfinite(float(value))
-                            for point in bounds
-                            for value in point
-                        )
-                    )
                 except (TypeError, ValueError):
-                    valid_bounds = False
                     opacity = 0.6
-                if valid_bounds and image_path and Path(image_path).is_file():
+                if (
+                    is_valid_overlay_bounds(bounds)
+                    and image_path
+                    and Path(image_path).is_file()
+                ):
                     overlay_name = geom.get("name")
                     try:
                         name_missing = overlay_name is None or pd.isna(overlay_name)
