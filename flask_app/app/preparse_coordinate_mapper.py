@@ -65,10 +65,12 @@ def pre_scan_for_coordinates(raw_message):
     """
 
     coordinate_pairs = []
-    lines = raw_message.splitlines()
     offset = 0  # Running character offset for global spans
 
-    for line_idx, line in enumerate(lines):
+    # Keep each original line ending so global spans remain exact for LF, CRLF,
+    # and CR messages. Validation receives only the line content.
+    for raw_line in raw_message.splitlines(keepends=True):
+        line = raw_line.rstrip("\r\n")
         result = validate_and_extract_coordinate_pair(
             field_name="coord_pair",
             raw_text=line,
@@ -97,7 +99,7 @@ def pre_scan_for_coordinates(raw_message):
                 "notes": _short("; ".join(result.get("notes", [])), 120)
             })
             # Deterministic: stop on first valid pair per line
-        offset += len(line) + 1  # +1 for newline
+        offset += len(raw_line)
 
     # Build DataFrame with fixed column order
     columns = ["lat", "lon", "lat_dd", "lon_dd", "start_pos", "end_pos", "format_type", "is_valid", "confidence", "notes"]
