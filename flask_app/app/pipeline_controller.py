@@ -487,10 +487,28 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
         log_error_and_continue(f"{get_current_utc_timestamp()} âŒ Pipeline processing error: {e}")
         return {"status": "error", "error": str(e)}
     
+def _default_sample_message_path():
+    return Path(__file__).resolve().parents[2] / "sample_sarsat_message.txt"
+
+
+def main(argv=None):
+    """Run the alert pipeline against an explicitly selected message file."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Process one SARSAT message")
+    parser.add_argument(
+        "message_file",
+        nargs="?",
+        type=Path,
+        default=_default_sample_message_path(),
+        help="message file to process (defaults to the repository sample)",
+    )
+    args = parser.parse_args(argv)
+    process_sarsat_alert(load_sample_message(args.message_file))
+
+
 if __name__ == "__main__":
-    sample_message_path = "C:/Users/gehig/Projects/RescueDecisionSystems/sample_sarsat_message.txt"
-    example_alert_message = load_sample_message(sample_message_path)
-    process_sarsat_alert(example_alert_message)
+    main()
 
 
 
