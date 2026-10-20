@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `b27103abb116792a842c96ec1bcc8ceb3de9b009`
+Baseline: `main` commit `a2944f5c3790dafd887033011f1a6ce5e0cf65be`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -277,10 +277,13 @@ Weather policy is evaluated independently for every valid alert position.
 When A and B have identical coordinates, RDS performs one provider lookup but
 retains the most conservative combined metadata: the largest available error
 radius and the smallest available coast distance. Invalid optional policy
-metadata is omitted rather than passed downstream.
+metadata is omitted rather than passed downstream, including Python and NumPy
+Boolean values that could otherwise be interpreted as zero or one kilometre.
 The reusable context boundary also rejects malformed, non-finite, boolean, and
 out-of-range coordinates before classification. The standalone observation
-reducer applies the same provider-ID validation as the full aggregator. Weather
+reducer applies the same provider-ID validation as the full aggregator,
+rejects Boolean age windows, and does not interpret numeric values as
+nanosecond-based timestamps near 1970. Weather
 health summaries normalize mixed-offset observation times to UTC and report an
 unknown span when no valid timestamp remains.
 
@@ -352,7 +355,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 736 passed; 2 live tests deselected.
+- Default offline suite: 746 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
