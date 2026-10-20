@@ -44,9 +44,25 @@ GIS_DATA_SCHEMA = {
 }
 
 # ✅ Function to Create DataFrames Based on Schema
+def _pandas_dtype(declared_type):
+    """Translate logical schema types into pandas-compatible dtypes."""
+    if declared_type is datetime.datetime:
+        return "datetime64[ns, UTC]"
+    # pandas stores per-row containers in object columns; passing list or
+    # tuple directly to ``astype`` is interpreted as an invalid dtype.
+    if declared_type in (list, tuple, dict, set):
+        return object
+    return declared_type
+
+
 def create_dataframe(schema):
     """Creates an empty pandas DataFrame based on the given schema."""
-    return pd.DataFrame(columns=schema.keys()).astype(schema)
+    return pd.DataFrame(
+        {
+            column: pd.Series(dtype=_pandas_dtype(declared_type))
+            for column, declared_type in schema.items()
+        }
+    )
 
 # ✅ Initialize DataFrames
 df_alerts = create_dataframe(SARSAT_ALERT_SCHEMA)
