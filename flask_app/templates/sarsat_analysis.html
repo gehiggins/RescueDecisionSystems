@@ -122,9 +122,15 @@ document.getElementById("sarsat-form").addEventListener("submit", function (even
         body: JSON.stringify({ message: alertText })
     })
     .then(async response => {
-        const data = await response.json();
+        const contentType = response.headers.get("content-type") || "";
+        const isJson = contentType.includes("application/json");
+        const data = isJson ? await response.json() : null;
         if (!response.ok) {
-            throw new Error(data.error || "Alert processing failed.");
+            throw new Error(data?.error || "Alert processing failed.");
+        }
+        if (!data) {
+            // A successful API response must still honor the documented JSON contract.
+            throw new Error("The server returned an invalid response.");
         }
         return data;
     })

@@ -49,6 +49,8 @@ def test_analysis_page_has_existing_placeholder_and_processing_status():
     assert b"images/alerts_map.webp" in response.data
     assert b'id="processing-status"' in response.data
     assert b"console.log" not in response.data
+    assert b'contentType.includes("application/json")' in response.data
+    assert b"The server returned an invalid response." in response.data
 
 
 def test_process_alert_rejects_non_json_request():
