@@ -2,11 +2,11 @@
 
 Status: verified current
 
-Reviewed against code and runtime: 2026-10-19
+Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `b4c626a6b87914c8e7532fae6582a0a8f046f818`
+Baseline: `main` commit `4b8e2b4d2f1dd6437599de1a1eac9f1c80cb801d`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -42,9 +42,12 @@ returns:
 - 2 NM / 3,704 metre error rings; and
 - a served HTML map.
 
-Live Open-Meteo retrieval was exercised for both sample positions. A
-current-time NOAA-15 test exercised CelesTrak TLE retrieval, Skyfield
-propagation, satellite footprints, and map overlays.
+Live Open-Meteo retrieval was exercised for both sample positions on
+2026-10-20. During the initial 2026-10-19 review, a current-time NOAA-15 test
+exercised CelesTrak TLE retrieval, Skyfield propagation, satellite footprints,
+and map overlays. A direct CelesTrak check on 2026-10-20 timed out, so current
+TLE-provider availability was not reconfirmed; cached TLEs remain usable and
+provider failures now enter a short backoff instead of causing a retry cascade.
 
 Satellite propagation uses the alert detection time. TLE data more than 168
 hours from the alert time is rejected by default rather than used to draw a
@@ -77,8 +80,10 @@ Detailed pipeline failures are logged on the server but are not returned to
 the browser. Raised exceptions, malformed integration results, malformed JSON
 requests, missing reported map files, and direct map-rendering failures retain
 stable JSON error responses. Pandas missing values serialize as JSON `null`.
-The browser also handles non-JSON proxy or server failures without displaying
-a JSON parsing error.
+Non-finite parsed numeric values serialize as JSON `null`, so strict clients
+do not receive non-standard `NaN` or `Infinity` tokens. The browser also
+handles non-JSON proxy or server failures without displaying a JSON parsing
+error.
 
 The web application adds frame, content-type, referrer, and no-store response
 headers where appropriate. Its four public pages render with valid references
@@ -99,7 +104,20 @@ not contact a provider or change application-wide logging merely when imported.
 Open-Meteo and Meteostat retrieval are isolated so an unexpected failure in
 one provider does not discard valid observations from the other. Weather-row
 reduction preserves the source identifier used to associate observations with
-stations.
+stations. Missing or non-finite measurements and invalid timestamps remain
+absent instead of aborting map generation. Invalid A/B and direct provider
+reference coordinates are rejected independently, while valid targets
+continue through the weather pipeline.
+
+Satellite context enrichment isolates visible-satellite, upcoming-pass, and
+nearest-satellite failures. Empty provider results preserve the overlay schema;
+incomplete satellite metadata does not discard valid geometry. Satellite
+subpoints can render without a footprint radius, and malformed track vertices
+or next-pass coordinates are removed individually.
+
+Map inputs accept only finite, in-range coordinates and positive finite range
+rings. Numeric range-ring text is normalized; malformed radii are omitted
+without stopping other layers.
 
 Database modules can be imported without a database URL. Database setup is
 lazy and explicit, and missing configuration produces a clear error if a
@@ -109,9 +127,10 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 125 passed; 2 live tests deselected.
-- Explicit external-service suite: 2 passed during the 2026-10-19 review; it
-  remains outside per-commit CI.
+- Default offline suite: 181 passed; 2 live tests deselected.
+- Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
+  outside per-commit CI. A direct CelesTrak check timed out that day, so no
+  current TLE-provider success is claimed for this baseline.
 - Editable development installation succeeded.
 - The deployment requirements wrapper installed successfully.
 - `pip check` reported no broken requirements.
