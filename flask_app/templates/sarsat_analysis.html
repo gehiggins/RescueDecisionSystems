@@ -46,9 +46,9 @@
             <h2 class="section-title">GIS-Based Analysis</h2>
             <p class="section-description">Once processed, the following outputs will be generated:</p>
             <ul>
-                <li><strong>Alert Location:</strong> Mapped with interpolated weather and nearest RCCs.</li>
-                <li><strong>Weather Stations:</strong> NOAA/NWS data for the area.</li>
-                <li><strong>Satellite Ground Tracks:</strong> Current and upcoming satellite passes for follow-on detections.</li>
+                <li><strong>Alert Location:</strong> Mapped with available uncertainty range rings.</li>
+                <li><strong>Weather Context:</strong> Available provider observations and model data near the alert positions.</li>
+                <li><strong>Satellite Context:</strong> Reporting-satellite overlays when suitable orbital data is available.</li>
             </ul>
 
             <!-- ✅ Default GIS Image Before Processing -->
@@ -89,8 +89,8 @@
                     <h2 class="section-title">Automated Output</h2>
                     <p class="section-description">Our system provides two key outputs:</p>
                     <ul>
-                        <li>GIS-Based Map – Displays alert location, interpolated weather, nearest RCCs, and satellite pass data.</li>
-                        <li>Distress Probability Report – Analyzes the likelihood that the alert is a real emergency, along with key justifications.</li>
+                        <li>GIS-Based Map – Displays verified alert positions, uncertainty rings, and available weather or satellite layers.</li>
+                        <li>Parsed Alert Summary – Returns extracted beacon, detection, position, and operational message fields.</li>
                     </ul>
                 </div>
             </div>
