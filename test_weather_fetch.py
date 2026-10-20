@@ -1,48 +1,58 @@
-﻿#test_weather_fetch.py
+"""Smoke-test the active weather provider, with live access opt-in only."""
 
-import sys
-import os
-import logging
+import argparse
 
-logging.info("âœ… Loaded setup_imports for consistent imports across scripts.")
+import pandas as pd
 
-# âœ… Ensure Python recognizes the `flask_app` directory
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from flask_app.app.wx_fetch_open_meteo import (
+    _HISTORICAL_FORECAST_URL,
+    _atmosphere_url,
+    fetch_open_meteo_obs,
+)
 
-# âœ… Import `setup_imports.py` using a relative path
-from app.setup_imports import *
 
-# âœ… Import `noaa_weather_fetch` correctly (assumes it's in flask_app/app)
-from flask_app.app.noaa_weather_fetch import fetch_nearest_weather_stations, fetch_weather_data
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Smoke-test RDS weather retrieval")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="contact Open-Meteo and verify a current observation response",
+    )
+    parser.add_argument("--latitude", type=float, default=37.76)
+    parser.add_argument("--longitude", type=float, default=-75.503333)
+    args = parser.parse_args(argv)
 
-# âœ… Test coordinates (Position A from SARSAT message â€” Chesapeake Bay area)
-test_latitude = 37.76
-test_longitude = -75.503333
+    if not args.live:
+        # A fixed clock keeps the offline routing check deterministic over time.
+        alert_time = pd.Timestamp("2025-03-02T13:32:17Z")
+        current_time = pd.Timestamp("2026-10-20T00:00:00Z")
+        endpoint = _atmosphere_url(alert_time, current_utc=current_time)
+        if endpoint != _HISTORICAL_FORECAST_URL:
+            raise SystemExit(f"Weather smoke failed: unexpected endpoint {endpoint}")
+        print("Weather offline contract smoke passed")
+        return 0
 
-print(f"âœ… Fetching nearest NOAA weather stations for ({test_latitude}, {test_longitude})...")
+    end_utc = pd.Timestamp.now(tz="UTC").floor("h")
+    start_utc = end_utc - pd.Timedelta(hours=6)
+    observations = fetch_open_meteo_obs(
+        args.latitude,
+        args.longitude,
+        start_utc,
+        end_utc,
+        include_marine=True,
+    )
+    required = {"provider", "valid_utc", "lat", "lon", "wind_ms"}
+    missing = required - set(observations.columns)
+    if missing:
+        raise SystemExit(
+            "Weather smoke failed; missing columns: " + ", ".join(sorted(missing))
+        )
+    if observations.empty:
+        raise SystemExit("Weather smoke failed: Open-Meteo returned no observations")
 
-# Step 1: Fetch nearest NOAA weather stations
-nearest_stations = fetch_nearest_weather_stations(test_latitude, test_longitude)
+    print(f"Weather live smoke passed: {len(observations)} observation row(s)")
+    return 0
 
-# Step 2: Print and verify results
-if nearest_stations is None:
-    print("âŒ ERROR: Function returned None instead of a DataFrame.")
-elif nearest_stations.empty:
-    print("âš ï¸ WARNING: No weather stations found near the test location.")
-else:
-    print("âœ… Nearest Weather Stations Found:")
-    print(nearest_stations)
 
-    # Step 3: Fetch weather data from the first available station
-    test_station_id = nearest_stations.iloc[0]["station_id"]
-    print(f"\nFetching weather data for station: {test_station_id}...")
-
-    weather_data = fetch_weather_data(test_station_id)
-
-    if weather_data.empty:
-        print("âš ï¸ WARNING: No weather data retrieved.")
-    else:
-        print("âœ… Weather Data Retrieved:")
-        print(weather_data)
-        
-
+if __name__ == "__main__":
+    raise SystemExit(main())
