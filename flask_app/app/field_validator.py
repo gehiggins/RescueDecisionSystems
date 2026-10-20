@@ -647,10 +647,29 @@ def validate_and_extract_coordinate_pair(field_name: str, raw_text: str, config:
 
     # Fallback: try to find two tokens (DMS or DD)
     token_pat = r"\d{1,3}[°\s]+\d{1,2}(?:\.\d+)?[\'\s]*(?:\d{1,2}(?:\.\d+)?)?[\"\s]*[NSEW]|\d{1,3}\.\d+[NSEW]"
-    tokens = re.findall(token_pat, std)
-    if len(tokens) >= 2:
-        lat_token = next((t for t in tokens if t.strip().upper().endswith(("N","S"))), None)
-        lon_token = next((t for t in tokens if t.strip().upper().endswith(("E","W"))), None)
+    token_matches = list(re.finditer(token_pat, std))
+    if len(token_matches) >= 2:
+        lat_match = next(
+            (
+                match
+                for match in token_matches
+                if match.group(0).strip().upper().endswith(("N", "S"))
+            ),
+            None,
+        )
+        lon_match = next(
+            (
+                match
+                for match in token_matches
+                if match.group(0).strip().upper().endswith(("E", "W"))
+            ),
+            None,
+        )
+        lat_token = lat_match.group(0) if lat_match else None
+        lon_token = lon_match.group(0) if lon_match else None
+        if lat_match and lon_match:
+            start_pos = min(lat_match.start(), lon_match.start())
+            end_pos = max(lat_match.end(), lon_match.end())
         # Determine format type for each token
         dms_pat = r"^\d{1,3}[°\s]+\d{1,2}(?:\.\d+)?[\'\s]*(?:\d{1,2}(?:\.\d+)?)?[\"\s]*[NSEW]$"
         dd_pat = r"^\d{1,3}\.\d+[NSEW]$"
