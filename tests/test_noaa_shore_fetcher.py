@@ -49,14 +49,21 @@ def test_station_discovery_uses_alert_location_and_sorts_by_distance(monkeypatch
     assert result.iloc[0]["distance_nm"] == pytest.approx(0.0)
 
 
-def test_invalid_station_reference_skips_provider_request(monkeypatch):
+@pytest.mark.parametrize(
+    ("latitude", "longitude"), [(91, 0), (True, False)]
+)
+def test_invalid_station_reference_skips_provider_request(
+    monkeypatch, latitude, longitude
+):
     monkeypatch.setattr(
         fetcher_noaa_shore.requests,
         "get",
         lambda *_args, **_kwargs: pytest.fail("provider called"),
     )
 
-    assert fetcher_noaa_shore.query_nearest_noaa_stations(91, 0).empty
+    assert fetcher_noaa_shore.query_nearest_noaa_stations(
+        latitude, longitude
+    ).empty
 
 
 def test_latest_observation_preserves_shared_metric_units(monkeypatch):
