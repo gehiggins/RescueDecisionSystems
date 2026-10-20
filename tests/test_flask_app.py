@@ -1,4 +1,6 @@
 from pathlib import Path
+import re
+from urllib.parse import unquote
 
 import pandas as pd
 import pytest
@@ -16,6 +18,26 @@ def test_application_factory_serves_home_page():
     assert response.headers["X-Frame-Options"] == "SAMEORIGIN"
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["Referrer-Policy"] == "same-origin"
+
+
+@pytest.mark.parametrize(
+    "page_path",
+    ["/", "/sarsat-analysis", "/our-process", "/future-projects"],
+)
+def test_rendered_pages_reference_existing_static_assets(page_path):
+    application = create_app({"TESTING": True})
+
+    response = application.test_client().get(page_path)
+
+    assert response.status_code == 200
+    static_urls = re.findall(
+        rb'(?:href|src)="(/static/[^"]+)"', response.data
+    )
+    assert static_urls
+    static_root = Path(application.static_folder)
+    for encoded_url in static_urls:
+        relative_path = unquote(encoded_url.decode("utf-8"))[len("/static/"):]
+        assert (static_root / relative_path).is_file(), encoded_url
 
 
 def test_analysis_page_has_existing_placeholder_and_processing_status():
