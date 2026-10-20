@@ -472,6 +472,29 @@ def test_process_alert_rejects_missing_reported_map(monkeypatch, caplog, tmp_pat
     assert "did not create its reported map" in caplog.text
 
 
+@pytest.mark.parametrize("invalid_path", [True, [], {}, ""])
+def test_process_alert_rejects_invalid_reported_map_path(
+    monkeypatch, caplog, invalid_path
+):
+    application = create_app({"TESTING": True})
+    monkeypatch.setattr(
+        "flask_app.app.routes.run_alert_pipeline",
+        lambda _message, maps_root: {
+            "status": "ok",
+            "parsed_data": {"site_id": "123"},
+            "map_html_path": invalid_path,
+        },
+    )
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Alert processing failed"}
+    assert "invalid map path" in caplog.text
+
+
 def test_process_alert_rejects_reported_non_html_map(monkeypatch, caplog, tmp_path):
     maps_dir = tmp_path / "maps"
     non_map = maps_dir / "123" / "diagnostic.txt"
