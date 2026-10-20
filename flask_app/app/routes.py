@@ -48,6 +48,16 @@ def _map_path(site_id):
     return maps_dir / f"gis_map_{site_id}.html"
 
 
+def _coordinates_are_valid(latitude, longitude):
+    """Return whether a coordinate pair is finite and within Earth bounds."""
+    return (
+        math.isfinite(latitude)
+        and math.isfinite(longitude)
+        and -90.0 <= latitude <= 90.0
+        and -180.0 <= longitude <= 180.0
+    )
+
+
 @main_bp.route("/")
 def index():
     return render_template("index.html")
@@ -137,6 +147,8 @@ def gis_map(latitude, longitude, site_id):
         longitude_value = float(longitude)
     except ValueError:
         return jsonify({"error": "Invalid coordinates"}), 400
+    if not _coordinates_are_valid(latitude_value, longitude_value):
+        return jsonify({"error": "Coordinates are outside valid bounds"}), 400
 
     alert_row = {
         "site_id": str(site_id),
