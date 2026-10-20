@@ -51,6 +51,21 @@ LOG = logging.getLogger(__name__)
 DEFAULT_MAX_TLE_AGE_HOURS = 168.0
 
 
+def _positive_catalog_id(value):
+    """Return a positive whole NORAD catalog ID, or ``None`` when unusable."""
+    if value is None or isinstance(value, (bool, np.bool_)):
+        return None
+    if not pd.api.types.is_scalar(value):
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(numeric) or numeric <= 0 or not numeric.is_integer():
+        return None
+    return int(numeric)
+
+
 def _positive_env_int(name: str, default: int) -> int:
     """Read a positive integer setting, falling back on invalid input."""
     try:
@@ -168,19 +183,23 @@ def build_sat_overlay_df(
     row = resolve_reporting_sat(alert_df)
 
     # Prefer a NORAD provided in the alert row (test/ingest convenience)
-    if pd.notna(alert_df.iloc[0].get("norad_id", np.nan)):
+    alert_norad_id = _positive_catalog_id(
+        alert_df.iloc[0].get("norad_id", np.nan)
+    )
+    if alert_norad_id is not None:
         # A resolved reference is a pandas Series, whose truth value is
         # intentionally ambiguous and which does not support ``setdefault``.
         # Convert it before applying the explicit alert override.
         row = {} if row is None else dict(row)
-        row["norad_id"] = int(alert_df.iloc[0]["norad_id"])
+        row["norad_id"] = alert_norad_id
         row.setdefault("common_name", str(alert_df.iloc[0].get("sat_name") or alert_df.iloc[0].get("reporting_sat") or "SAT"))
 
     if row is None:
         row = {}  # defer return so fallback/overrides can run
 
     name = str(row.get("common_name") or row.get("designator"))
-    norad_id = int(row["norad_id"]) if pd.notna(row.get("norad_id")) else np.nan
+    row_norad_id = _positive_catalog_id(row.get("norad_id"))
+    norad_id = row_norad_id if row_norad_id is not None else np.nan
     source = "reference"
     lat = lon = alt_km = np.nan
     r_km = np.nan
@@ -193,8 +212,8 @@ def build_sat_overlay_df(
 
     # TLE path
     tle_df = None
-    if use_tle and pd.notna(row.get("norad_id")):
-        tle_df = load_tle_snapshot([str(int(row["norad_id"]))]); source = "celestrak:catnr"
+    if use_tle and row_norad_id is not None:
+        tle_df = load_tle_snapshot([str(row_norad_id)]); source = "celestrak:catnr"
     elif use_tle:
         d0 = str(row.get("designator",""))[:1].upper()
         group = "galileo" if d0=="E" else ("glonass" if d0=="R" else ("beidou" if d0 in ("B","C") else None))
@@ -237,7 +256,9 @@ def build_sat_overlay_df(
                         next_pass_marker = None
         # prefer provider name/CATNR when present
         name = str(t.get("name") or name)
-        if pd.notna(t.get("norad_id")): norad_id = int(t["norad_id"])
+        provider_norad_id = _positive_catalog_id(t.get("norad_id"))
+        if provider_norad_id is not None:
+            norad_id = provider_norad_id
 
     if use_tle and not _tle_is_fresh(at_time_utc, tle_epoch):
         if pd.notna(tle_epoch):
