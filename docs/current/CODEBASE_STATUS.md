@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `80261a459f11b454a4e1209e909956c03e7ebc6d`
+Baseline: `main` commit `a09d99454e55999b755d876c489225fca296510f`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -30,6 +30,11 @@ pipeline:
 
 The map URL returned by the API is served by the Flask application. Database
 configuration is not required for parsing, enrichment, or map generation.
+
+An installed development checkout provides the `run_rds` command. It binds to
+the loopback interface and disables Flask debug mode by default; a developer
+must explicitly request another host or enable debug mode. This launcher is for
+local development, not production deployment.
 
 ## Verified behavior
 
@@ -151,6 +156,16 @@ variables available for deliberate overrides. Legacy TLE and sample-message
 utilities are quiet on import and perform file or network work only when
 called explicitly. The NOAA diagnostic and weather health utility likewise do
 not contact a provider or change application-wide logging merely when imported.
+The satellite GIS, TLE, NOAA, weather, and Meteostat diagnostic scripts default
+to deterministic offline checks; live provider access requires an explicit
+command-line option. Golden GIS fixture generation requires an explicit output
+path and does not overwrite the committed fixture by default.
+
+The import-rewrite maintenance helper previews proposed `from app.` namespace
+changes by default. Applying changes requires an explicit `--apply` option; the
+helper excludes archives and notebook checkpoints, ignores comments and string
+literals, and uses atomic permission-preserving file replacement. The broader
+application namespace migration has not been performed.
 
 The optional NDBC buoy adapter now normalizes usable coordinates from the
 committed station metadata, retrieves preferred observations with fallback,
@@ -249,7 +264,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 458 passed; 2 live tests deselected.
+- Default offline suite: 477 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
