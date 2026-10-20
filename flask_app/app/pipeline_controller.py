@@ -85,7 +85,10 @@ def _map_output_path(maps_root, site_id):
         resolved_candidate.relative_to(resolved_root)
     except ValueError as exc:
         raise ValueError("Map output directory is outside the configured root") from exc
-    return resolved_candidate / f"gis_map_{_safe_map_site_id(site_id)}.html"
+    output_path = resolved_candidate / f"gis_map_{_safe_map_site_id(site_id)}.html"
+    if output_path.is_symlink():
+        raise ValueError("Map output file cannot be a symbolic link")
+    return output_path
 
 
 def _present_scalar(value):
