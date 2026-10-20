@@ -1,78 +1,94 @@
-import json
+"""Developer diagnostic for the maintained NOAA/NWS shore adapter."""
 
-import requests
+import argparse
 
-# NOAA API requires a User-Agent
-HEADERS = {
-    "User-Agent": "RescueDecisionSystems.com (RescueDecisionSystems@outlook.com)"
-}
+import pandas as pd
 
-# Test Location (Offshore in the Gulf of Mexico)
-latitude = 36.70  # Approx. location of NOAA buoy 42001
-longitude = -75.67
+from flask_app.app.fetcher_noaa_shore import (
+    _temperature_c,
+    _wind_speed_ms,
+    fetch_single_noaa_station,
+    query_nearest_noaa_stations,
+)
 
-def fetch_weather_stations(lat, lon):
-    """Fetch nearest NOAA weather stations (land & marine)."""
-    try:
-        url = f"https://api.weather.gov/points/{lat},{lon}"
-        response = requests.get(url, headers=HEADERS, timeout=10)
 
-        if response.status_code != 200:
-            print(f"🚨 ERROR: Received status code {response.status_code}")
-            print(response.text)
-            return
+DEFAULT_LATITUDE = 37.76
+DEFAULT_LONGITUDE = -75.503333
 
-        data = response.json()
-        station_url = data.get("properties", {}).get("observationStations", None)
 
-        if not station_url:
-            print("❌ ERROR: No observation stations found.")
-            return
+def fetch_weather_stations(lat, lon, max_stations=3, request_timeout=10):
+    """Return nearby NWS stations and the nearest station's latest observation."""
+    stations = query_nearest_noaa_stations(
+        lat,
+        lon,
+        max_stations=max_stations,
+        request_timeout=request_timeout,
+    )
+    if stations.empty:
+        return stations, pd.DataFrame()
+    observation = fetch_single_noaa_station(
+        stations.iloc[0]["station_id"],
+        request_timeout=request_timeout,
+    )
+    return stations, observation
 
-        # Fetch nearest stations
-        station_response = requests.get(station_url, headers=HEADERS, timeout=10)
-        if station_response.status_code != 200:
-            print(f"🚨 ERROR: Could not retrieve stations. Code {station_response.status_code}")
-            return
 
-        stations = station_response.json().get("observationStations", [])
-        if not stations:
-            print("⚠️ No weather stations found.")
-            return
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Check NOAA/NWS shore station discovery and observations"
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="contact api.weather.gov; omitted by default for offline safety",
+    )
+    parser.add_argument("--latitude", type=float, default=DEFAULT_LATITUDE)
+    parser.add_argument("--longitude", type=float, default=DEFAULT_LONGITUDE)
+    parser.add_argument("--max-stations", type=int, default=3)
+    parser.add_argument("--request-timeout", type=float, default=10.0)
+    args = parser.parse_args(argv)
 
-        print(f"✅ Found {len(stations)} stations. Fetching weather data for first station...")
+    if not args.live:
+        # Exercise the unit contract without contacting the provider.
+        assert _temperature_c(
+            {"value": 68, "unitCode": "wmoUnit:degF"}
+        ) == 20
+        assert _wind_speed_ms(
+            {"value": 36, "unitCode": "wmoUnit:km_h-1"}
+        ) == 10
+        print("NOAA shore diagnostic offline contract passed")
+        return 0
 
-        # Fetch weather data for the first station (could be buoy or land-based)
-        first_station_url = stations[0]
-        weather_response = requests.get(first_station_url + "/observations/latest", headers=HEADERS, timeout=10)
-        
-        if weather_response.status_code != 200:
-            print(f"🚨 ERROR: Could not retrieve weather data from {first_station_url}")
-            return
-        
-        weather_data = weather_response.json().get("properties", {})
-        
-        # ✅ Print Full Weather Data
-        print(json.dumps(weather_data, indent=2))
+    stations, observation = fetch_weather_stations(
+        args.latitude,
+        args.longitude,
+        max_stations=args.max_stations,
+        request_timeout=args.request_timeout,
+    )
+    if stations.empty:
+        raise SystemExit("NOAA shore diagnostic failed: no stations returned")
+    if observation.empty:
+        raise SystemExit("NOAA shore diagnostic failed: no observation returned")
 
-        # ✅ Print Key Marine Weather Data
-        print(f"✅ Weather Data for {first_station_url}:")
-        print(f"   🌡 Temperature: {weather_data.get('temperature', {}).get('value', 'N/A')} °C")
-        print(f"   💨 Wind Speed: {weather_data.get('windSpeed', {}).get('value', 'N/A')} km/h")
-        print(f"   💨 Wind Direction: {weather_data.get('windDirection', {}).get('value', 'N/A')}°")
-        print(f"   🌊 Wave Height: {weather_data.get('waveHeight', {}).get('value', 'N/A')} m")
-        print(f"   🌊 Wave Period: {weather_data.get('wavePeriod', {}).get('value', 'N/A')} sec")
-        print(f"   🌊 Sea State: {weather_data.get('seaState', {}).get('value', 'N/A')}")
-        print(f"   ☔ Precipitation: {weather_data.get('precipitationLastHour', {}).get('value', 'N/A')} mm")
-        print(f"   📅 Observation Time: {weather_data.get('timestamp', 'N/A')}")
-    
-    except requests.exceptions.RequestException as e:
-        print(f"❌ ERROR: Request failed - {e}")
-
-def main():
-    """Run the live NOAA diagnostic only when explicitly requested."""
-    fetch_weather_stations(latitude, longitude)
+    print("Nearby NWS stations:")
+    print(
+        stations[["station_id", "station_name", "distance_nm"]].to_string(
+            index=False
+        )
+    )
+    print("Nearest station observation (RDS metric schema):")
+    print(
+        observation[
+            [
+                "observation_time",
+                "temperature",
+                "wind_speed",
+                "wind_direction",
+            ]
+        ].to_string(index=False)
+    )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -76,3 +76,10 @@ def test_offshore_weather_smoke_defaults_to_offline_contract_check():
 
     assert result.returncode == 0, result.stderr
     assert "Offshore weather offline contract smoke passed" in result.stdout
+
+
+def test_noaa_shore_diagnostic_defaults_to_offline_contract_check():
+    result = _run_script("flask_app/test_noaa_api.py")
+
+    assert result.returncode == 0, result.stderr
+    assert "NOAA shore diagnostic offline contract passed" in result.stdout
