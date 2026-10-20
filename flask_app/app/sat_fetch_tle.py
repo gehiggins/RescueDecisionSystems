@@ -85,10 +85,27 @@ def load_sat_reference() -> pd.DataFrame:
     df["norad_id"] = pd.to_numeric(df["norad_id"], errors="coerce").astype("Int64")
     return df
 
+
+def _lookup_text(value) -> str | None:
+    """Return non-empty scalar alert text without truth-testing nullable values."""
+    if value is None or not pd.api.types.is_scalar(value):
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def resolve_reporting_sat(alert_df: pd.DataFrame) -> pd.Series | None:
     """Resolve the reporting satellite from alert fields using the baseline."""
+    if not isinstance(alert_df, pd.DataFrame) or alert_df.empty:
+        return None
     df = load_sat_reference()
-    row = None
+    common_names = df["common_name"].astype("string").str.lower()
+    designators = df["designator"].astype("string").str.upper()
 
     # Try by name (sat_name or satellite_name)
     name_col = None
@@ -97,25 +114,37 @@ def resolve_reporting_sat(alert_df: pd.DataFrame) -> pd.Series | None:
             name_col = c
             break
     if name_col:
-        val = str(alert_df.iloc[0][name_col]).strip().lower()
-        # Exact match first
-        matches = df[df["common_name"].str.lower() == val]
-        if matches.empty:
-            # Contains match
-            matches = df[df["common_name"].str.lower().str.contains(val, na=False)]
-        if not matches.empty:
-            if len(matches) > 1:
-                LOG.warning(f"Multiple satellite matches for name '{val}': {[m for m in matches['common_name']]}")
-            return matches.iloc[0][["type", "designator", "common_name", "norad_id", "intl_designator"]]
+        value = _lookup_text(alert_df.iloc[0][name_col])
+        if value is not None:
+            val = value.lower()
+            # Exact match first, then a literal (not regex) partial match.
+            matches = df[common_names == val]
+            if matches.empty:
+                matches = df[common_names.str.contains(val, na=False, regex=False)]
+            if not matches.empty:
+                if len(matches) > 1:
+                    LOG.warning(
+                        "Multiple satellite matches for name %r: %s",
+                        val,
+                        matches["common_name"].tolist(),
+                    )
+                return matches.iloc[0][["type", "designator", "common_name", "norad_id", "intl_designator"]]
 
     # Try by designator
     for c in ["sat_designator", "sat", "SAT"]:
         if c in alert_df.columns:
-            val = str(alert_df.iloc[0][c]).strip().upper()
-            matches = df[df["designator"].str.upper() == val]
+            value = _lookup_text(alert_df.iloc[0][c])
+            if value is None:
+                continue
+            val = value.upper()
+            matches = df[designators == val]
             if not matches.empty:
                 if len(matches) > 1:
-                    LOG.warning(f"Multiple satellite matches for designator '{val}': {[m for m in matches['designator']]}")
+                    LOG.warning(
+                        "Multiple satellite matches for designator %r: %s",
+                        val,
+                        matches["designator"].tolist(),
+                    )
                 return matches.iloc[0][["type", "designator", "common_name", "norad_id", "intl_designator"]]
     return None
 
