@@ -2,6 +2,7 @@ import pandas as pd
 import pytest
 
 from flask_app.app import wx_obs, wx_pipeline
+from rds_engine.context import classify_zone_context
 
 
 def _station_observation():
@@ -383,6 +384,70 @@ def test_weather_aggregator_preserves_explicit_marine_choice(
 
     assert result.empty
     assert captured["include_marine"] is expected
+
+
+@pytest.mark.parametrize(
+    ("coast_distance", "expected_zone"),
+    [("3", "coastal_waters"), ("15", "near_shore_onshore"), ("16", "inland")],
+)
+def test_weather_context_normalizes_numeric_text_distance(
+    coast_distance, expected_zone
+):
+    context = classify_zone_context(
+        lat=37.5,
+        lon=-75.5,
+        error_radius_km="12.5",
+        coast_distance_km=coast_distance,
+    )
+
+    assert context.error_radius_km == 12.5
+    assert context.coast_distance_km == float(coast_distance)
+    assert context.zone == expected_zone
+
+
+@pytest.mark.parametrize("invalid", ["bad", -1, float("nan"), float("inf"), True])
+def test_weather_context_treats_invalid_optional_distance_as_unknown(invalid):
+    context = classify_zone_context(
+        lat=37.5,
+        lon=-75.5,
+        error_radius_km=invalid,
+        coast_distance_km=invalid,
+    )
+
+    assert context.error_radius_km is None
+    assert context.coast_distance_km is None
+    assert context.zone == "unknown"
+
+
+def test_weather_aggregator_uses_normalized_context_metadata(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_open_meteo_obs",
+        lambda *_args, **kwargs: captured.update(kwargs) or pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_meteostat_obs_near",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
+
+    result = wx_obs.build_wx_obs_for_area(
+        [
+            {
+                "lat": 37.5,
+                "lon": -75.5,
+                "error_radius_km": "12",
+                "coast_distance_km": "unknown",
+            }
+        ],
+        pd.Timestamp("2026-10-19T12:00:00Z"),
+        pd.Timestamp("2026-10-19T18:00:00Z"),
+        include_marine=None,
+    )
+
+    assert result.empty
+    assert captured["include_marine"] is True
 
 
 def test_weather_aggregator_filters_invalid_reference_points(
