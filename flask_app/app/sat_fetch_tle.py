@@ -152,7 +152,9 @@ def load_tle_snapshot(sat_names_or_ids: list[str]) -> pd.DataFrame:
             # Try to infer group from designator
             if isinstance(s, str):
                 s_up = s.upper()
-                if s_up.startswith("E"):
+                if s_up in {"GALILEO", "GLONASS", "BEIDOU"}:
+                    groups.add(s_up.lower())
+                elif s_up.startswith("E"):
                     groups.add("galileo")
                 elif s_up.startswith("R"):
                     groups.add("glonass")
