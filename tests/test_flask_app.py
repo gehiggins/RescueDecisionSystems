@@ -237,6 +237,30 @@ def test_process_alert_rejects_invalid_success_payload(monkeypatch, caplog):
     assert "invalid parsed data" in caplog.text
 
 
+def test_process_alert_rejects_missing_reported_map(monkeypatch, caplog, tmp_path):
+    maps_dir = tmp_path / "maps"
+    application = create_app(
+        {"TESTING": True, "RDS_MAPS_DIR": str(maps_dir)}
+    )
+    missing_map = maps_dir / "123" / "gis_map_123.html"
+    monkeypatch.setattr(
+        "flask_app.app.routes.run_alert_pipeline",
+        lambda _message, maps_root: {
+            "status": "ok",
+            "parsed_data": {"site_id": "123"},
+            "map_html_path": str(missing_map),
+        },
+    )
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Alert processing failed"}
+    assert "did not create its reported map" in caplog.text
+
+
 def test_map_generation_rejects_site_id_path_traversal(tmp_path):
     application = create_app(
         {"TESTING": True, "RDS_MAPS_DIR": str(tmp_path / "maps")}
