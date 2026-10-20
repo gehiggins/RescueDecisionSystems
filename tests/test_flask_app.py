@@ -107,7 +107,7 @@ def test_model_spot_predictions_are_added_to_map_weather_rows():
                 "valid_utc": "2026-10-19T18:00:00Z",
                 "temp_c": 18.0,
                 "wind_ms": 7.0,
-                "source_type": "model_interpolated",
+                "source_type": "model",
             },
             {
                 "lat": 37.50,
@@ -125,3 +125,19 @@ def test_model_spot_predictions_are_added_to_map_weather_rows():
     assert result.iloc[0]["source_type"] == "model_interpolated"
     assert result.iloc[0]["lat_dd"] == 37.76
     assert result.iloc[0]["temp_C"] == 18.0
+
+
+def test_weather_source_ids_fall_back_to_provider_and_coordinates():
+    from flask_app.app import pipeline_controller
+
+    observations = pd.DataFrame(
+        [
+            {"provider": "Open-Meteo", "lat": 37.76, "lon": -75.50},
+            {"provider": "Open-Meteo", "lat": 38.25, "lon": -70.20},
+        ]
+    )
+
+    identifiers = pipeline_controller._weather_source_ids(observations)
+
+    assert identifiers.is_unique
+    assert identifiers.iloc[0] == "Open-Meteo:37.76:-75.5"
