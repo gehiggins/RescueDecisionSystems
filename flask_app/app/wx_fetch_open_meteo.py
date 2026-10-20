@@ -51,6 +51,9 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
             "precipitation","cloud_cover"
         ]),
         "timezone": "UTC",
+        # Open-Meteo defaults wind speed to km/h. The shared wx_obs contract
+        # is metres/second, so request that unit explicitly for speeds/gusts.
+        "wind_speed_unit": "ms",
         "start_date": start_utc.strftime("%Y-%m-%d"),
         "end_date": end_utc.strftime("%Y-%m-%d")
     }
