@@ -47,8 +47,8 @@ _DEFAULT_MAX_STATIONS = 5
 
 def _bounded_float(value, *, default, minimum, maximum, name):
     try:
-        normalized = float(value)
-    except (TypeError, ValueError):
+        normalized = float("nan") if isinstance(value, bool) else float(value)
+    except (TypeError, ValueError, OverflowError):
         normalized = float("nan")
     if not math.isfinite(normalized) or not minimum <= normalized <= maximum:
         LOG.warning("Invalid weather health %s=%r; using default %s", name, value, default)
@@ -58,8 +58,8 @@ def _bounded_float(value, *, default, minimum, maximum, name):
 
 def _positive_float(value, *, default, name):
     try:
-        normalized = float(value)
-    except (TypeError, ValueError):
+        normalized = float("nan") if isinstance(value, bool) else float(value)
+    except (TypeError, ValueError, OverflowError):
         normalized = float("nan")
     if not math.isfinite(normalized) or normalized <= 0:
         LOG.warning("Invalid weather health %s=%r; using default %s", name, value, default)
