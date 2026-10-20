@@ -466,7 +466,9 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
         # --- Map render (write to a real HTML file path) ---
         from pathlib import Path
 
-        site_id = str(alert_row.get("site_id") or "unknown")
+        # Reuse the normalized identifier at the final write boundary. Using
+        # the raw alert value here would undo the earlier path-safety check.
+        site_id = site_id_safe
         if maps_root is None:
             maps_root = Path(__file__).resolve().parents[2] / "data" / "maps"
         out_dir = Path(maps_root) / site_id
