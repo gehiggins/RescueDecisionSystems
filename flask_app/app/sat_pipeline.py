@@ -79,6 +79,27 @@ def _optional_text(value):
     return text or None
 
 
+def _coordinate_pair(lat, lon):
+    """Return a finite in-range scalar coordinate pair, or ``None``."""
+    if isinstance(lat, (bool, np.bool_)) or isinstance(lon, (bool, np.bool_)):
+        return None
+    if not pd.api.types.is_scalar(lat) or not pd.api.types.is_scalar(lon):
+        return None
+    try:
+        lat_value = float(lat)
+        lon_value = float(lon)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if (
+        not math.isfinite(lat_value)
+        or not math.isfinite(lon_value)
+        or not -90.0 <= lat_value <= 90.0
+        or not -180.0 <= lon_value <= 180.0
+    ):
+        return None
+    return lat_value, lon_value
+
+
 def _positive_env_int(name: str, default: int) -> int:
     """Read a positive integer setting, falling back on invalid input."""
     try:
@@ -265,12 +286,13 @@ def build_sat_overlay_df(
             if {"alert_lat_dd","alert_lon_dd"}.issubset(alert_df.columns):
                 la = alert_df.iloc[0].get("alert_lat_dd")
                 lo = alert_df.iloc[0].get("alert_lon_dd")
-                if pd.notna(la) and pd.notna(lo):
+                alert_position = _coordinate_pair(la, lo)
+                if alert_position is not None:
                     try:
                         next_pass_marker = find_next_pass_marker(
                             tle1,
                             tle2,
-                            (float(la), float(lo)),
+                            alert_position,
                             at_time_utc.to_pydatetime(),
                             max_hours=12,
                         )
