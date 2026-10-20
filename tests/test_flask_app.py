@@ -23,6 +23,7 @@ def test_analysis_page_has_existing_placeholder_and_processing_status():
     assert response.status_code == 200
     assert b"images/alerts_map.webp" in response.data
     assert b'id="processing-status"' in response.data
+    assert b"console.log" not in response.data
 
 
 def test_process_alert_rejects_non_json_request():
@@ -113,7 +114,7 @@ def test_process_alert_returns_active_parser_shape(monkeypatch, tmp_path):
     assert body["weather_rows"] == 1
 
 
-def test_process_alert_reports_full_pipeline_failure(monkeypatch):
+def test_process_alert_does_not_expose_pipeline_failure(monkeypatch, caplog):
     application = create_app({"TESTING": True})
     monkeypatch.setattr(
         "flask_app.app.routes.run_alert_pipeline",
@@ -125,7 +126,24 @@ def test_process_alert_reports_full_pipeline_failure(monkeypatch):
     )
 
     assert response.status_code == 500
-    assert response.get_json()["error"] == "weather failed"
+    assert response.get_json()["error"] == "Alert processing failed"
+    assert "weather failed" in caplog.text
+
+
+def test_process_alert_rejects_invalid_success_payload(monkeypatch, caplog):
+    application = create_app({"TESTING": True})
+    monkeypatch.setattr(
+        "flask_app.app.routes.run_alert_pipeline",
+        lambda _message, maps_root: {"status": "ok", "parsed_data": None},
+    )
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    assert response.status_code == 500
+    assert response.get_json()["error"] == "Alert processing failed"
+    assert "invalid parsed data" in caplog.text
 
 
 def test_map_generation_rejects_site_id_path_traversal(tmp_path):
