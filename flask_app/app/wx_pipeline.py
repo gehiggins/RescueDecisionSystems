@@ -9,6 +9,7 @@ from rds_engine.context import classify_zone_context
 from rds_engine.policy_wx import make_wx_data_plan
 import os
 import math
+import numpy as np
 import pandas as pd
 from app.utils_time import now_utc
 
@@ -31,6 +32,26 @@ def _normalize_hours_back(hours_back):
         return _DEFAULT_HOURS_BACK
     return normalized
 
+
+def _weather_window_end(target_utc):
+    """Use a valid alert time for weather retrieval, otherwise use current UTC."""
+    if target_utc is None:
+        return datetime.now(timezone.utc)
+    if not pd.api.types.is_scalar(target_utc) or isinstance(
+        target_utc, (bool, int, float, np.number)
+    ):
+        LOG.warning("Invalid weather target_utc=%r; using current UTC", target_utc)
+        return datetime.now(timezone.utc)
+    try:
+        parsed = pd.to_datetime(target_utc, utc=True, errors="coerce")
+    except (TypeError, ValueError, OverflowError):
+        parsed = pd.NaT
+    if pd.isna(parsed):
+        if target_utc is not pd.NaT:
+            LOG.warning("Invalid weather target_utc=%r; using current UTC", target_utc)
+        return datetime.now(timezone.utc)
+    return parsed.to_pydatetime()
+
 def _optional_distance_km(value):
     """Return finite non-negative point metadata, or ``None`` when unusable."""
     if value is None or isinstance(value, bool):
@@ -46,7 +67,8 @@ def run_wx_pipeline(alert_targets_df: pd.DataFrame,
                     hours_back: int = 6,
                     radius_km: float = 50.0,
                     max_stations: int = 5,
-                    include_marine: bool = True) -> pd.DataFrame:
+                    include_marine: bool = True,
+                    target_utc=None) -> pd.DataFrame:
     """
     alert_targets_df columns expected: site_id, target, lat, lon  (A/B live elsewhere)
     """
@@ -101,7 +123,7 @@ def run_wx_pipeline(alert_targets_df: pd.DataFrame,
     radius_km, max_stations = _normalize_search_parameters(
         radius_km, max_stations
     )
-    end_ts = datetime.now(timezone.utc)
+    end_ts = _weather_window_end(target_utc)
     start_ts = end_ts - timedelta(hours=hours_back)
 
     # Preserve ``None`` so the aggregator can apply the existing policy to
