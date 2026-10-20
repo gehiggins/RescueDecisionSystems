@@ -129,19 +129,14 @@ document.getElementById("sarsat-form").addEventListener("submit", function (even
         return data;
     })
     .then(data => {
-        console.log("✅ Flask Response:", data);  // ✅ Debugging: See full Flask response
-
         if (data.success) {
             let latitude = data.parsed_data?.[0]?.latitude_a;
             let longitude = data.parsed_data?.[0]?.longitude_a;
             let siteId = data.parsed_data?.[0]?.site_id;
 
-            console.log("✅ Extracted Data for GIS Map:", latitude, longitude, siteId);
-
             if (latitude != null && longitude != null && siteId != null && data.map_url) {
                 // The server owns the output path; the browser only consumes the returned URL.
                 let mapUrl = data.map_url;
-                console.log("✅ Updating GIS Map iframe source:", mapUrl);
                 
                 // ✅ Update the iframe src instead of redirecting the page
                 document.getElementById("gis-map-frame").src = mapUrl;
@@ -152,16 +147,13 @@ document.getElementById("sarsat-form").addEventListener("submit", function (even
                 const layers = (data.layers || []).join(", ") || "Alert Positions";
                 status.textContent = `Map ready. Layers: ${layers}. Weather rows: ${data.weather_rows || 0}. Satellite rows: ${data.satellite_rows || 0}.`;
             } else {
-                console.error("❌ ERROR: Missing required values! Latitude, Longitude, or Site ID is undefined.");
                 status.textContent = "The alert was parsed, but no map location was available.";
             }
         } else {
-            console.error("❌ ERROR from Flask:", data.error);
             status.textContent = data.error || "Alert processing failed.";
         }
     })
     .catch(error => {
-        console.error("❌ Fetch error:", error);
         status.textContent = error.message || "Alert processing failed.";
     })
     .finally(() => {

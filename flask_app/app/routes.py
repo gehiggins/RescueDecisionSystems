@@ -109,9 +109,14 @@ def process_alert():
     result = run_alert_pipeline(raw_message, maps_root=maps_dir)
     if not result or result.get("status") != "ok":
         error = (result or {}).get("error", "Alert processing failed")
-        status_code = 422 if error == "Message parsing failed" else 500
-        return jsonify({"error": error}), status_code
+        if error == "Message parsing failed":
+            return jsonify({"error": error}), 422
+        current_app.logger.error("Alert pipeline failed: %s", error)
+        return jsonify({"error": "Alert processing failed"}), 500
 
+    if not isinstance(result.get("parsed_data"), dict):
+        current_app.logger.error("Alert pipeline returned invalid parsed data")
+        return jsonify({"error": "Alert processing failed"}), 500
     parsed_data = _serialize_parsed_alert(result["parsed_data"])
     map_url = None
     if result.get("map_html_path"):
@@ -119,7 +124,10 @@ def process_alert():
         try:
             relative_map_path = map_path.relative_to(maps_dir)
         except ValueError:
-            return jsonify({"error": "Pipeline returned an invalid map path"}), 500
+            current_app.logger.error(
+                "Alert pipeline returned a map outside RDS_MAPS_DIR: %s", map_path
+            )
+            return jsonify({"error": "Alert processing failed"}), 500
         map_url = url_for(
             "main.serve_map", filename=relative_map_path.as_posix()
         )
