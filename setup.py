@@ -6,21 +6,29 @@ setup(
     packages=find_packages(),
     install_requires=[
         'Flask',
-        'Flask-Login',
         'SQLAlchemy',
         'psycopg2-binary',
         'pandas',
-        'numpy<1.27',   # 👈 Locking numpy to avoid scipy conflict
+        'numpy<1.27',
         'scipy>=1.10',
         'scikit-learn',
+        'joblib',
         'geopandas',
         'shapely',
-        'contextily',
+        'geopy',
+        'folium',
+        'matplotlib',
         'pillow',
         'requests',
         'python-dotenv',
         'skyfield'
     ],
+    extras_require={
+        'server': ['gunicorn'],
+        'weather': ['meteostat'],
+        'timezone': ['timezonefinder'],
+        'test': ['pytest'],
+    },
     entry_points={
         'console_scripts': [
             'run_rds=flask_app.run:main'

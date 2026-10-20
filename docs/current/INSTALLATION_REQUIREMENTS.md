@@ -1,56 +1,58 @@
-# Installation requirements audit
+# Installation requirements
 
-Status: verified current inventory; environment not validated
+Status: verified current
 
-Reviewed against code: 2026-10-19
-
-Baseline: `main` commit `10e41ddb54e85ab17543f339137f7f1da2d78f26`
+Reviewed and installation-tested: 2026-10-19
 
 Supersedes: `docs/archive/2025/RDS_Installation_Requirements_2025-02-28.md`
 
-## Current manifest state
+## Supported installation paths
 
-The repository does not yet have one complete, reproducible dependency
-manifest.
+Create and activate a Python virtual environment from the repository root.
 
-`setup.py` declares Flask, Flask-Login, SQLAlchemy, psycopg2-binary, pandas,
-`numpy<1.27`, `scipy>=1.10`, scikit-learn, geopandas, shapely, contextily,
-Pillow, requests, and python-dotenv.
+For development and tests:
 
-`flask_app/requirements.txt` separately declares Flask, Flask-SQLAlchemy,
-psycopg2-binary, requests, and gunicorn. It is not a complete replacement for
-`setup.py`.
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e '.[test]'
+```
 
-Direct imports in active code add dependencies that are not declared in
-`setup.py`, including:
+For the web application with the Gunicorn server dependency:
 
-- `folium` and `matplotlib` for GIS rendering;
-- `geopy` and `joblib`, imported by the shared setup module;
-- `skyfield` for satellite propagation;
-- optional `timezonefinder` for local timezone lookup;
-- optional `meteostat` for station observations;
-- `beautifulsoup4` for the NDBC metadata-generation utility; and
-- `pytest` for the test suite.
+```bash
+.venv/bin/pip install -r flask_app/requirements.txt
+```
 
-Skyfield supplies the SGP4 propagation path used by the satellite code. Its
-transitive dependencies should not be relied on as implicit declarations in a
-reproducible environment.
+`setup.py` is the authoritative dependency declaration.
+`flask_app/requirements.txt` is a small deployment wrapper that installs this
+project with its `server` extra; it does not maintain a second dependency list.
 
-## What can be stated safely
+## Optional integrations
 
-- The repository advertises `pip install -e .`, but `setup.py` alone is
-  insufficient for all active imports.
-- The two manifest files should be reconciled before publishing a supported
-  installation command.
-- The committed NumPy constraint (`numpy<1.27`) and SciPy lower bound reflect a
-  historical compatibility note. Their compatibility with the current full
-  stack was not re-tested during this documentation audit.
-- Database-backed operation additionally requires a reachable PostgreSQL
-  service and appropriate configuration. The repository currently contains
-  local/default connection assumptions that should be reviewed before use.
+Install optional packages only when their corresponding integration is needed:
 
-## Verification boundary
+```bash
+.venv/bin/pip install -e '.[weather]'
+.venv/bin/pip install -e '.[timezone]'
+```
 
-This document is a source-and-manifest inventory, not a successful installation
-record. The audit environment did not have the project dependencies or `pytest`
-installed, and no packages were installed as part of the documentation cleanup.
+- `weather` installs Meteostat support. Open-Meteo remains available through
+  the core installation.
+- `timezone` installs `timezonefinder` for coordinate-derived local timezones.
+
+PostgreSQL persistence requires a reachable database and `DATABASE_URL`.
+Parsing, live weather/satellite enrichment, and map generation work without a
+database; alert sequence numbering then starts from an empty local history.
+
+## Verification performed
+
+- Installed the editable project with the `test` extra in a Python 3.9 virtual
+  environment.
+- Installed `flask_app/requirements.txt` from the repository root and confirmed
+  that the Gunicorn server dependency was included.
+- Imported and exercised the Flask application, GIS renderer, live weather
+  path, and Skyfield satellite propagation path.
+- Ran the default offline suite after installation.
+
+Live weather and TLE retrieval require outbound internet access. Production
+deployment configuration is intentionally outside this installation check.
