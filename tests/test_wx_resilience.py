@@ -446,7 +446,7 @@ def test_weather_pipeline_skips_providers_when_all_targets_invalid(
 
 
 @pytest.mark.parametrize(
-    "hours_back", [None, "bad", float("nan"), float("inf"), -1, 0]
+    "hours_back", [None, "bad", float("nan"), float("inf"), -1, 0, True]
 )
 def test_weather_pipeline_defaults_invalid_time_window(
     monkeypatch, caplog, hours_back
@@ -499,6 +499,7 @@ def test_weather_pipeline_centers_window_on_alert_time(monkeypatch):
         (50, float("nan")),
         (50, 0),
         (50, 2.5),
+        (True, True),
     ],
 )
 def test_weather_pipeline_defaults_invalid_station_search_parameters(
@@ -524,7 +525,12 @@ def test_weather_pipeline_defaults_invalid_station_search_parameters(
     assert "Invalid weather" in caplog.text
 
 
-def test_weather_aggregator_normalizes_direct_search_parameters(monkeypatch):
+@pytest.mark.parametrize(
+    ("radius_km", "max_stations"), [(-1, 2.5), (True, True)]
+)
+def test_weather_aggregator_normalizes_direct_search_parameters(
+    monkeypatch, radius_km, max_stations
+):
     captured = {}
     monkeypatch.setattr(
         wx_obs,
@@ -542,8 +548,8 @@ def test_weather_aggregator_normalizes_direct_search_parameters(monkeypatch):
         [(37.5, -75.5)],
         pd.Timestamp("2026-10-19T12:00:00Z"),
         pd.Timestamp("2026-10-19T18:00:00Z"),
-        radius_km=-1,
-        max_stations=2.5,
+        radius_km=radius_km,
+        max_stations=max_stations,
     )
 
     assert result.empty
