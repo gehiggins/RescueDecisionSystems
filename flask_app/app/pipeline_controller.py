@@ -49,6 +49,7 @@ LOG = logging.getLogger(__name__)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from app.setup_imports import *
+from app.debug_outputs import dump_dataframe
 from app.gis_map_inputs_builder import build_gis_map_inputs_df
 from app.gis_mapping import generate_gis_map_html_from_dfs
 from app.preparse_coordinate_mapper import pre_scan_for_coordinates
@@ -202,14 +203,21 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
 
         alert_df = pd.DataFrame([parsed_data])
 
-        # DEBUG: show the ring inputs living on the alert row
-        print("\n[DEBUG] alert_df ring fields:")
-        print(alert_df[['site_id','expected_error_nm','range_ring_meters_a','range_ring_meters_b',
-                'position_method','format_type_a','format_type_b']].to_string(index=False))
-
-        # (optional) write a snapshot so you can open it in Excel
-        alert_df.to_csv('data/debugging/debug_final_alert_df.csv', index=False)
-        print("ðŸ“„ Wrote data/debugging/debug_final_alert_df.csv")
+        LOG.debug(
+            "Parsed alert ring fields:\n%s",
+            alert_df[
+                [
+                    "site_id",
+                    "expected_error_nm",
+                    "range_ring_meters_a",
+                    "range_ring_meters_b",
+                    "position_method",
+                    "format_type_a",
+                    "format_type_b",
+                ]
+            ].to_string(index=False),
+        )
+        dump_dataframe(alert_df, "debug_final_alert_df.csv")
 
         logging.info(f"{get_current_utc_timestamp()} ðŸ“ Parsed Positions - A: {parsed_data.get('latitude_a')}, "
                      f"B: {parsed_data.get('latitude_b')}, Status A: {parsed_data.get('position_status_a')}, "
@@ -222,9 +230,7 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
         alert_df = finalize_alert_df(alert_df, existing_alerts_db)  # Pass it to finalize_alert_df()
         logging.info(f"{get_current_utc_timestamp()} âœ… Finalized alert data.")
 
-        # ðŸš¨ DEBUG STOP: Print alert_df and exit ðŸš¨
-        print("âœ… Finalized Alert DataFrame:")
-        print(alert_df.to_string(index=False))  # Displays all columns and rows without truncation
+        LOG.debug("Finalized alert DataFrame:\n%s", alert_df.to_string(index=False))
 
         """
         # Step 4: Save Alert to Database
@@ -300,7 +306,7 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
         # Load satellite overlays for this site
         sat_overlays = load_sat_overlays_for_site(site_id_safe)
 
-        print("[sat_overlays] loaded:", 0 if not sat_overlays else len(sat_overlays))
+        LOG.debug("Satellite overlays loaded: %s", len(sat_overlays or []))
 
         # Build ephemeral positions_df (A row, and B row if present)
         rows = []
@@ -442,7 +448,7 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
             n_sat = int(gis_map_inputs_df[gis_map_inputs_df["layer"]=="satellite_overlay"].shape[0])
         except Exception:
             n_sat = 0
-        print("[gis_df] satellite_overlay rows:", n_sat)
+        LOG.debug("Satellite overlay map rows: %s", n_sat)
 
         LOG.info(f"GIS map inputs row counts by layer: {gis_map_inputs_df['layer'].value_counts().to_dict()}")
 
@@ -465,7 +471,6 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
 
         LOG.info(f"Available layers: {result.get('layers', [])}")
 
-        print("✅ Map:", result)
         LOG.info(f"Map HTML output path: {result.get('map_html_path')}")
         return {
             "status": "ok",

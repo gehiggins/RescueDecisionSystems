@@ -35,6 +35,7 @@
 
 from app.setup_imports import *
 
+from app.debug_outputs import dump_dataframe
 from app.utils_coordinates import clean_and_standardize_coordinate
 from app.field_validator import (
     validate_and_extract_coordinate_token,
@@ -63,8 +64,6 @@ def pre_scan_for_coordinates(raw_message):
             - is_valid: Whether the pair is fully valid
     """
 
-
-    import os
     coordinate_pairs = []
     lines = raw_message.splitlines()
     offset = 0  # Running character offset for global spans
@@ -104,11 +103,7 @@ def pre_scan_for_coordinates(raw_message):
     columns = ["lat", "lon", "lat_dd", "lon_dd", "start_pos", "end_pos", "format_type", "is_valid", "confidence", "notes"]
     coord_df = pd.DataFrame(coordinate_pairs, columns=columns)
 
-    # Ensure output directory exists
-    debug_csv_path = os.path.abspath("data/debugging/debug_preparsed_coordinates.csv")
-    os.makedirs(os.path.dirname(debug_csv_path), exist_ok=True)
-    coord_df.to_csv(debug_csv_path, index=False)
-    print(f"âœ… Saved Preparsed Coordinates to: {debug_csv_path}")
+    dump_dataframe(coord_df, "debug_preparsed_coordinates.csv")
 
     return coord_df
 

@@ -6,8 +6,6 @@ from flask_app.app.utils_coordinates import coordinate_pair_to_dd, is_valid_coor
 from flask_app.app.utils import log_error_and_continue
 import re
 
-print("ðŸ“¦ LOADED: parser_sarsat_msg.py from flask_app/app")
-
 
 def _parse_detect_time(message_text):
     """Parse the explicit DATE/TIME DETECTED fields as a UTC timestamp."""
