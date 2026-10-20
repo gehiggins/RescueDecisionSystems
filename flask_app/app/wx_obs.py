@@ -120,7 +120,9 @@ def _normalize_search_parameters(radius_km, max_stations):
     if radius_km is not None:
         try:
             normalized_radius = (
-                float("nan") if isinstance(radius_km, bool) else float(radius_km)
+                float("nan")
+                if isinstance(radius_km, (bool, np.bool_))
+                else float(radius_km)
             )
         except (TypeError, ValueError, OverflowError):
             normalized_radius = float("nan")
@@ -137,7 +139,7 @@ def _normalize_search_parameters(radius_km, max_stations):
         try:
             numeric_max_stations = (
                 float("nan")
-                if isinstance(max_stations, bool)
+                if isinstance(max_stations, (bool, np.bool_))
                 else float(max_stations)
             )
         except (TypeError, ValueError, OverflowError):
