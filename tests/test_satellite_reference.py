@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from flask_app.app import sat_fetch_tle
 from flask_app.app import sat_pipeline
@@ -104,3 +105,18 @@ def test_stale_tle_is_not_used_for_historical_alert(monkeypatch):
     overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=True)
 
     assert overlay.empty
+
+
+@pytest.mark.parametrize("configured", ["not-a-number", "nan", "inf", "-1", "0"])
+def test_invalid_tle_age_configuration_uses_safe_default(
+    monkeypatch, configured
+):
+    monkeypatch.setenv("RDS_SAT_MAX_TLE_AGE_HOURS", configured)
+
+    assert sat_pipeline._max_tle_age_hours() == 168.0
+
+
+def test_positive_tle_age_configuration_is_preserved(monkeypatch):
+    monkeypatch.setenv("RDS_SAT_MAX_TLE_AGE_HOURS", "72")
+
+    assert sat_pipeline._max_tle_age_hours() == 72.0

@@ -47,13 +47,24 @@ import pandas as pd, numpy as np
 
 LOG = logging.getLogger(__name__)
 
+DEFAULT_MAX_TLE_AGE_HOURS = 168.0
+
 
 def _max_tle_age_hours() -> float:
     """Maximum event-to-TLE epoch difference allowed for map propagation."""
     try:
-        return float(os.getenv("RDS_SAT_MAX_TLE_AGE_HOURS", "168"))
+        configured = float(
+            os.getenv("RDS_SAT_MAX_TLE_AGE_HOURS", str(DEFAULT_MAX_TLE_AGE_HOURS))
+        )
     except (TypeError, ValueError):
-        return 168.0
+        configured = DEFAULT_MAX_TLE_AGE_HOURS
+    if not math.isfinite(configured) or configured <= 0:
+        LOG.warning(
+            "Invalid RDS_SAT_MAX_TLE_AGE_HOURS; using %.0f hours",
+            DEFAULT_MAX_TLE_AGE_HOURS,
+        )
+        return DEFAULT_MAX_TLE_AGE_HOURS
+    return configured
 
 
 def _tle_age_hours(at_time_utc, tle_epoch_utc) -> float:
