@@ -4,8 +4,18 @@
 
 from app.setup_imports import *
 from flask_app.app.utils import log_error_and_continue, calculate_distance_nm
-from flask_app.app.fetch_NOAA_offshore_buoys import fetch_offshore_buoys
+from flask_app.app.fetcher_ndbc_buoy import fetch_ndbc_buoy_data
 from flask_app.app.noaa_weather_alerts_fetch import fetch_weather_alerts_zone
+
+
+def fetch_offshore_buoys(lat, lon, max_buoys=10):
+    """Compatibility wrapper around the maintained NDBC adapter."""
+    return fetch_ndbc_buoy_data(
+        lat,
+        lon,
+        position_label="compatibility",
+        max_buoys=max_buoys,
+    )
 
 def fetch_nearest_weather_stations(lat, lon, position_label='A'):
     """
@@ -40,7 +50,7 @@ def fetch_nearest_weather_stations(lat, lon, position_label='A'):
         weather_alerts_zone, zone_alerts = fetch_weather_alerts_zone(lat, lon)
         combined_stations['weather_alerts_zone'] = np.nan
 
-        if weather_alerts_zone:
+        if weather_alerts_zone and 'zone' in combined_stations.columns:
             logging.info(f"ðŸŒ Weather zone for Position {position_label}: {weather_alerts_zone}")
             combined_stations['weather_alerts_zone'] = combined_stations.apply(
                 lambda row: weather_alerts_zone if pd.notna(row['zone']) and row['zone'] == weather_alerts_zone else np.nan,
