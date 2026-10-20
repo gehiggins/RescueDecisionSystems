@@ -147,6 +147,40 @@ def test_satellite_pipeline_applies_norad_override_to_resolved_reference(
     assert requested == [["28654"]]
 
 
+@pytest.mark.parametrize(
+    "invalid_norad_id",
+    [True, [], {}, 25338.5, "25338.5", "not-a-catalog-id", 0, -1],
+)
+def test_satellite_pipeline_ignores_invalid_norad_override(
+    monkeypatch, invalid_norad_id
+):
+    monkeypatch.setattr(
+        sat_pipeline,
+        "load_sat_reference",
+        lambda: pd.DataFrame(
+            columns=["type", "designator", "common_name", "norad_id"]
+        ),
+    )
+    monkeypatch.setattr(sat_pipeline, "resolve_reporting_sat", lambda _alert: None)
+    monkeypatch.setattr(
+        sat_pipeline,
+        "load_tle_snapshot",
+        lambda _identifiers: pytest.fail("invalid NORAD ID reached TLE lookup"),
+    )
+    alert = pd.DataFrame(
+        [
+            {
+                "alert_time_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+                "norad_id": invalid_norad_id,
+            }
+        ]
+    )
+
+    overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=True)
+
+    assert overlay.empty
+
+
 @pytest.mark.parametrize("alert_time", [None, "invalid", ["2026-10-20T12:00:00Z"]])
 def test_satellite_pipeline_rejects_invalid_alert_time_without_provider_lookup(
     monkeypatch, alert_time
