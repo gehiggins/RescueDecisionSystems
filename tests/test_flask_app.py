@@ -33,6 +33,49 @@ def test_process_alert_rejects_non_json_request():
     assert response.get_json()["error"] == "Invalid request format. Must be JSON."
 
 
+def test_process_alert_rejects_blank_message():
+    application = create_app({"TESTING": True})
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "   "}
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "No message provided"
+
+
+def test_process_alert_rejects_message_over_configured_limit(monkeypatch):
+    application = create_app({"TESTING": True, "RDS_MAX_ALERT_CHARS": 10})
+    pipeline_called = False
+
+    def run_pipeline(_message, maps_root):
+        nonlocal pipeline_called
+        pipeline_called = True
+
+    monkeypatch.setattr("flask_app.app.routes.run_alert_pipeline", run_pipeline)
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "x" * 11}
+    )
+
+    assert response.status_code == 413
+    assert response.get_json()["error"].endswith("10 characters.")
+    assert pipeline_called is False
+
+
+def test_process_alert_returns_json_when_request_body_is_too_large():
+    application = create_app({"TESTING": True, "MAX_CONTENT_LENGTH": 32})
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "x" * 64}
+    )
+
+    assert response.status_code == 413
+    assert response.get_json()["error"] == (
+        "Request is too large to process as a SARSAT alert."
+    )
+
+
 def test_process_alert_returns_active_parser_shape(monkeypatch, tmp_path):
     application = create_app(
         {"TESTING": True, "RDS_MAPS_DIR": str(tmp_path / "maps")}
