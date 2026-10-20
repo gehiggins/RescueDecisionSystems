@@ -212,6 +212,46 @@ def test_all_malformed_weather_rows_return_empty_schema(monkeypatch, caplog):
     assert "Discarded 2 malformed weather observation row" in caplog.text
 
 
+def test_malformed_source_id_shapes_do_not_discard_valid_observations(
+    monkeypatch, caplog
+):
+    provider_rows = pd.DataFrame(
+        [
+            {
+                "source_id": ["array-shaped-id"],
+                "valid_utc": "2026-10-19T18:00:00Z",
+            },
+            {
+                "source_id": {"station": "mapping-shaped-id"},
+                "valid_utc": "2026-10-19T18:00:00Z",
+            },
+            {
+                "source_id": "  VALID-STATION  ",
+                "valid_utc": "2026-10-19T18:00:00Z",
+            },
+        ]
+    )
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_open_meteo_obs",
+        lambda *_args, **_kwargs: provider_rows,
+    )
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_meteostat_obs_near",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
+
+    result = wx_obs.build_wx_obs_for_area(
+        [(37.5, -75.5)],
+        pd.Timestamp("2026-10-19T12:00:00Z"),
+        pd.Timestamp("2026-10-19T18:00:00Z"),
+    )
+
+    assert result["source_id"].tolist() == ["VALID-STATION"]
+    assert "Discarded 2 malformed weather observation row" in caplog.text
+
+
 def test_weather_pipeline_discards_invalid_targets_and_keeps_valid_target(
     monkeypatch, caplog
 ):
