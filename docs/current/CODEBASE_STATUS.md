@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `4b8e2b4d2f1dd6437599de1a1eac9f1c80cb801d`
+Baseline: `main` commit `7eb43f3c1b557d5720def4024268286a59f09083`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -43,9 +43,15 @@ returns:
 - a served HTML map.
 
 Live Open-Meteo retrieval was exercised for both sample positions on
-2026-10-20. During the initial 2026-10-19 review, a current-time NOAA-15 test
-exercised CelesTrak TLE retrieval, Skyfield propagation, satellite footprints,
-and map overlays. A direct CelesTrak check on 2026-10-20 timed out, so current
+2026-10-20. The full controller produced two weather rows and an HTML map with
+alert-position, range-ring, and weather layers. Open-Meteo is explicitly asked
+for metres-per-second wind values to match the `wind_ms` schema; the verified
+sample displayed 19 kt and 31 kt after this correction, rather than the
+incorrect 70 kt and 111 kt produced when the provider's default km/h values
+were treated as m/s. During the initial 2026-10-19 review, a current-time
+NOAA-15 test exercised CelesTrak TLE retrieval, Skyfield propagation,
+satellite footprints, and map overlays. A direct CelesTrak check on 2026-10-20
+timed out, so current
 TLE-provider availability was not reconfirmed; cached TLEs remain usable and
 provider failures now enter a short backoff instead of causing a retry cascade.
 
@@ -119,6 +125,16 @@ Map inputs accept only finite, in-range coordinates and positive finite range
 rings. Numeric range-ring text is normalized; malformed radii are omitted
 without stopping other layers.
 
+The map renderer independently validates point, ring, track, and satellite
+geometry, so malformed rows cannot abort otherwise valid layers. External
+station and provider display values are escaped before entering map popup and
+tooltip HTML. Alert finalization normalizes site identifiers, ignores invalid
+historical sequence values, and assigns distinct increasing sequence numbers
+to repeated sites in the same batch. Shared UTC slicing accepts naive, aware,
+and mixed-offset timestamps without comparing incompatible indexes. Shared
+coordinate utilities enforce pole and antimeridian bounds even when called
+outside the primary alert validator.
+
 Database modules can be imported without a database URL. Database setup is
 lazy and explicit, and missing configuration produces a clear error if a
 database operation is actually requested. A retired local database credential
@@ -127,7 +143,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 181 passed; 2 live tests deselected.
+- Default offline suite: 239 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.

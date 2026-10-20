@@ -5,7 +5,7 @@ Status: verified current
 Reviewed and installation-tested: 2026-10-19
 
 Continuous verification baseline: `main` commit
-`4b8e2b4d2f1dd6437599de1a1eac9f1c80cb801d` (2026-10-20)
+`7eb43f3c1b557d5720def4024268286a59f09083` (2026-10-20)
 
 Supersedes: `docs/archive/2025/RDS_Installation_Requirements_2025-02-28.md`
 
@@ -55,7 +55,13 @@ database; alert sequence numbering then starts from an empty local history.
   that the Gunicorn server dependency was included.
 - Imported and exercised the Flask application, GIS renderer, live weather
   path, and Skyfield satellite propagation path.
-- Ran the default offline suite after installation.
+- Ran the default offline suite after installation: 239 passed, with the two
+  explicitly marked live-provider tests deselected.
+- Ran the explicit live-provider suite: 2 passed on 2026-10-20.
+- Ran the committed sample alert through the full controller and map writer;
+  it produced two live weather rows and the alert, range-ring, and weather map
+  layers. CelesTrak timed out during that run, and the pipeline completed
+  without satellite rows as designed.
 
 Live weather and TLE retrieval require outbound internet access. Production
 deployment configuration is intentionally outside this installation check.
