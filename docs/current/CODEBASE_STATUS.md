@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `4d3470b1048fb2888facac9d7467292a85e94b31`
+Baseline: `main` commit `5b61688a1af09bcf3d806ce93f5c9af71744d5ca`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -42,27 +42,30 @@ returns:
 - 2 NM / 3,704 metre error rings; and
 - a served HTML map.
 
-Live Open-Meteo retrieval was exercised for both sample positions on
-2026-10-20 before alert-time weather selection was connected. That run
-produced two current-weather rows and an HTML map with alert-position,
-range-ring, and weather layers; it does not verify historical weather for the
-2025 sample alert. The controller now centers weather retrieval on the parsed
-alert detection time. Atmospheric requests older than the live service's
-92-day window use Open-Meteo's historical-forecast service, while recent
-alerts continue to use the live forecast service. These selections and the
-timezone conversion are covered by offline regression tests. Open-Meteo is
+Live historical Open-Meteo retrieval was exercised for both sample positions
+on 2026-10-20 after alert-time weather selection was connected. The full
+controller used the 2025 detection time, produced two historical-weather rows,
+and rendered an HTML map with both alert positions, range rings, and weather
+markers. A direct 2020 request through the RDS fetcher also returned the exact
+requested hour with finite wind data. The controller centers weather retrieval
+on the parsed alert detection time. Recent alerts use the live forecast
+service, archived alerts from 2022 onward use the historical-forecast service,
+and earlier alerts use the long-term historical weather archive. Open-Meteo is
 explicitly asked for metres-per-second wind values to match the `wind_ms`
 schema. During the initial 2026-10-19 review, a current-time NOAA-15 test
 exercised CelesTrak TLE retrieval, Skyfield propagation, satellite footprints,
 and map overlays. A direct CelesTrak check on 2026-10-20 timed out, so current
 TLE-provider availability was not reconfirmed; cached TLEs remain usable and
-provider failures now enter a short backoff instead of causing a retry cascade.
+provider failures enter a short backoff instead of causing a retry cascade.
 
 Satellite propagation uses the alert detection time. TLE data more than 168
 hours from the alert time is rejected by default rather than used to draw a
 potentially misleading position. The limit is configurable through
 `RDS_SAT_MAX_TLE_AGE_HOURS`. Invalid, non-finite, zero, or negative limits
-fall back to the 168-hour safeguard.
+fall back to the 168-hour safeguard. Stale elements are rejected before RDS
+calculates a subpoint, ground track, or next-pass marker. When a resolved
+satellite reference and an explicit alert NORAD ID are both present, the alert
+override is applied without truth-testing the pandas reference record.
 
 Coordinate validation rejects latitude/longitude pairs unless both tokens are
 valid. Minutes and seconds must remain below 60, hemisphere letters must match
@@ -199,7 +202,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 418 passed; 2 live tests deselected.
+- Default offline suite: 420 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
