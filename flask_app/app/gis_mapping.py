@@ -578,8 +578,13 @@ def generate_gis_map_html_from_dfs(
         out_path = str(Path(out_dir) / f"gis_map_{site_id}.html")
 
     # --- Center/Meta ---
-    lat0 = (alert_row or {}).get("position_lat_dd_a") or (alert_row or {}).get("alert_lat_dd")
-    lon0 = (alert_row or {}).get("position_lon_dd_a") or (alert_row or {}).get("alert_lon_dd")
+    lat0 = alert_row.get("position_lat_dd_a")
+    lon0 = alert_row.get("position_lon_dd_a")
+    # Zero is a valid coordinate, so fall back only for genuinely missing data.
+    if lat0 is None or pd.isna(lat0):
+        lat0 = alert_row.get("alert_lat_dd")
+    if lon0 is None or pd.isna(lon0):
+        lon0 = alert_row.get("alert_lon_dd")
     if pd.isna(lat0) or pd.isna(lon0):
         lat0, lon0 = 38.255, -70.208333  # safe default
 
