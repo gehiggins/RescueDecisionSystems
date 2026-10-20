@@ -117,6 +117,32 @@ def test_buoy_fetch_honors_station_limit(monkeypatch):
     assert result["station_id"].tolist() == ["ONE", "TWO"]
 
 
+@pytest.mark.parametrize("invalid_limit", [True, pd.Series([True]).iloc[0]])
+def test_buoy_fetch_defaults_boolean_station_limit(monkeypatch, invalid_limit):
+    metadata = pd.DataFrame(
+        [
+            {
+                "station_id": str(index),
+                "latitude": 37.5 + index / 100,
+                "longitude": -74.5,
+            }
+            for index in range(12)
+        ]
+    )
+    monkeypatch.setattr(fetcher_ndbc_buoy, "load_buoy_metadata", lambda: metadata)
+    monkeypatch.setattr(
+        fetcher_ndbc_buoy,
+        "fetch_single_buoy",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
+
+    result = fetcher_ndbc_buoy.fetch_ndbc_buoy_data(
+        37.5, -74.5, "A", max_buoys=invalid_limit
+    )
+
+    assert len(result) == 10
+
+
 @pytest.mark.parametrize(
     ("latitude", "longitude"),
     [(91, 0), (0, 181), (float("nan"), 0), ("bad", 0), (True, False)],
