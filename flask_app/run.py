@@ -11,12 +11,12 @@ app = create_app()
 # ✅ Log every request Flask processes
 @app.before_request
 def log_request():
-    print(f"🔹 Flask received request: {request.method} {request.path}")
+    app.logger.debug("Flask request: %s %s", request.method, request.path)
 
 def main():
     """Run the local development server."""
     logging.basicConfig(level=logging.DEBUG)
-    print("✅ Flask is running in DEBUG mode. Logging all requests.")
+    app.logger.info("Flask development server is starting in debug mode.")
     app.run(debug=True)
 
 
