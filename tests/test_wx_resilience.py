@@ -347,6 +347,44 @@ def test_weather_aggregator_normalizes_direct_search_parameters(monkeypatch):
     assert captured["max_stations"] == 5
 
 
+@pytest.mark.parametrize(
+    ("explicit_value", "policy_value", "expected"),
+    [(False, True, False), (True, False, True), (None, True, True)],
+)
+def test_weather_aggregator_preserves_explicit_marine_choice(
+    monkeypatch, explicit_value, policy_value, expected
+):
+    captured = {}
+
+    class Plan:
+        include_marine = policy_value
+        spatial_radius_km = 50.0
+        station_limit = 5
+        rationale = "test policy"
+
+    monkeypatch.setattr(wx_obs, "make_wx_data_plan", lambda *_a, **_k: Plan())
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_open_meteo_obs",
+        lambda *_args, **kwargs: captured.update(kwargs) or pd.DataFrame(),
+    )
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_meteostat_obs_near",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
+
+    result = wx_obs.build_wx_obs_for_area(
+        [(37.5, -75.5)],
+        pd.Timestamp("2026-10-19T12:00:00Z"),
+        pd.Timestamp("2026-10-19T18:00:00Z"),
+        include_marine=explicit_value,
+    )
+
+    assert result.empty
+    assert captured["include_marine"] is expected
+
+
 def test_weather_aggregator_filters_invalid_reference_points(
     monkeypatch, caplog
 ):
