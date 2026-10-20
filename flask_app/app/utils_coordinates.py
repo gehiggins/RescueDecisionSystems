@@ -1,5 +1,6 @@
 ﻿import re
 import logging
+import math
 from app.utils import log_error_and_continue
 
 def is_valid_coordinate(coord_string):
@@ -7,8 +8,11 @@ def is_valid_coordinate(coord_string):
     Checks if a string is a valid coordinate (basic format + N/S/E/W).
     Returns True or False.
     """
-    pattern = r"\d{2,3} \d{2,3}\.\d+[NSEW]"
-    return bool(re.search(pattern, coord_string.strip().upper()))
+    try:
+        parse_any_coordinate(coord_string)
+        return True
+    except (AttributeError, TypeError, ValueError):
+        return False
 
 def clean_and_standardize_coordinate(coord_string: str) -> str:
     if coord_string is None:
@@ -30,7 +34,12 @@ def parse_any_coordinate(coord_string: str) -> float:
     if not (0 <= minutes < 60): raise ValueError("minutes out of range")
     if not (0 <= seconds < 60): raise ValueError("seconds out of range")
     dd = deg + minutes/60.0 + seconds/3600.0
-    if m.group(4) in ("S", "W"): dd *= -1
+    cardinal = m.group(4)
+    limit = 90.0 if cardinal in ("N", "S") else 180.0
+    # At the pole or antimeridian, minutes and seconds must both be zero.
+    if dd > limit:
+        raise ValueError("coordinate out of range")
+    if cardinal in ("S", "W"): dd *= -1
     return dd
 
 def coordinate_pair_to_dd(coord_string):
@@ -59,10 +68,18 @@ def coordinate_pair_to_dd(coord_string):
         return None, None
 
 def _bounds_ok_lat(lat):  
-    return lat is not None and -90.0 <= lat <= 90.0
+    try:
+        lat = float(lat)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(lat) and -90.0 <= lat <= 90.0
 
 def _bounds_ok_lon(lon):  
-    return lon is not None and -180.0 <= lon <= 180.0
+    try:
+        lon = float(lon)
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(lon) and -180.0 <= lon <= 180.0
 
 def coordinate_pair_to_dd_safe(coord_string):
     lat, lon = coordinate_pair_to_dd(coord_string)
@@ -167,10 +184,12 @@ def to_latlon_polyline(coords_lonlat):
     """
     out = []
     for pt in (coords_lonlat or []):
-        if pt and len(pt) == 2:
-            lon, lat = pt
-            try:
-                out.append([float(lat), float(lon)])
-            except Exception:
+        try:
+            if len(pt) != 2:
                 continue
+            lon, lat = float(pt[0]), float(pt[1])
+        except (TypeError, ValueError):
+            continue
+        if _bounds_ok_lon(lon) and _bounds_ok_lat(lat):
+            out.append([lat, lon])
     return out
