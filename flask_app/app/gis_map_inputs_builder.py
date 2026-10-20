@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 from typing import Optional
 from app.utils_display import format_us_display, to_dual_time, derive_local_tz
+from app.utils_coordinates import is_valid_overlay_bounds
 
 LOG = logging.getLogger(__name__)
 
@@ -412,7 +413,9 @@ def build_gis_map_inputs_df(
                 LOG.warning("Skipping malformed satellite overlay entry: %r", o)
                 continue
             # ImageOverlay passthrough
-            if o.get("type") == "ImageOverlay" and not _is_missing(o.get("bounds")):
+            if o.get("type") == "ImageOverlay" and is_valid_overlay_bounds(
+                o.get("bounds")
+            ):
                 rows.append({
                     "site_id": positions_df["site_id"].iloc[0] if positions_df is not None and not positions_df.empty else None,
                     "layer": "satellite_overlay",
@@ -696,6 +699,8 @@ def build_gis_map_inputs_df(
                 return False
             # all vertices valid
             return all(_valid_coords_pair(pt) for pt in coords)
+        if t == "ImageOverlay":
+            return is_valid_overlay_bounds(g.get("bounds"))
         # other types pass through
         return True
 
