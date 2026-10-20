@@ -1,5 +1,7 @@
 import pytest
 from app.field_validator import (
+    FIELD_CONFIG,
+    validate_and_extract,
     validate_and_extract_coordinate_token,
     validate_and_extract_coordinate_pair
 )
@@ -7,6 +9,29 @@ from flask_app.app.preparse_coordinate_mapper import pre_scan_for_coordinates
 
 def approx(val, ref, tol=1e-4):
     return abs(val - ref) < tol
+
+
+def test_generic_validator_tries_configured_fallback_patterns():
+    result = validate_and_extract(
+        "beacon_id",
+        "BEACON ID: ABCDEF123456",
+        FIELD_CONFIG["beacon_id"],
+    )
+
+    assert result["valid"] is True
+    assert result["value"] == "ABCDEF123456"
+    assert result["fallback_used"] is True
+
+
+def test_generic_validator_reports_failure_after_all_patterns_miss():
+    result = validate_and_extract(
+        "beacon_id", "BEACON ID: not-a-hex-id", FIELD_CONFIG["beacon_id"]
+    )
+
+    assert result["valid"] is False
+    assert result["value"] is None
+    assert result["checks_failed"] == ["pattern_no_match"]
+    assert sum("did not match" in note for note in result["notes"]) == 2
 
 def test_lat_token_minutes_only_ok():
     res = validate_and_extract_coordinate_token("latitude", "37 45.600N", {}, None)
