@@ -159,9 +159,17 @@ def _parse_data_row(header_line, data_row):
             "observation_time": obs_time.isoformat(),
             "timelate": round(timelate, 2),
             "temperature": _safe_float_lookup(header_line, data_row, 'ATMP'),
-            "wind_speed": _safe_float_lookup(header_line, data_row, 'WSPD'),
-            "wind_direction": _safe_float_lookup(header_line, data_row, 'WDIR'),
-            "wave_height": _safe_float_lookup(header_line, data_row, 'WVHT')
+            # Numeric provider tokens still need physical range checks before
+            # they can be trusted by the shared operational weather schema.
+            "wind_speed": _safe_float_lookup(
+                header_line, data_row, 'WSPD', minimum=0
+            ),
+            "wind_direction": _safe_float_lookup(
+                header_line, data_row, 'WDIR', minimum=0, maximum=360
+            ),
+            "wave_height": _safe_float_lookup(
+                header_line, data_row, 'WVHT', minimum=0
+            )
         }
 
         if timelate > 1:
@@ -176,7 +184,9 @@ def _parse_data_row(header_line, data_row):
         log_error_and_continue(f"Failed to parse data row: {e}")
         return None
 
-def _safe_float_lookup(header, row, field_name):
+def _safe_float_lookup(
+    header, row, field_name, minimum=None, maximum=None
+):
     """
     Safely fetches and converts a field from the data row, handling 'MM' missing values.
     """
@@ -186,7 +196,13 @@ def _safe_float_lookup(header, row, field_name):
         if value == 'MM':
             return None
         numeric = float(value)
-        return numeric if math.isfinite(numeric) else None
+        if not math.isfinite(numeric):
+            return None
+        if minimum is not None and numeric < minimum:
+            return None
+        if maximum is not None and numeric > maximum:
+            return None
+        return numeric
     except (ValueError, IndexError, TypeError, OverflowError):
         return None
 
