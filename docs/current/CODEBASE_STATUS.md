@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `71138265ab6312db159b862834514192b2ff6d02`
+Baseline: `main` commit `718a98d69fec6a231329e6309280138b52dbb70c`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -152,6 +152,21 @@ utilities are quiet on import and perform file or network work only when
 called explicitly. The NOAA diagnostic and weather health utility likewise do
 not contact a provider or change application-wide logging merely when imported.
 
+The optional NDBC buoy adapter now normalizes usable coordinates from the
+committed station metadata, retrieves preferred observations with fallback,
+and preserves nearby-station context when observations are unavailable. The
+retired NOAA weather compatibility interface imports successfully and delegates
+offshore requests to that maintained adapter, but it remains disabled in the
+active production path. The NDBC metadata refresh script uses repository-
+relative outputs, declared project dependencies, bounded requests, and explicit
+command-line output options; its live multi-station refresh was not run during
+this maintenance batch, so the committed reference dataset was not replaced.
+
+The central empty DataFrame schemas now initialize successfully with current
+pandas. Timestamp columns are UTC-aware, while list and coordinate-container
+fields use pandas object columns. An isolation audit imported every active
+`flask_app/app` module and every `rds_engine` module successfully.
+
 Open-Meteo and Meteostat retrieval are isolated so an unexpected failure in
 one provider does not discard valid observations from the other. Weather-row
 reduction preserves the source identifier used to associate observations with
@@ -217,7 +232,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 433 passed; 2 live tests deselected.
+- Default offline suite: 448 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
