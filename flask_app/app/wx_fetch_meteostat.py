@@ -61,6 +61,22 @@ def fetch_meteostat_obs_near(lat: float, lon: float, start_utc, end_utc,
         if stations_df is None or len(stations_df) == 0:
             LOG.info("Meteostat: no nearby stations within radius_km=%s", radius_km)
             return pd.DataFrame(columns=cols)
+        if not isinstance(stations_df, pd.DataFrame) or not {
+            "latitude", "longitude"
+        }.issubset(stations_df.columns):
+            LOG.warning("Meteostat station lookup returned invalid station metadata")
+            return out
+        stations_df = stations_df.copy()
+        stations_df["latitude"] = pd.to_numeric(stations_df["latitude"], errors="coerce")
+        stations_df["longitude"] = pd.to_numeric(stations_df["longitude"], errors="coerce")
+        usable_coordinates = (
+            stations_df["latitude"].between(-90.0, 90.0)
+            & stations_df["longitude"].between(-180.0, 180.0)
+        )
+        stations_df = stations_df.loc[usable_coordinates].copy()
+        if stations_df.empty:
+            LOG.info("Meteostat: nearby station metadata had no usable coordinates")
+            return out
         stations_df["dist_km"] = stations_df.apply(lambda r: haversine_km(lat, lon, r["latitude"], r["longitude"]), axis=1)
         stations_df = (stations_df[stations_df["dist_km"] <= radius_km].sort_values("dist_km", ascending=True).head(max_stations))
     except Exception as e:
