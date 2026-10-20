@@ -1,6 +1,7 @@
 ﻿import pytest
 import pandas as pd
 from app.gis_map_inputs_builder import build_gis_map_inputs_df
+import importlib
 
 def make_positions_df():
     return pd.DataFrame([{
@@ -110,3 +111,22 @@ def test_gis_map_inputs_empty_inputs():
     stations_df = pd.DataFrame()
     df = build_gis_map_inputs_df(positions_df, wx_df, stations_df, op_tz_env="UTC")
     assert df.empty
+
+
+def test_satellite_overlay_uses_alert_detection_time(monkeypatch):
+    captured = {}
+    sat_pipeline = importlib.import_module("app.sat_pipeline")
+
+    def capture_alert_time(alert_df, **_kwargs):
+        captured["alert_time_utc"] = alert_df.iloc[0]["alert_time_utc"]
+        return pd.DataFrame()
+
+    monkeypatch.setattr(sat_pipeline, "build_sat_overlay_df", capture_alert_time)
+
+    build_gis_map_inputs_df(
+        make_positions_df(),
+        alert_time_utc="2025-03-02T13:32:17Z",
+        op_tz_env="UTC",
+    )
+
+    assert captured["alert_time_utc"] == pd.Timestamp("2025-03-02T13:32:17Z")
