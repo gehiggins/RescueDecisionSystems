@@ -37,6 +37,8 @@ def _station_id(value):
 
 def _measurement(value, minimum=None, maximum=None):
     """Return one finite in-range Meteostat value, or NaN."""
+    if isinstance(value, (bool, np.bool_)):
+        return np.nan
     try:
         numeric = float(value)
     except (TypeError, ValueError, OverflowError):
@@ -60,7 +62,7 @@ def _normalize_search_parameters(radius_km, max_stations):
     """Return provider-safe radius and station-count parameters."""
     try:
         radius = float(radius_km)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         radius = float("nan")
     if isinstance(radius_km, (bool, np.bool_)) or not np.isfinite(radius) or radius <= 0:
         LOG.warning(
@@ -72,7 +74,7 @@ def _normalize_search_parameters(radius_km, max_stations):
 
     try:
         station_count = float(max_stations)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         station_count = float("nan")
     if (
         isinstance(max_stations, (bool, np.bool_))
@@ -115,7 +117,7 @@ def fetch_meteostat_obs_near(lat: float, lon: float, start_utc, end_utc,
         return out
     try:
         lat, lon = float(lat), float(lon)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         LOG.warning("Meteostat fetch skipped because coordinates are invalid")
         return out
     if (
@@ -154,10 +156,16 @@ def fetch_meteostat_obs_near(lat: float, lon: float, start_utc, end_utc,
             LOG.warning("Meteostat station lookup returned invalid station metadata")
             return out
         stations_df = stations_df.copy()
+        boolean_coordinates = stations_df["latitude"].map(
+            lambda value: isinstance(value, (bool, np.bool_))
+        ) | stations_df["longitude"].map(
+            lambda value: isinstance(value, (bool, np.bool_))
+        )
         stations_df["latitude"] = pd.to_numeric(stations_df["latitude"], errors="coerce")
         stations_df["longitude"] = pd.to_numeric(stations_df["longitude"], errors="coerce")
         usable_coordinates = (
-            stations_df["latitude"].between(-90.0, 90.0)
+            ~boolean_coordinates
+            & stations_df["latitude"].between(-90.0, 90.0)
             & stations_df["longitude"].between(-180.0, 180.0)
         )
         stations_df = stations_df.loc[usable_coordinates].copy()
@@ -175,13 +183,12 @@ def fetch_meteostat_obs_near(lat: float, lon: float, start_utc, end_utc,
         try:
             if isinstance(s, pd.Series):
                 sid = (
-                    str(s["id"]) if "id" in s.index
-                    else str(s["station"]) if "station" in s.index
-                    else str(s.name)
+                    s["id"] if "id" in s.index
+                    else s["station"] if "station" in s.index
+                    else s.name
                 )
             else:
-                sid = str(getattr(s, "id", getattr(s, "station", getattr(s, "Index", s)))
-                )
+                sid = getattr(s, "id", getattr(s, "station", getattr(s, "Index", s)))
         except Exception as e:
             LOG.debug("Meteostat station row keys=%s", list(getattr(s, "index", [])))
             LOG.warning("Skipping station; unable to determine id: %s", e)
