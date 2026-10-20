@@ -295,6 +295,32 @@ def test_prebuilt_satellite_overlays_validate_geometry_values():
     ]
 
 
+@pytest.mark.parametrize(
+    "bounds",
+    [
+        [[40.0, -78.0], [35.0, -72.0]],
+        [[35.0, -72.0], [40.0, -78.0]],
+        [[35.0, -78.0], [91.0, -72.0]],
+        [[35.0, -78.0], [40.0, float("nan")]],
+        "not-bounds",
+    ],
+)
+def test_prebuilt_image_overlays_reject_invalid_bounds(bounds):
+    result = build_gis_map_inputs_df(
+        make_positions_df(),
+        sat_overlays=[
+            {
+                "type": "ImageOverlay",
+                "bounds": bounds,
+                "image_path": "coverage.png",
+            }
+        ],
+        op_tz_env="UTC",
+    )
+
+    assert result[result["layer"] == "satellite_overlay"].empty
+
+
 def test_prebuilt_satellite_circle_normalizes_numeric_text_geometry():
     overlays = [
         {
