@@ -1020,6 +1020,77 @@ def test_upcoming_passes_use_groundtrack_contract(monkeypatch):
     assert captured["max_hours"] == 6.0
 
 
+@pytest.mark.parametrize(
+    "candidate_builder",
+    [sat_pipeline._visible_candidates, sat_pipeline._upcoming_passes],
+    ids=["visible", "upcoming"],
+)
+def test_secondary_candidate_paths_skip_malformed_provider_catalog_id(
+    monkeypatch, candidate_builder
+):
+    reference = pd.DataFrame([{"type": "LEO", "norad_id": 25338}])
+    malformed_tle = pd.DataFrame(
+        [
+            {
+                "name": "Malformed satellite",
+                "norad_id": [25338],
+                "tle_line1": "line 1",
+                "tle_line2": "line 2",
+                "epoch_utc": "2026-10-20T11:00:00Z",
+            }
+        ]
+    )
+    monkeypatch.setattr(sat_pipeline, "load_sat_reference", lambda: reference)
+    monkeypatch.setattr(
+        sat_pipeline, "load_tle_snapshot", lambda _ids: malformed_tle
+    )
+    monkeypatch.setattr(
+        sat_pipeline,
+        "compute_subpoint_at",
+        lambda *_args: pytest.fail("invalid provider catalog ID reached propagation"),
+    )
+
+    result = candidate_builder(
+        37.5,
+        -75.0,
+        pd.Timestamp("2026-10-20T12:00:00Z"),
+        exclude_norad=set(),
+    )
+
+    assert result.empty
+
+
+def test_secondary_candidate_request_filters_invalid_reference_catalog_ids(
+    monkeypatch,
+):
+    requested = []
+    reference = pd.DataFrame(
+        [
+            {"type": "LEO", "norad_id": True},
+            {"type": "LEO", "norad_id": 25338.5},
+            {"type": "LEO", "norad_id": [28654]},
+            {"type": "LEO", "norad_id": 25338},
+            {"type": "LEO", "norad_id": "25338"},
+        ]
+    )
+    monkeypatch.setattr(sat_pipeline, "load_sat_reference", lambda: reference)
+    monkeypatch.setattr(
+        sat_pipeline,
+        "load_tle_snapshot",
+        lambda identifiers: requested.extend(identifiers) or pd.DataFrame(),
+    )
+
+    result = sat_pipeline._visible_candidates(
+        37.5,
+        -75.0,
+        pd.Timestamp("2026-10-20T12:00:00Z"),
+        exclude_norad=set(),
+    )
+
+    assert result.empty
+    assert requested == ["25338"]
+
+
 def test_satellite_pipeline_uses_requested_nearest_fallback(monkeypatch):
     reference = pd.DataFrame(
         [

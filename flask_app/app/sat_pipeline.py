@@ -120,6 +120,21 @@ def _satellite_subpoint(values):
     return position[0], position[1], altitude_value
 
 
+def _catalog_id_requests(values, limit):
+    """Build a bounded, de-duplicated provider request from reference IDs."""
+    requests = []
+    seen = set()
+    for value in values:
+        catalog_id = _positive_catalog_id(value)
+        if catalog_id is None or catalog_id in seen:
+            continue
+        seen.add(catalog_id)
+        requests.append(str(catalog_id))
+        if len(requests) >= limit:
+            break
+    return requests
+
+
 def _positive_env_int(name: str, default: int) -> int:
     """Read a positive integer setting, falling back on invalid input."""
     try:
@@ -620,25 +635,44 @@ def _fallback_nearest_leo(
     cand = ref[ref["type_norm"].isin(_types) & pd.notna(ref["norad_id"])] .copy()  # [updated]
     if cand.empty: 
         return pd.DataFrame()
-    catnrs = [str(int(x)) for x in cand["norad_id"].head(max_candidates).tolist()]
+    catnrs = _catalog_id_requests(cand["norad_id"].tolist(), max_candidates)
+    if not catnrs:
+        return pd.DataFrame()
     tles = load_tle_snapshot(catnrs)  # returns many rows
     rows = []
     for _, t in tles.iterrows():
         try:
-            tle_epoch = pd.to_datetime(t.get("epoch_utc"), utc=True, errors="coerce")
+            nid = _positive_catalog_id(t.get("norad_id"))
+            if nid is None:
+                continue
+            tle_epoch = _utc_timestamp(t.get("epoch_utc"))
             if not _tle_is_fresh(at_time_utc, tle_epoch):
                 continue
-            lat, lon, alt_km = compute_subpoint_at(t["tle_line1"], t["tle_line2"], at_time_utc.to_pydatetime())
+            subpoint = _satellite_subpoint(
+                compute_subpoint_at(
+                    t["tle_line1"], t["tle_line2"], at_time_utc.to_pydatetime()
+                )
+            )
+            if subpoint is None:
+                continue
+            lat, lon, alt_km = subpoint
             dist_km = _haversine_km(alert_lat, alert_lon, lat, lon)
             rows.append({
                 "sat_name": t.get("name"),
-                "norad_id": t.get("norad_id"),
+                "norad_id": nid,
                 "at_time_utc": at_time_utc,
                 "lat_dd": lat, "lon_dd": lon, "alt_km": alt_km,
                 "footprint_radius_km": np.nan,  # filled later
                 "tle_epoch_utc": tle_epoch,
                 "tle_age_hours": np.nan,
-                "sat_type": (str(ref.loc[ref["norad_id"]==t.get("norad_id"), "type_norm"].iloc[0]) if not ref.empty else None),  # [updated]
+                "sat_type": next(
+                    (
+                        str(reference_row.get("type_norm"))
+                        for _, reference_row in ref.iterrows()
+                        if _positive_catalog_id(reference_row.get("norad_id")) == nid
+                    ),
+                    None,
+                ),
                 "source": "fallback:nearest",  # [updated]
                 "track_coords": None,
                 "track_start_utc": None,
@@ -748,18 +782,27 @@ def _visible_candidates(alert_lat: float, alert_lon: float, at_time_utc: pd.Time
     cand = ref[ref["type_norm"].isin(_mode_types) & pd.notna(ref["norad_id"])] .copy()  # [updated]
     if cand.empty:
         return pd.DataFrame()
-    catnrs = [str(int(x)) for x in cand["norad_id"].tolist()][:max_candidates]
+    catnrs = _catalog_id_requests(cand["norad_id"].tolist(), max_candidates)
+    if not catnrs:
+        return pd.DataFrame()
     tles = load_tle_snapshot(catnrs)
     rows = []
     for _, t in tles.iterrows():
-        nid = t.get("norad_id")
-        if pd.notna(nid) and int(nid) in exclude_norad:
+        nid = _positive_catalog_id(t.get("norad_id"))
+        if nid is None or nid in exclude_norad:
             continue
         try:
-            tle_epoch = pd.to_datetime(t.get("epoch_utc"), utc=True, errors="coerce")
+            tle_epoch = _utc_timestamp(t.get("epoch_utc"))
             if not _tle_is_fresh(at_time_utc, tle_epoch):
                 continue
-            lat, lon, alt_km = compute_subpoint_at(t["tle_line1"], t["tle_line2"], at_time_utc.to_pydatetime())
+            subpoint = _satellite_subpoint(
+                compute_subpoint_at(
+                    t["tle_line1"], t["tle_line2"], at_time_utc.to_pydatetime()
+                )
+            )
+            if subpoint is None:
+                continue
+            lat, lon, alt_km = subpoint
             dist_km = _haversine_km(alert_lat, alert_lon, lat, lon)
             r = pd.DataFrame([{"sat_name": t.get("name"),
                                "norad_id": nid,
@@ -797,15 +840,17 @@ def _upcoming_passes(alert_lat: float, alert_lon: float, at_time_utc: pd.Timesta
     cand = ref[ref["type_norm"].isin(_mode_types) & pd.notna(ref["norad_id"])] .copy()  # [updated]
     if cand.empty:
         return pd.DataFrame()
-    catnrs = [str(int(x)) for x in cand["norad_id"].tolist()][:max_candidates]
+    catnrs = _catalog_id_requests(cand["norad_id"].tolist(), max_candidates)
+    if not catnrs:
+        return pd.DataFrame()
     tles = load_tle_snapshot(catnrs)
     rows = []
     for _, t in tles.iterrows():
-        nid = t.get("norad_id")
-        if pd.notna(nid) and int(nid) in exclude_norad:
+        nid = _positive_catalog_id(t.get("norad_id"))
+        if nid is None or nid in exclude_norad:
             continue
         try:
-            tle_epoch = pd.to_datetime(t.get("epoch_utc"), utc=True, errors="coerce")
+            tle_epoch = _utc_timestamp(t.get("epoch_utc"))
             if not _tle_is_fresh(at_time_utc, tle_epoch):
                 continue
             # --- [fixed] upcoming pass search — must be inside the same try:
@@ -815,11 +860,18 @@ def _upcoming_passes(alert_lat: float, alert_lon: float, at_time_utc: pd.Timesta
                                            max_hours=float(max_hours))
             if not marker:
                 continue
-            when = pd.to_datetime(marker.get("when_utc"), utc=True, errors="coerce")
-            if pd.isna(when):
+            when = _utc_timestamp(marker.get("when_utc"))
+            if when is pd.NaT:
                 continue
             # subpoint & footprint at pass time
-            plat, plon, alt_km = compute_subpoint_at(t["tle_line1"], t["tle_line2"], when.to_pydatetime())
+            subpoint = _satellite_subpoint(
+                compute_subpoint_at(
+                    t["tle_line1"], t["tle_line2"], when.to_pydatetime()
+                )
+            )
+            if subpoint is None:
+                continue
+            plat, plon, alt_km = subpoint
             r = pd.DataFrame([{"sat_name": t.get("name"),
                                "norad_id": nid,
                                "at_time_utc": when,
