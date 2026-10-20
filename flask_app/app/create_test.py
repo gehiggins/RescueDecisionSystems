@@ -1,3 +1,9 @@
-# This is a test file to verify that files can be created and edited successfully.
+"""Legacy manual smoke entry point retained without import-time output."""
 
-print('Test file created successfully!')
+
+def main():
+    print("Test file created successfully!")
+
+
+if __name__ == "__main__":
+    main()
