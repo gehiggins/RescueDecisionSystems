@@ -31,7 +31,7 @@ def _json_compatible(value):
         return None
     if hasattr(value, "item"):
         value = value.item()
-    if isinstance(value, float) and math.isnan(value):
+    if isinstance(value, float) and not math.isfinite(value):
         return None
     if hasattr(value, "isoformat"):
         return value.isoformat()

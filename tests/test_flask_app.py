@@ -191,6 +191,29 @@ def test_process_alert_serializes_pandas_missing_values(monkeypatch):
     assert parsed["detect_time"] is None
 
 
+@pytest.mark.parametrize("non_finite", [float("nan"), float("inf"), float("-inf")])
+def test_process_alert_serializes_non_finite_numbers_as_null(
+    monkeypatch, non_finite
+):
+    application = create_app({"TESTING": True})
+    monkeypatch.setattr(
+        "flask_app.app.routes.run_alert_pipeline",
+        lambda _message, maps_root: {
+            "status": "ok",
+            "parsed_data": {"site_id": "123", "latitude_b": non_finite},
+        },
+    )
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["parsed_data"][0]["latitude_b"] is None
+    assert b"NaN" not in response.data
+    assert b"Infinity" not in response.data
+
+
 def test_process_alert_does_not_expose_pipeline_failure(monkeypatch, caplog):
     application = create_app({"TESTING": True})
     monkeypatch.setattr(
