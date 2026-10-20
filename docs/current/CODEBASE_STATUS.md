@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `ba9c027b016f21ffc65a5e8cbc1c2a89927ac60c`
+Baseline: `main` commit `4d3470b1048fb2888facac9d7467292a85e94b31`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -43,15 +43,18 @@ returns:
 - a served HTML map.
 
 Live Open-Meteo retrieval was exercised for both sample positions on
-2026-10-20. The full controller produced two weather rows and an HTML map with
-alert-position, range-ring, and weather layers. Open-Meteo is explicitly asked
-for metres-per-second wind values to match the `wind_ms` schema; the verified
-sample displayed 19 kt and 31 kt after this correction, rather than the
-incorrect 70 kt and 111 kt produced when the provider's default km/h values
-were treated as m/s. During the initial 2026-10-19 review, a current-time
-NOAA-15 test exercised CelesTrak TLE retrieval, Skyfield propagation,
-satellite footprints, and map overlays. A direct CelesTrak check on 2026-10-20
-timed out, so current
+2026-10-20 before alert-time weather selection was connected. That run
+produced two current-weather rows and an HTML map with alert-position,
+range-ring, and weather layers; it does not verify historical weather for the
+2025 sample alert. The controller now centers weather retrieval on the parsed
+alert detection time. Atmospheric requests older than the live service's
+92-day window use Open-Meteo's historical-forecast service, while recent
+alerts continue to use the live forecast service. These selections and the
+timezone conversion are covered by offline regression tests. Open-Meteo is
+explicitly asked for metres-per-second wind values to match the `wind_ms`
+schema. During the initial 2026-10-19 review, a current-time NOAA-15 test
+exercised CelesTrak TLE retrieval, Skyfield propagation, satellite footprints,
+and map overlays. A direct CelesTrak check on 2026-10-20 timed out, so current
 TLE-provider availability was not reconfirmed; cached TLEs remain usable and
 provider failures now enter a short backoff instead of causing a retry cascade.
 
@@ -196,7 +199,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 415 passed; 2 live tests deselected.
+- Default offline suite: 418 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
