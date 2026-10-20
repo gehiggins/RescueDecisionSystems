@@ -5,6 +5,7 @@
 # Updated with debugging and column enforcement - 2025-03-06
 
 import math
+import re
 
 from app.setup_imports import *
 from flask_app.app.utils import (
@@ -19,6 +20,7 @@ NOAA_REQUEST_TIMEOUT_SECONDS = 15
 NOAA_REQUEST_HEADERS = {"User-Agent": "RDS-WEATHER/1.0"}
 NOAA_DEFAULT_MAX_STATIONS = 5
 NOAA_MAX_STATIONS = 20
+NOAA_STATION_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,20}\Z")
 
 
 def _station_limit(value):
@@ -32,6 +34,19 @@ def _station_limit(value):
     if not math.isfinite(numeric) or numeric < 1 or not numeric.is_integer():
         return None
     return min(int(numeric), NOAA_MAX_STATIONS)
+
+
+def _station_id(value):
+    """Return one provider-safe NOAA station identifier, or ``None``."""
+    if value is None or isinstance(value, (bool, np.bool_)):
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return None
+    normalized = str(value).strip()
+    return normalized if NOAA_STATION_ID_PATTERN.fullmatch(normalized) else None
 
 
 def _measurement(measurement):
@@ -181,12 +196,16 @@ def query_nearest_noaa_stations(
             station_lon, station_lat = float(coordinates[0]), float(coordinates[1])
         except (TypeError, ValueError, OverflowError):
             continue
-        station_id = properties.get("stationIdentifier")
-        if not station_id or not -90 <= station_lat <= 90 or not -180 <= station_lon <= 180:
+        station_id = _station_id(properties.get("stationIdentifier"))
+        if (
+            station_id is None
+            or not -90 <= station_lat <= 90
+            or not -180 <= station_lon <= 180
+        ):
             continue
         stations.append(
             {
-                "station_id": str(station_id),
+                "station_id": station_id,
                 "station_name": properties.get("name", "N/A"),
                 "latitude": station_lat,
                 "longitude": station_lon,
@@ -208,6 +227,10 @@ def query_nearest_noaa_stations(
 def fetch_single_noaa_station(
     station_id, request_timeout=NOAA_REQUEST_TIMEOUT_SECONDS
 ):
+    station_id = _station_id(station_id)
+    if station_id is None:
+        logging.warning("Invalid NOAA station identifier; skipping provider request")
+        return pd.DataFrame()
     request_timeout = normalize_request_timeout(
         request_timeout, NOAA_REQUEST_TIMEOUT_SECONDS
     )
