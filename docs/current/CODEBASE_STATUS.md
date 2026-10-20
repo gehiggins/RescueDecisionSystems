@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `9d529d335d59b143b1b3ebbc8c64fbf69397e35e`
+Baseline: `main` commit `4e9b127c3a949b51f45b894c964a93ed6675c1fb`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -97,8 +97,10 @@ to committed static assets.
 
 Diagnostic alert CSVs are disabled during normal operation. They can be
 enabled deliberately with `RDS_DEBUG_DUMP=1`; `RDS_DEBUG_DIR` selects their
-output directory. Untimestamped map-input transforms remain offline instead of
-silently contacting the satellite service.
+output directory. Diagnostic filenames are confined to that directory and
+symbolic-link output targets are rejected before writing. Untimestamped
+map-input transforms remain offline instead of silently contacting the
+satellite service.
 
 Active data and projection defaults no longer depend on one developer's file
 system. Repository-relative paths are used by default, with environment
@@ -113,7 +115,9 @@ reduction preserves the source identifier used to associate observations with
 stations. Missing or non-finite measurements and invalid timestamps remain
 absent instead of aborting map generation. Invalid A/B and direct provider
 reference coordinates are rejected independently, while valid targets
-continue through the weather pipeline.
+continue through the weather pipeline. Empty, null, or unsupported weather
+target inputs return the canonical empty observation schema without contacting
+a provider.
 
 Open-Meteo keeps usable timestamp rows when individual provider arrays are
 short or malformed. Meteostat's documented km/h wind and gust values are
@@ -129,7 +133,11 @@ incomplete satellite metadata does not discard valid geometry. Satellite
 subpoints can render without a footprint radius, and malformed track vertices
 or next-pass coordinates are removed individually. Missing, array-like, or
 malformed alert timestamps return an empty satellite overlay before reference
-or TLE-provider work begins.
+or TLE-provider work begins. Satellite propagation boundaries normalize valid
+times to UTC and reject malformed timestamps or out-of-range alert coordinates
+before invoking Skyfield. Malformed or empty constellation responses are not
+cached as successful TLE lookups, allowing a later provider recovery to be
+retried.
 
 Coordinate source spans identify the exact matched DMS or decimal-degree token
 pair and preserve offsets across LF, CRLF, and CR line endings. Coordinate
@@ -157,7 +165,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 254 passed; 2 live tests deselected.
+- Default offline suite: 384 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
