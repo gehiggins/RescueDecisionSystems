@@ -18,6 +18,7 @@ LOG = logging.getLogger(__name__)
 
 _DEFAULT_RADIUS_KM = 50.0
 _DEFAULT_MAX_STATIONS = 5
+_MAX_STATIONS = 100
 _STATION_ID_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,20}\Z")
 
 
@@ -85,7 +86,7 @@ def _normalize_search_parameters(radius_km, max_stations):
             _DEFAULT_MAX_STATIONS,
         )
         station_count = _DEFAULT_MAX_STATIONS
-    return radius, int(station_count)
+    return radius, min(int(station_count), _MAX_STATIONS)
 
 try:
     from meteostat import Stations, Hourly
