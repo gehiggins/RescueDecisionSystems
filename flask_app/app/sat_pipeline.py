@@ -66,6 +66,19 @@ def _positive_catalog_id(value):
     return int(numeric)
 
 
+def _optional_text(value):
+    """Return stripped scalar text without evaluating nullable values as booleans."""
+    if value is None or not pd.api.types.is_scalar(value):
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def _positive_env_int(name: str, default: int) -> int:
     """Read a positive integer setting, falling back on invalid input."""
     try:
@@ -192,12 +205,21 @@ def build_sat_overlay_df(
         # Convert it before applying the explicit alert override.
         row = {} if row is None else dict(row)
         row["norad_id"] = alert_norad_id
-        row.setdefault("common_name", str(alert_df.iloc[0].get("sat_name") or alert_df.iloc[0].get("reporting_sat") or "SAT"))
+        row.setdefault(
+            "common_name",
+            _optional_text(alert_df.iloc[0].get("sat_name"))
+            or _optional_text(alert_df.iloc[0].get("reporting_sat"))
+            or "SAT",
+        )
 
     if row is None:
         row = {}  # defer return so fallback/overrides can run
 
-    name = str(row.get("common_name") or row.get("designator"))
+    name = (
+        _optional_text(row.get("common_name"))
+        or _optional_text(row.get("designator"))
+        or "Unknown"
+    )
     row_norad_id = _positive_catalog_id(row.get("norad_id"))
     norad_id = row_norad_id if row_norad_id is not None else np.nan
     source = "reference"
@@ -255,7 +277,7 @@ def build_sat_overlay_df(
                     except Exception:
                         next_pass_marker = None
         # prefer provider name/CATNR when present
-        name = str(t.get("name") or name)
+        name = _optional_text(t.get("name")) or name
         provider_norad_id = _positive_catalog_id(t.get("norad_id"))
         if provider_norad_id is not None:
             norad_id = provider_norad_id

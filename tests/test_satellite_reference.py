@@ -181,6 +181,59 @@ def test_satellite_pipeline_ignores_invalid_norad_override(
     assert overlay.empty
 
 
+def test_satellite_pipeline_handles_nullable_alert_satellite_names(monkeypatch):
+    requested = []
+    monkeypatch.setattr(sat_pipeline, "resolve_reporting_sat", lambda _alert: None)
+    monkeypatch.setattr(
+        sat_pipeline,
+        "load_tle_snapshot",
+        lambda identifiers: requested.append(identifiers) or pd.DataFrame(),
+    )
+    alert = pd.DataFrame(
+        [
+            {
+                "alert_time_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+                "norad_id": 25338,
+                "sat_name": pd.NA,
+                "reporting_sat": ["not", "scalar"],
+            }
+        ]
+    )
+
+    overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=True)
+
+    assert overlay.empty
+    assert requested == [["25338"]]
+
+
+def test_satellite_pipeline_uses_designator_when_reference_name_is_missing(
+    monkeypatch,
+):
+    requested = []
+    monkeypatch.setattr(
+        sat_pipeline,
+        "resolve_reporting_sat",
+        lambda _alert: {
+            "common_name": pd.NA,
+            "designator": "NOAA-15",
+            "norad_id": 25338,
+        },
+    )
+    monkeypatch.setattr(
+        sat_pipeline,
+        "load_tle_snapshot",
+        lambda identifiers: requested.append(identifiers) or pd.DataFrame(),
+    )
+    alert = pd.DataFrame(
+        [{"alert_time_utc": pd.Timestamp("2026-10-20T12:00:00Z")}]
+    )
+
+    overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=True)
+
+    assert overlay.empty
+    assert requested == [["25338"]]
+
+
 @pytest.mark.parametrize("alert_time", [None, "invalid", ["2026-10-20T12:00:00Z"]])
 def test_satellite_pipeline_rejects_invalid_alert_time_without_provider_lookup(
     monkeypatch, alert_time
