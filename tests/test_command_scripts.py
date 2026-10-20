@@ -83,3 +83,12 @@ def test_noaa_shore_diagnostic_defaults_to_offline_contract_check():
 
     assert result.returncode == 0, result.stderr
     assert "NOAA shore diagnostic offline contract passed" in result.stdout
+
+
+def test_meteostat_timezone_probe_runs_without_optional_dependency():
+    result = _run_script("ms_fetch_probe.py")
+
+    assert result.returncode == 0, result.stderr
+    assert "Meteostat timezone probe passed" in result.stdout
+    assert "Naive index" in result.stdout
+    assert "UTC-aware index" in result.stdout
