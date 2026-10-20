@@ -39,9 +39,9 @@ def run_wx_pipeline(alert_targets_df: pd.DataFrame,
     """
     alert_targets_df columns expected: site_id, target, lat, lon  (A/B live elsewhere)
     """
-    if alert_targets_df is None or alert_targets_df.empty:
+    if not isinstance(alert_targets_df, pd.DataFrame) or alert_targets_df.empty:
         LOG.warning("No alert targets provided; wx pipeline skipped.")
-        return pd.DataFrame()
+        return _empty_wx_obs()
 
     # Unique A/B coordinates for the case
     pts = []
