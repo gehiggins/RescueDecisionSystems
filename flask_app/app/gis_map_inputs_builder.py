@@ -411,9 +411,15 @@ def build_gis_map_inputs_df(
 
         # UPDATED: honor RDS_SAT_TYPES instead of hard-coding LEO  # [updated]
         types_env = (os.getenv("RDS_SAT_TYPES","LEO") or "LEO").split(",")  # [updated]
-        _sat_df = build_sat_overlay_df(_alert,  # [updated]
-                               types=tuple(t.strip().upper() for t in types_env if t.strip()),  # [updated]
-                               use_tle=True, fallback_to_nearest=True)  # [updated]
+        # A satellite position is only meaningful for a known alert time. It
+        # also keeps this transform offline for callers that are only building
+        # provided position/weather/station layers.
+        if alert_time_utc is None:
+            _sat_df = pd.DataFrame()
+        else:
+            _sat_df = build_sat_overlay_df(_alert,  # [updated]
+                                   types=tuple(t.strip().upper() for t in types_env if t.strip()),  # [updated]
+                                   use_tle=True, fallback_to_nearest=True)  # [updated]
 
         if _sat_df is not None and not _sat_df.empty:
             # Footprint circle (guardrail: require center + radius)

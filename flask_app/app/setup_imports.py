@@ -17,8 +17,6 @@ repo_root = Path(__file__).resolve().parents[1]      # .../RescueDecisionSystems
 flask_app_dir = repo_root / "flask_app"              # .../RescueDecisionSystems/flask_app
 if str(flask_app_dir) not in sys.path:
     sys.path.insert(0, str(flask_app_dir))
-    import logging
-    logging.info(f"✅ Added Flask app directory to Python path: {flask_app_dir}")
 
 
 
@@ -27,8 +25,8 @@ import logging
 import json
 from datetime import datetime
 
-# ✅ Configure Logging (Move this before any logging calls)
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Applications and command-line entry points own logging configuration. This
+# shared import module must stay quiet when Gunicorn or tests import it.
 
 # ✅ Data Handling
 import pandas as pd
@@ -56,18 +54,8 @@ from sklearn.preprocessing import StandardScaler
 # ✅ Utility Functions
 from typing import Dict, List, Tuple, Optional
 
-
-logging.info("✅ Loaded setup_imports for consistent imports across scripts.")
-
 # ✅ensure load_dotenv() is consistently applied across all scripts
 from dotenv import load_dotenv
-import os
 
 # ✅ Load environment variables from .env file
 load_dotenv()
-
-# Optional: Log or print confirmation for debugging
-if os.getenv("DATABASE_URL"):
-    print("[OK] DATABASE_URL loaded successfully.")
-else:
-    print("[WARN] DATABASE_URL not found.")

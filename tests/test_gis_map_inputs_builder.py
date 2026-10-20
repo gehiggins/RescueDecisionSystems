@@ -41,10 +41,18 @@ def make_stations_df():
         "lon_dd": -122.4194
     }])
 
-def test_gis_map_inputs_all_layers():
+def test_gis_map_inputs_all_layers(monkeypatch):
     positions_df = make_positions_df()
     wx_df = make_wx_df()
     stations_df = make_stations_df()
+    sat_pipeline = importlib.import_module("app.sat_pipeline")
+
+    def unexpected_satellite_fetch(*_args, **_kwargs):
+        pytest.fail("satellite pipeline ran without an alert timestamp")
+
+    monkeypatch.setattr(
+        sat_pipeline, "build_sat_overlay_df", unexpected_satellite_fetch
+    )
 
     df = build_gis_map_inputs_df(positions_df, wx_df, stations_df, op_tz_env="UTC")
     assert not df.empty
