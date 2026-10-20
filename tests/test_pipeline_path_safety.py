@@ -25,6 +25,31 @@ def test_map_site_id_length_is_bounded():
     assert len(_safe_map_site_id("A" * 200)) == 80
 
 
+def test_satellite_overlay_site_symlink_cannot_escape_root(monkeypatch, tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    image_path = outside / "coverage.png"
+    image_path.write_bytes(b"png")
+    image_path.with_suffix(".bounds.json").write_text(
+        "[[35.0, -78.0], [40.0, -72.0]]", encoding="utf-8"
+    )
+
+    overlays_root = tmp_path / "data" / "sat_overlays"
+    overlays_root.mkdir(parents=True)
+    site_link = overlays_root / "98372"
+    try:
+        site_link.symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pytest.skip("directory symlinks are unavailable on this platform")
+    monkeypatch.setattr(
+        pipeline_controller,
+        "__file__",
+        str(tmp_path / "flask_app" / "app" / "pipeline_controller.py"),
+    )
+
+    assert pipeline_controller.load_sat_overlays_for_site("98372") == []
+
+
 def test_pipeline_uses_safe_site_id_for_final_map_path(monkeypatch, tmp_path):
     parsed = {
         "site_id": "../../outside",
