@@ -56,3 +56,10 @@ database; alert sequence numbering then starts from an empty local history.
 
 Live weather and TLE retrieval require outbound internet access. Production
 deployment configuration is intentionally outside this installation check.
+
+## Continuous verification
+
+GitHub Actions runs the supported Python 3.9 installation, dependency check,
+offline test suite, and Gunicorn configuration check for every pull request and
+every update to `main`. Live external-service tests remain deliberately
+separate so temporary provider outages do not block unrelated code changes.
