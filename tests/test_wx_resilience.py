@@ -472,6 +472,27 @@ def test_weather_pipeline_defaults_invalid_time_window(
     assert "Invalid weather hours_back" in caplog.text
 
 
+def test_weather_pipeline_defaults_time_window_that_overflows_datetime(
+    monkeypatch, caplog
+):
+    captured = {}
+
+    def capture_window(**kwargs):
+        captured.update(kwargs)
+        return _station_observation()
+
+    monkeypatch.setattr(wx_pipeline, "build_wx_obs_for_area", capture_window)
+
+    result = wx_pipeline.run_wx_pipeline(
+        pd.DataFrame([{"lat": 37.5, "lon": -75.5}]),
+        hours_back=1e308,
+    )
+
+    assert result["source_id"].tolist() == ["TEST-STATION"]
+    assert captured["end_utc"] - captured["start_utc"] == pd.Timedelta(hours=6)
+    assert "exceeds the supported datetime range" in caplog.text
+
+
 def test_weather_pipeline_centers_window_on_alert_time(monkeypatch):
     captured = {}
 
