@@ -118,7 +118,9 @@ def _append_model_spot_predictions(df_wx_obs, wx_df):
     ):
         return wx_df
 
-    spot = df_wx_obs[df_wx_obs["source_type"] == "model_interpolated"].copy()
+    spot = df_wx_obs[
+        df_wx_obs["source_type"].isin(["model", "model_interpolated"])
+    ].copy()
     if spot.empty:
         return wx_df
 
@@ -148,6 +150,39 @@ def _append_model_spot_predictions(df_wx_obs, wx_df):
 
     existing = wx_df if isinstance(wx_df, pd.DataFrame) else pd.DataFrame()
     return pd.concat([existing, spot], ignore_index=True)
+
+
+def _weather_source_ids(weather_rows):
+    """Build stable identifiers for physical station rows from provider output."""
+    ids = pd.Series(pd.NA, index=weather_rows.index, dtype="object")
+    available = [
+        column
+        for column in ["station_id", "source_id", "id"]
+        if column in weather_rows.columns
+    ]
+    if available:
+        ids = weather_rows[available].astype("object").bfill(axis=1).iloc[:, 0]
+
+    missing = ids.isna() | ids.astype(str).str.strip().eq("")
+    if missing.any():
+        provider = weather_rows.get(
+            "provider", pd.Series("weather", index=weather_rows.index)
+        ).fillna("weather")
+        latitude = weather_rows.get(
+            "lat", pd.Series(pd.NA, index=weather_rows.index)
+        )
+        longitude = weather_rows.get(
+            "lon", pd.Series(pd.NA, index=weather_rows.index)
+        )
+        generated = (
+            provider.astype(str)
+            + ":"
+            + latitude.astype(str)
+            + ":"
+            + longitude.astype(str)
+        )
+        ids.loc[missing] = generated.loc[missing]
+    return ids.rename("sid")
 
 def process_sarsat_alert(raw_alert_message):
 
@@ -326,15 +361,18 @@ def process_sarsat_alert(raw_alert_message):
 
         # --- Collapse to one row per station with latest values ---
         wx_df = pd.DataFrame()
-        if df_wx_obs is not None and not df_wx_obs.empty:
-            # pick first non-null id across options to be our grouping key
-            id_cols = [c for c in ["station_id", "source_id", "id", "provider"] if c in df_wx_obs.columns]
-            sid_series = (
-                df_wx_obs[id_cols].astype("object").bfill(axis=1).iloc[:, 0].rename("sid")
-            )
+        station_obs = pd.DataFrame()
+        if isinstance(df_wx_obs, pd.DataFrame) and not df_wx_obs.empty:
+            if "source_type" in df_wx_obs.columns:
+                station_obs = df_wx_obs[df_wx_obs["source_type"] == "station"].copy()
+            else:
+                station_obs = df_wx_obs.copy()
+
+        if not station_obs.empty:
+            sid_series = _weather_source_ids(station_obs)
 
             agg = (
-                pd.concat([df_wx_obs, sid_series], axis=1)
+                pd.concat([station_obs, sid_series], axis=1)
                 .sort_values("valid_utc")
                 .groupby("sid", dropna=False)
                 .agg({
@@ -354,9 +392,8 @@ def process_sarsat_alert(raw_alert_message):
                     "temp_c": "temp_C"   # <-- add this
                 })
             )
+            agg["source_type"] = "station"
             wx_df = agg
-        else:
-            wx_df = pd.DataFrame()
 
         # ---- Append model/interpolated SPOT predictions (for ring-dot icon) ----
         wx_df = _append_model_spot_predictions(df_wx_obs, wx_df)
@@ -376,7 +413,12 @@ def process_sarsat_alert(raw_alert_message):
         stations_df = pd.DataFrame(st_rows) if st_rows else pd.DataFrame()
 
         # Merge latest wx values into stations_df
-        if not wx_df.empty:
+        if (
+            not stations_df.empty
+            and not wx_df.empty
+            and "station_id" in stations_df.columns
+            and "station_id" in wx_df.columns
+        ):
             merge_cols = [c for c in ["station_id","lat_dd","lon_dd","wind_ms","wave_height_m","temp_C","obs_time"] if c in wx_df.columns]
             stations_df = stations_df.merge(
                 wx_df[merge_cols],
