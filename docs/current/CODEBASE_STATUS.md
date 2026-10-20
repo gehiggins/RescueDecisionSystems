@@ -4,7 +4,7 @@ Status: verified current
 
 Reviewed against code and runtime: 2026-10-19
 
-Baseline: `main` commit `5da6e1f9e50935b42d008251f5ba1e3e9bcaee31`
+Baseline: `main` commit `f8a887289230564e24f572fd9ebacace1d4da189`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -56,9 +56,15 @@ out-of-range coordinates. Generated map serving is confined to the configured
 map directory, including when a requested file is a symbolic link.
 
 Detailed pipeline failures are logged on the server but are not returned to
-the browser. The web application adds frame, content-type, referrer, and
-no-store response headers where appropriate. Its four public pages render with
-valid references to committed static assets.
+the browser. Raised exceptions, malformed integration results, malformed JSON
+requests, missing reported map files, and direct map-rendering failures retain
+stable JSON error responses. Pandas missing values serialize as JSON `null`.
+The browser also handles non-JSON proxy or server failures without displaying
+a JSON parsing error.
+
+The web application adds frame, content-type, referrer, and no-store response
+headers where appropriate. Its four public pages render with valid references
+to committed static assets.
 
 Diagnostic alert CSVs are disabled during normal operation. They can be
 enabled deliberately with `RDS_DEBUG_DUMP=1`; `RDS_DEBUG_DIR` selects their
@@ -79,7 +85,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 68 passed; 2 live tests deselected.
+- Default offline suite: 81 passed; 2 live tests deselected.
 - Explicit external-service suite: 2 passed.
 - Editable development installation succeeded.
 - The deployment requirements wrapper installed successfully.
