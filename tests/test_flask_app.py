@@ -365,6 +365,40 @@ def test_direct_map_generation_rejects_missing_output(monkeypatch, caplog, tmp_p
     assert "did not create output" in caplog.text
 
 
+def test_direct_map_generation_rejects_output_file_symlink(
+    monkeypatch, caplog, tmp_path
+):
+    maps_dir = tmp_path / "maps"
+    maps_dir.mkdir()
+    outside_map = tmp_path / "outside.html"
+    outside_map.write_text("preserve me", encoding="utf-8")
+    output_link = maps_dir / "gis_map_98372.html"
+    try:
+        output_link.symlink_to(outside_map)
+    except OSError:
+        pytest.skip("file symlinks are unavailable on this platform")
+    application = create_app(
+        {"TESTING": True, "RDS_MAPS_DIR": str(maps_dir)}
+    )
+    renderer_called = False
+
+    def generate_map(_alert_row, _output_path):
+        nonlocal renderer_called
+        renderer_called = True
+
+    monkeypatch.setattr("flask_app.app.routes.generate_gis_map", generate_map)
+
+    response = application.test_client().get(
+        "/generate_gis_map/37.5/-75.5/98372"
+    )
+
+    assert response.status_code == 500
+    assert response.get_json() == {"error": "Map generation failed"}
+    assert renderer_called is False
+    assert outside_map.read_text(encoding="utf-8") == "preserve me"
+    assert "output path is unsafe" in caplog.text
+
+
 def test_generated_map_response_is_not_cached(tmp_path):
     maps_dir = tmp_path / "maps"
     map_path = maps_dir / "98372" / "gis_map_98372.html"
