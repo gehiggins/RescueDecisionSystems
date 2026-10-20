@@ -51,3 +51,21 @@ def test_weather_smoke_defaults_to_offline_contract_check():
 
     assert result.returncode == 0, result.stderr
     assert "Weather offline contract smoke passed" in result.stdout
+
+
+def test_tle_smoke_defaults_to_offline_reference_check():
+    result = _run_script("_tle_smoketest.py")
+
+    assert result.returncode == 0, result.stderr
+    assert "TLE offline contract smoke passed" in result.stdout
+
+
+def test_satellite_gis_smoke_generates_map_without_network(tmp_path):
+    output = tmp_path / "satellite-gis-smoke.html"
+
+    result = _run_script("_sat_gis_smoketest.py", "--output", str(output))
+
+    assert result.returncode == 0, result.stderr
+    assert "Satellite GIS offline contract smoke passed" in result.stdout
+    assert output.is_file()
+    assert "leaflet" in output.read_text(encoding="utf-8").lower()
