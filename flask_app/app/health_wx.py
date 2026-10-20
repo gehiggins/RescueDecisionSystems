@@ -79,12 +79,17 @@ def _summarize_df(df: pd.DataFrame) -> dict:
     if df is None or df.empty:
         return {"rows": 0, "min_ts": None, "max_ts": None, "missing_cols": REQUIRED_COLS}
     missing = [c for c in REQUIRED_COLS if c not in df.columns]
-    ts = pd.to_datetime(df["valid_utc"], errors="coerce") if "valid_utc" in df.columns else pd.Series([], dtype="datetime64[ns, UTC]")
-    if not isinstance(ts, pd.Series) or ts.empty:
+    ts = (
+        pd.to_datetime(df["valid_utc"], utc=True, errors="coerce")
+        if "valid_utc" in df.columns
+        else pd.Series([], dtype="datetime64[ns, UTC]")
+    )
+    valid_ts = ts.dropna() if isinstance(ts, pd.Series) else ts
+    if not isinstance(valid_ts, pd.Series) or valid_ts.empty:
         min_ts = max_ts = None
     else:
-        min_ts = ts.min()
-        max_ts = ts.max()
+        min_ts = valid_ts.min()
+        max_ts = valid_ts.max()
     return {"rows": int(df.shape[0]), "min_ts": min_ts, "max_ts": max_ts, "missing_cols": missing}
 
 

@@ -55,3 +55,37 @@ def test_health_entrypoint_leaves_values_for_safe_normalization(monkeypatch):
     assert parameters["hours"] == "bad"
     assert parameters["max_stations"] == "2.5"
     assert parameters["include_marine"] is False
+
+
+def test_health_summary_normalizes_mixed_offsets_to_utc():
+    observations = pd.DataFrame(
+        {
+            "valid_utc": [
+                "2026-10-20T12:00:00Z",
+                "2026-10-20T09:00:00-05:00",
+            ],
+            "lat": [37.5, 37.5],
+            "lon": [-75.5, -75.5],
+            "provider": ["test", "test"],
+            "source_type": ["model", "model"],
+        }
+    )
+
+    summary = health_wx._summarize_df(observations)
+
+    assert summary["min_ts"] == pd.Timestamp("2026-10-20T12:00:00Z")
+    assert summary["max_ts"] == pd.Timestamp("2026-10-20T14:00:00Z")
+    assert summary["missing_cols"] == []
+
+
+def test_health_summary_reports_unknown_span_for_invalid_timestamps():
+    observations = pd.DataFrame(
+        {"valid_utc": ["bad", None], "provider": ["test", "test"]}
+    )
+
+    summary = health_wx._summarize_df(observations)
+
+    assert summary["rows"] == 2
+    assert summary["min_ts"] is None
+    assert summary["max_ts"] is None
+    assert summary["missing_cols"] == ["lat", "lon", "source_type"]
