@@ -141,10 +141,21 @@ def _max_tle_age_hours() -> float:
     return configured
 
 
+def _utc_timestamp(value):
+    """Normalize one provider timestamp without accepting array-like values."""
+    if value is None or not pd.api.types.is_scalar(value):
+        return pd.NaT
+    try:
+        parsed = pd.to_datetime(value, utc=True, errors="coerce")
+    except (TypeError, ValueError, OverflowError):
+        return pd.NaT
+    return parsed if isinstance(parsed, pd.Timestamp) and pd.notna(parsed) else pd.NaT
+
+
 def _tle_age_hours(at_time_utc, tle_epoch_utc) -> float:
-    at_time = pd.to_datetime(at_time_utc, utc=True, errors="coerce")
-    epoch = pd.to_datetime(tle_epoch_utc, utc=True, errors="coerce")
-    if pd.isna(at_time) or pd.isna(epoch):
+    at_time = _utc_timestamp(at_time_utc)
+    epoch = _utc_timestamp(tle_epoch_utc)
+    if at_time is pd.NaT or epoch is pd.NaT:
         return float("nan")
     return float(abs((at_time - epoch).total_seconds()) / 3600.0)
 
@@ -265,7 +276,7 @@ def build_sat_overlay_df(
     if use_tle and tle_df is not None and not tle_df.empty:
         t = tle_df.iloc[0]
         tle1, tle2 = t["tle_line1"], t["tle_line2"]
-        tle_epoch = pd.to_datetime(t["epoch_utc"], utc=True, errors="coerce")
+        tle_epoch = _utc_timestamp(t.get("epoch_utc"))
         if pd.notna(tle_epoch):
             tle_age_hours = float(abs((at_time_utc - tle_epoch).total_seconds())/3600.0)
         # Reject stale elements before any propagation work. Calculating a
