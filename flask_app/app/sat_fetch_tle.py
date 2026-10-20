@@ -1,4 +1,6 @@
-﻿# ============================== RDS STANDARD HEADER ==============================
+﻿from __future__ import annotations
+
+# ============================== RDS STANDARD HEADER ==============================
 # Script Name: sat_fetch_tle.py
 # Last Updated (UTC): 2025-09-04
 # Update Summary:

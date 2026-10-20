@@ -160,6 +160,16 @@ def build_gis_map_inputs_df(
             wave_m = w.get("wave_height_m")
             wind_ms = w.get("wind_ms")
             temp_C = w.get("temp_C")
+            # Weather observations may arrive in long form (obs_type/value) or
+            # wide form (one measurement per column); normalize both here.
+            obs_type = w.get("obs_type")
+            obs_value = w.get("obs_value")
+            if _is_missing(wave_m) and obs_type == "wave_height_m":
+                wave_m = obs_value
+            if _is_missing(wind_ms) and obs_type == "wind_ms":
+                wind_ms = obs_value
+            if _is_missing(temp_C) and obs_type in {"temp_C", "temp_c"}:
+                temp_C = obs_value
             display = format_us_display(
                 wave_height_m=wave_m,
                 wind_ms=wind_ms,
@@ -541,6 +551,11 @@ def build_gis_map_inputs_df(
         df_out['lat_dd'] = np.nan
     if 'lon_dd' not in df_out.columns:
         df_out['lon_dd'] = np.nan
+
+    # Preserve the full output schema for empty inputs without asking pandas to
+    # expand rows that do not exist.
+    if df_out.empty:
+        return df_out
 
     def _derive_latlon(row):
         g = row.get('geometry') or {}

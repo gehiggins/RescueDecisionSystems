@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # ============================== RDS STANDARD HEADER ==============================
 # Script Name: utils_display.py
 # Last Updated (UTC): 2025-09-15
@@ -120,13 +122,19 @@ def format_us_display(
     has_tc  = _is_num(temp_c)
     has_tf  = _is_num(F)
 
+    # Omit unavailable measurements so callers can distinguish "not supplied"
+    # from a value that was supplied and formatted.
     out = {}
-    out["wave_height_display"] = f"{feet:.1f} ft" if has_wave else "None"
-    out["wind_display"]        = f"{knots:.0f} kt" if has_wind else "None"
-    if   has_tf and has_tc: out["temp_display"] = f"{F:.0f} °F / {temp_c:.1f} °C"
-    elif has_tf:            out["temp_display"] = f"{F:.0f} °F"
-    elif has_tc:            out["temp_display"] = f"{temp_c:.1f} °C"
-    else:                   out["temp_display"] = "None"
+    if has_wave:
+        out["wave_height_display"] = f"{feet:.1f} ft"
+    if has_wind:
+        out["wind_display"] = f"{knots:.0f} kt"
+    if has_tf and has_tc:
+        out["temp_display"] = f"{F:.0f} °F / {temp_c:.1f} °C"
+    elif has_tf:
+        out["temp_display"] = f"{F:.0f} °F"
+    elif has_tc:
+        out["temp_display"] = f"{temp_c:.1f} °C"
     return out
 
 def is_maritime(lat: float, lon: float, shore_nm: float = 5.0) -> bool:

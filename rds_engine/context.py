@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .types import Context
 
 def classify_zone_context(

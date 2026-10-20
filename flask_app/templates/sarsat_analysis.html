@@ -121,14 +121,15 @@ document.getElementById("sarsat-form").addEventListener("submit", function (even
         console.log("✅ Flask Response:", data);  // ✅ Debugging: See full Flask response
 
         if (data.success) {
-            let latitude = data.parsed_data?.[0]?.latitude_decimal;
-            let longitude = data.parsed_data?.[0]?.longitude_decimal;
+            let latitude = data.parsed_data?.[0]?.latitude_a;
+            let longitude = data.parsed_data?.[0]?.longitude_a;
             let siteId = data.parsed_data?.[0]?.site_id;
 
             console.log("✅ Extracted Data for GIS Map:", latitude, longitude, siteId);
 
-            if (latitude !== undefined && longitude !== undefined && siteId !== undefined) {
-                let mapUrl = `/maps/gis_map_${siteId}.html`;
+            if (latitude != null && longitude != null && siteId != null && data.map_url) {
+                // The server owns the output path; the browser only consumes the returned URL.
+                let mapUrl = data.map_url;
                 console.log("✅ Updating GIS Map iframe source:", mapUrl);
                 
                 // ✅ Update the iframe src instead of redirecting the page
