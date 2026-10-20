@@ -211,7 +211,7 @@ def test_weather_and_station_rows_accept_pandas_missing_values():
     assert weather["wave_height_display"] == "None"
     assert weather["wind_display"] == "None"
     assert weather["temp_display"] == "None"
-    assert weather["ts_utc"] is None
-    assert weather["ts_local"] is None
+    assert pd.isna(weather["ts_utc"])
+    assert pd.isna(weather["ts_local"])
     assert station["source_id"] == ""
     assert station["label"] == "Station"
