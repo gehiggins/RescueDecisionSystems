@@ -15,6 +15,9 @@ from app.utils_time import ensure_utc, ensure_utc_index, window_slice, coerce_ut
 
 LOG = logging.getLogger(__name__)
 
+_DEFAULT_RADIUS_KM = 50.0
+_DEFAULT_MAX_STATIONS = 5
+
 
 def _kmh_to_ms(value):
     """Convert one finite Meteostat wind value from km/h to m/s."""
@@ -23,6 +26,39 @@ def _kmh_to_ms(value):
     except (TypeError, ValueError):
         return np.nan
     return numeric / 3.6 if np.isfinite(numeric) else np.nan
+
+
+def _normalize_search_parameters(radius_km, max_stations):
+    """Return provider-safe radius and station-count parameters."""
+    try:
+        radius = float(radius_km)
+    except (TypeError, ValueError):
+        radius = float("nan")
+    if isinstance(radius_km, bool) or not np.isfinite(radius) or radius <= 0:
+        LOG.warning(
+            "Invalid Meteostat radius_km=%r; using default %.1f",
+            radius_km,
+            _DEFAULT_RADIUS_KM,
+        )
+        radius = _DEFAULT_RADIUS_KM
+
+    try:
+        station_count = float(max_stations)
+    except (TypeError, ValueError):
+        station_count = float("nan")
+    if (
+        isinstance(max_stations, bool)
+        or not np.isfinite(station_count)
+        or station_count < 1
+        or not station_count.is_integer()
+    ):
+        LOG.warning(
+            "Invalid Meteostat max_stations=%r; using default %s",
+            max_stations,
+            _DEFAULT_MAX_STATIONS,
+        )
+        station_count = _DEFAULT_MAX_STATIONS
+    return radius, int(station_count)
 
 try:
     from meteostat import Stations, Hourly
@@ -61,6 +97,10 @@ def fetch_meteostat_obs_near(lat: float, lon: float, start_utc, end_utc,
     if not _HAS_METEOSTAT:
         LOG.info("Meteostat not installed; skipping.")
         return out
+
+    radius_km, max_stations = _normalize_search_parameters(
+        radius_km, max_stations
+    )
 
     # Optional input hygiene
     start_utc, end_utc = coerce_utc_range(start_utc, end_utc)
