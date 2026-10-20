@@ -101,6 +101,7 @@ def build_gis_map_inputs_df(
     shore_nm: float = 5.0,
     sat_overlays: Optional[list] = None,
     alert_time_utc=None,
+    satellite_alert_df: Optional[pd.DataFrame] = None,
 ) -> pd.DataFrame:
     """
     Return a single DataFrame (gis_map_inputs_df) with rows for:
@@ -541,13 +542,29 @@ def build_gis_map_inputs_df(
                 alert_time_utc, utc=True, errors="coerce"
             )
         _has_alert_time = not pd.isna(_alert_time)
-        _alert = pd.DataFrame([{
-            'alert_id': site_id,
-            'alert_time_utc': _alert_time,
-            'alert_lat_dd': _lat,
-            'alert_lon_dd': _lon,
-            # Optional: upstream may add 'norad_id' when testing old alerts
-        }])
+        if (
+            isinstance(satellite_alert_df, pd.DataFrame)
+            and not satellite_alert_df.empty
+        ):
+            # Preserve reporting-satellite identifiers from the authoritative
+            # parsed alert; rebuilding only coordinates/time loses the name,
+            # designator, and NORAD fields used by satellite resolution.
+            _alert = satellite_alert_df.iloc[[0]].copy()
+            _alert.loc[_alert.index[0], "alert_time_utc"] = _alert_time
+            if "alert_id" not in _alert.columns:
+                _alert["alert_id"] = site_id
+            if "alert_lat_dd" not in _alert.columns:
+                _alert["alert_lat_dd"] = _lat
+            if "alert_lon_dd" not in _alert.columns:
+                _alert["alert_lon_dd"] = _lon
+        else:
+            _alert = pd.DataFrame([{
+                'alert_id': site_id,
+                'alert_time_utc': _alert_time,
+                'alert_lat_dd': _lat,
+                'alert_lon_dd': _lon,
+                # Optional: upstream may add 'norad_id' when testing old alerts
+            }])
 
         import os
         _test_norad = os.getenv("RDS_SAT_TEST_NORAD")

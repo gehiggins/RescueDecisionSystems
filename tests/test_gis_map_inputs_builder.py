@@ -140,6 +140,39 @@ def test_satellite_overlay_uses_alert_detection_time(monkeypatch):
     assert captured["alert_time_utc"] == pd.Timestamp("2025-03-02T13:32:17Z")
 
 
+def test_satellite_overlay_preserves_reporting_satellite_identity(monkeypatch):
+    captured = {}
+    sat_pipeline = importlib.import_module("app.sat_pipeline")
+
+    def capture_alert(alert_df, **_kwargs):
+        captured.update(alert_df.iloc[0].to_dict())
+        return pd.DataFrame()
+
+    monkeypatch.setattr(sat_pipeline, "build_sat_overlay_df", capture_alert)
+    parsed_alert = pd.DataFrame(
+        [
+            {
+                "site_id": "98372",
+                "satellite_name": "NOAA 19",
+                "sat_designator": "S13",
+                "norad_id": 33591,
+            }
+        ]
+    )
+
+    build_gis_map_inputs_df(
+        make_positions_df(),
+        alert_time_utc="2025-03-02T13:32:17Z",
+        satellite_alert_df=parsed_alert,
+        op_tz_env="UTC",
+    )
+
+    assert captured["satellite_name"] == "NOAA 19"
+    assert captured["sat_designator"] == "S13"
+    assert captured["norad_id"] == 33591
+    assert captured["alert_time_utc"] == pd.Timestamp("2025-03-02T13:32:17Z")
+
+
 @pytest.mark.parametrize(
     "missing_time",
     [None, pd.NaT, "not-a-time", 12345, ["2025-03-02T13:32:17Z"]],
