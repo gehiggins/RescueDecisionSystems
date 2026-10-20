@@ -90,6 +90,7 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
             'longitude_b': None,
             'position_status_a': None,
             'position_status_b': None,
+            'position_device': None,
             'position_method': None,
             'position_resolution': None,
             'expected_error_nm': None,
@@ -117,6 +118,26 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
         )
         if satellite_match:
             parsed_data["satellite_name"] = satellite_match.group(1).strip()
+
+        position_device_match = re.search(
+            r"^\s*POSITION\s+DEVICE\s*:\s*([^\r\n]+?)\s*$",
+            message_text,
+            re.IGNORECASE | re.MULTILINE,
+        )
+        if position_device_match:
+            parsed_data["position_device"] = (
+                position_device_match.group(1).strip()
+            )
+
+        position_resolution_match = re.search(
+            r"^\s*POSITION\s+RESOLUTION\s*:\s*([^\r\n]+?)\s*$",
+            message_text,
+            re.IGNORECASE | re.MULTILINE,
+        )
+        if position_resolution_match:
+            parsed_data["position_resolution"] = (
+                position_resolution_match.group(1).strip()
+            )
 
         # --- Parse EE from message_text ---
         ee_msg_match = re.search(r"EXPECTED\s+HORIZONTAL\s+ERROR\s*\(EE\)\s*:\s*([0-9]*\.?[0-9]+)\s*NM", message_text, re.IGNORECASE)
