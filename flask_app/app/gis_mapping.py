@@ -857,10 +857,14 @@ def generate_gis_map_html_from_dfs(
                     and image_file is not None
                 ):
                     overlay_name = geom.get("name")
-                    try:
-                        name_missing = overlay_name is None or pd.isna(overlay_name)
-                    except (TypeError, ValueError):
-                        name_missing = True
+                    name_missing = not pd.api.types.is_scalar(overlay_name)
+                    if not name_missing:
+                        try:
+                            name_missing = overlay_name is None or bool(
+                                pd.isna(overlay_name)
+                            )
+                        except (TypeError, ValueError):
+                            name_missing = True
                     if name_missing:
                         overlay_name = sat.get("label")
                     folium.raster_layers.ImageOverlay(
