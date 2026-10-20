@@ -94,3 +94,59 @@ def test_weather_reducer_preserves_source_identity():
     assert result.loc[result["source_id"] == "A", "valid_utc"].item() == (
         pd.Timestamp("2026-10-19T18:00:00Z")
     )
+
+
+def test_malformed_provider_rows_do_not_discard_valid_observations(
+    monkeypatch, caplog
+):
+    malformed = pd.DataFrame(
+        [{"valid_utc": "not-a-time", "provider": "open-meteo"}]
+    )
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_open_meteo_obs",
+        lambda *_args, **_kwargs: malformed,
+    )
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_meteostat_obs_near",
+        lambda *_args, **_kwargs: _station_observation(),
+    )
+
+    result = wx_obs.build_wx_obs_for_area(
+        [(37.5, -75.5)],
+        pd.Timestamp("2026-10-19T12:00:00Z"),
+        pd.Timestamp("2026-10-19T18:00:00Z"),
+    )
+
+    assert result["source_id"].tolist() == ["TEST-STATION"]
+    assert "Discarded 1 malformed weather observation row" in caplog.text
+
+
+def test_all_malformed_weather_rows_return_empty_schema(monkeypatch, caplog):
+    malformed = pd.DataFrame(
+        [
+            {"source_id": "", "valid_utc": "2026-10-19T18:00:00Z"},
+            {"source_id": "BAD-TIME", "valid_utc": "not-a-time"},
+        ]
+    )
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_open_meteo_obs",
+        lambda *_args, **_kwargs: malformed,
+    )
+    monkeypatch.setattr(
+        wx_obs,
+        "fetch_meteostat_obs_near",
+        lambda *_args, **_kwargs: pd.DataFrame(),
+    )
+
+    result = wx_obs.build_wx_obs_for_area(
+        [(37.5, -75.5)],
+        pd.Timestamp("2026-10-19T12:00:00Z"),
+        pd.Timestamp("2026-10-19T18:00:00Z"),
+    )
+
+    assert result.empty
+    assert list(result.columns) == wx_obs._WX_OBS_COLS
+    assert "Discarded 2 malformed weather observation row" in caplog.text
