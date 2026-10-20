@@ -92,7 +92,8 @@ def test_buoy_fetch_enriches_nearest_station_observation(monkeypatch):
     )
 
 
-def test_buoy_fetch_honors_station_limit(monkeypatch):
+@pytest.mark.parametrize("station_limit", [2, 2.0, "2", "2.0"])
+def test_buoy_fetch_honors_station_limit(monkeypatch, station_limit):
     metadata = pd.DataFrame(
         [
             {
@@ -111,14 +112,17 @@ def test_buoy_fetch_honors_station_limit(monkeypatch):
     )
 
     result = fetcher_ndbc_buoy.fetch_ndbc_buoy_data(
-        37.5, -74.5, "A", max_buoys=2
+        37.5, -74.5, "A", max_buoys=station_limit
     )
 
     assert result["station_id"].tolist() == ["ONE", "TWO"]
 
 
-@pytest.mark.parametrize("invalid_limit", [True, pd.Series([True]).iloc[0]])
-def test_buoy_fetch_defaults_boolean_station_limit(monkeypatch, invalid_limit):
+@pytest.mark.parametrize(
+    "invalid_limit",
+    [True, pd.Series([True]).iloc[0], 2.5, 0, "bad", float("inf")],
+)
+def test_buoy_fetch_defaults_invalid_station_limit(monkeypatch, invalid_limit):
     metadata = pd.DataFrame(
         [
             {
