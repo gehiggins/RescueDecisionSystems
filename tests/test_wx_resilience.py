@@ -3,6 +3,7 @@ import pytest
 
 from flask_app.app import wx_obs, wx_pipeline
 from rds_engine.context import classify_zone_context
+from rds_engine.policy_wx import make_wx_data_plan
 
 
 def _station_observation():
@@ -448,6 +449,40 @@ def test_weather_aggregator_uses_normalized_context_metadata(monkeypatch):
 
     assert result.empty
     assert captured["include_marine"] is True
+
+
+@pytest.mark.parametrize("mode", ["FORCE", " force ", "Force"])
+def test_weather_policy_normalizes_force_mode(mode):
+    context = classify_zone_context(lat=37.5, lon=-75.5)
+
+    plan = make_wx_data_plan(context, mode=mode)
+
+    assert plan.include_marine is True
+    assert plan.rationale == ["mode=force → include_marine=True"]
+
+
+@pytest.mark.parametrize("mode", ["OFF", " off ", "Off"])
+def test_weather_policy_normalizes_off_mode(mode):
+    context = classify_zone_context(
+        lat=37.5, lon=-75.5, error_radius_km=20
+    )
+
+    plan = make_wx_data_plan(context, mode=mode)
+
+    assert plan.include_marine is False
+    assert plan.rationale == ["mode=off → include_marine=False"]
+
+
+def test_weather_policy_records_invalid_mode_and_uses_auto_rules():
+    context = classify_zone_context(
+        lat=37.5, lon=-75.5, error_radius_km=20
+    )
+
+    plan = make_wx_data_plan(context, mode="unexpected")
+
+    assert plan.include_marine is True
+    assert plan.rationale[0] == "unrecognized mode='unexpected' → mode=auto"
+    assert "include marine" in plan.rationale[1]
 
 
 def test_weather_aggregator_filters_invalid_reference_points(
