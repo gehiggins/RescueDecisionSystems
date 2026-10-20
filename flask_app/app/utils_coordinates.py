@@ -81,6 +81,22 @@ def _bounds_ok_lon(lon):
         return False
     return math.isfinite(lon) and -180.0 <= lon <= 180.0
 
+
+def is_valid_overlay_bounds(bounds):
+    """Validate Leaflet image bounds as ``[[south, west], [north, east]]``."""
+    try:
+        if len(bounds) != 2 or any(len(point) != 2 for point in bounds):
+            return False
+        south, west = (float(value) for value in bounds[0])
+        north, east = (float(value) for value in bounds[1])
+    except (TypeError, ValueError):
+        return False
+    return (
+        all(math.isfinite(value) for value in (south, west, north, east))
+        and -90.0 <= south < north <= 90.0
+        and -180.0 <= west < east <= 180.0
+    )
+
 def coordinate_pair_to_dd_safe(coord_string):
     lat, lon = coordinate_pair_to_dd(coord_string)
     if not (_bounds_ok_lat(lat) and _bounds_ok_lon(lon)):
