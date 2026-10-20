@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `a2944f5c3790dafd887033011f1a6ce5e0cf65be`
+Baseline: `main` commit `693febd3d97578441b71e3b57cbe1a60b00b6bb8`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -290,7 +290,10 @@ unknown span when no valid timestamp remains.
 Open-Meteo keeps usable timestamp rows when individual provider arrays are
 short or malformed. Meteostat's documented km/h wind and gust values are
 converted to the shared m/s schema, invalid station metadata is filtered per
-row, and valid stations remain available. Invalid provider time windows are
+row, and valid stations remain available. Boolean measurements, station
+coordinates, and raw station identifiers are rejected before numeric or text
+coercion, so they cannot appear as legitimate 0/1 values or station IDs.
+Invalid provider time windows are
 rejected before network lookup. Shared weather calculations accept finite
 scalar numeric strings and reject malformed, array-like, and non-finite
 values. Open-Meteo atmospheric and marine values are range-checked before
@@ -355,7 +358,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 746 passed; 2 live tests deselected.
+- Default offline suite: 749 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
