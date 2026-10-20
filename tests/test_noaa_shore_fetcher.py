@@ -66,8 +66,11 @@ def test_invalid_station_reference_skips_provider_request(
     ).empty
 
 
-@pytest.mark.parametrize("invalid_limit", [True, pd.Series([True]).iloc[0]])
-def test_boolean_station_limit_skips_provider_request(monkeypatch, invalid_limit):
+@pytest.mark.parametrize(
+    "invalid_limit",
+    [True, pd.Series([True]).iloc[0], 2.5, 0, "bad", float("inf")],
+)
+def test_invalid_station_limit_skips_provider_request(monkeypatch, invalid_limit):
     monkeypatch.setattr(
         fetcher_noaa_shore.requests,
         "get",
