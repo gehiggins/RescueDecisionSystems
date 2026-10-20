@@ -25,6 +25,7 @@ from app.setup_imports import *  # pandas as pd, numpy as np, logging, etc.
 
 from app.utils_time import now_utc
 from app.wx_fetch_open_meteo import fetch_open_meteo_obs
+import math
 
 # Meteostat optional: handle gracefully if lib/env not present
 try:
@@ -36,6 +37,42 @@ except Exception:
 LOG = logging.getLogger("health_wx")
 
 REQUIRED_COLS = ["valid_utc", "lat", "lon", "provider", "source_type"]
+
+_DEFAULT_LAT = 47.6062
+_DEFAULT_LON = -122.3321
+_DEFAULT_HOURS = 6.0
+_DEFAULT_RADIUS_KM = 75.0
+_DEFAULT_MAX_STATIONS = 5
+
+
+def _bounded_float(value, *, default, minimum, maximum, name):
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError):
+        normalized = float("nan")
+    if not math.isfinite(normalized) or not minimum <= normalized <= maximum:
+        LOG.warning("Invalid weather health %s=%r; using default %s", name, value, default)
+        return default
+    return normalized
+
+
+def _positive_float(value, *, default, name):
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError):
+        normalized = float("nan")
+    if not math.isfinite(normalized) or normalized <= 0:
+        LOG.warning("Invalid weather health %s=%r; using default %s", name, value, default)
+        return default
+    return normalized
+
+
+def _positive_int(value, *, default, name):
+    normalized = _positive_float(value, default=default, name=name)
+    if not float(normalized).is_integer():
+        LOG.warning("Invalid weather health %s=%r; using default %s", name, value, default)
+        return default
+    return int(normalized)
 
 
 def _summarize_df(df: pd.DataFrame) -> dict:
@@ -55,6 +92,21 @@ def run_wx_health_check(lat: float, lon: float, hours: int = 6,
                         radius_km: float = 75.0, max_stations: int = 5,
                         include_marine: bool = True) -> dict:
     """Return a dict with per-provider row counts, timespan, and missing cols."""
+    # Health checks often receive values from environment variables, so
+    # normalize them before any timestamp math or provider request occurs.
+    lat = _bounded_float(
+        lat, default=_DEFAULT_LAT, minimum=-90.0, maximum=90.0, name="lat"
+    )
+    lon = _bounded_float(
+        lon, default=_DEFAULT_LON, minimum=-180.0, maximum=180.0, name="lon"
+    )
+    hours = _positive_float(hours, default=_DEFAULT_HOURS, name="hours")
+    radius_km = _positive_float(
+        radius_km, default=_DEFAULT_RADIUS_KM, name="radius_km"
+    )
+    max_stations = _positive_int(
+        max_stations, default=_DEFAULT_MAX_STATIONS, name="max_stations"
+    )
     end_utc = now_utc().replace(minute=0, second=0, microsecond=0)
     start_utc = end_utc - pd.Timedelta(hours=hours)
 
