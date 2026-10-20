@@ -85,6 +85,38 @@ class _MixedStationIdentifiersQuery:
         )
 
 
+class _BooleanStationMetadataQuery:
+    def nearby(self, lat, lon):
+        assert (lat, lon) == (37.5, -75.5)
+        return self
+
+    def fetch(self, limit):
+        assert limit == 3
+        return pd.DataFrame(
+            [
+                {"latitude": True, "longitude": -75.5, "name": "Bad"},
+                {"latitude": 37.5, "longitude": -75.5, "name": "Valid"},
+            ],
+            index=pd.Index(["KBOOL", "KTEST"], name="id"),
+        )
+
+
+class _BooleanStationIdentifiersQuery:
+    def nearby(self, lat, lon):
+        assert (lat, lon) == (37.5, -75.5)
+        return self
+
+    def fetch(self, limit):
+        assert limit == 6
+        return pd.DataFrame(
+            [
+                {"latitude": 37.5, "longitude": -75.5, "name": "Bad"},
+                {"latitude": 37.6, "longitude": -75.6, "name": "Valid"},
+            ],
+            index=pd.Index([True, "KTEST"], name="id", dtype="object"),
+        )
+
+
 def test_meteostat_converts_metric_wind_and_gust_to_metres_per_second(monkeypatch):
     monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
     monkeypatch.setattr(wx_fetch_meteostat, "Stations", _StationsQuery, raising=False)
@@ -110,6 +142,8 @@ def test_meteostat_wind_conversion_rejects_nonfinite_values():
     assert np.isnan(wx_fetch_meteostat._kmh_to_ms("bad"))
     assert np.isnan(wx_fetch_meteostat._kmh_to_ms(np.inf))
     assert np.isnan(wx_fetch_meteostat._kmh_to_ms(-1))
+    assert np.isnan(wx_fetch_meteostat._kmh_to_ms(True))
+    assert np.isnan(wx_fetch_meteostat._kmh_to_ms(np.bool_(True)))
 
 
 def test_meteostat_rejects_physically_invalid_measurements(monkeypatch):
@@ -157,7 +191,17 @@ def test_meteostat_measurement_range_preserves_boundaries(
 
 @pytest.mark.parametrize(
     "invalid_station_id",
-    [None, "", "   ", True, pd.NA, "../KTEST", "KTEST?x=1", "KTEST/extra"],
+    [
+        None,
+        "",
+        "   ",
+        True,
+        np.bool_(True),
+        pd.NA,
+        "../KTEST",
+        "KTEST?x=1",
+        "KTEST/extra",
+    ],
 )
 def test_meteostat_station_identifier_rejects_unsafe_values(
     invalid_station_id,
@@ -184,6 +228,33 @@ def test_meteostat_skips_invalid_station_identifier(monkeypatch):
         "2026-10-20T12:00:00Z",
         radius_km=50.0,
         max_stations=2,
+    )
+
+    assert result["source_id"].tolist() == ["KTEST"]
+
+
+@pytest.mark.parametrize(
+    "stations_query",
+    [_BooleanStationMetadataQuery, _BooleanStationIdentifiersQuery],
+)
+def test_meteostat_skips_boolean_station_metadata(
+    monkeypatch, stations_query
+):
+    monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
+    monkeypatch.setattr(
+        wx_fetch_meteostat, "Stations", stations_query, raising=False
+    )
+    monkeypatch.setattr(
+        wx_fetch_meteostat, "Hourly", _HourlyQuery, raising=False
+    )
+
+    result = wx_fetch_meteostat.fetch_meteostat_obs_near(
+        37.5,
+        -75.5,
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T12:00:00Z",
+        radius_km=50.0,
+        max_stations=2 if stations_query is _BooleanStationIdentifiersQuery else 1,
     )
 
     assert result["source_id"].tolist() == ["KTEST"]
