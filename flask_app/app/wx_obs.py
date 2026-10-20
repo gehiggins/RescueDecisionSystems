@@ -150,6 +150,25 @@ def _normalize_search_parameters(radius_km, max_stations):
 def _empty_wx_obs() -> pd.DataFrame:
     return pd.DataFrame(columns=_WX_OBS_COLS)
 
+
+def _normalize_source_id(value):
+    """Return a stable provider identifier, or ``None`` when malformed."""
+    if not pd.api.types.is_scalar(value) or isinstance(value, bool):
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return None
+    if isinstance(value, (float, np.number)):
+        try:
+            if not math.isfinite(float(value)):
+                return None
+        except (TypeError, ValueError):
+            return None
+    normalized = str(value).strip()
+    return normalized or None
+
 def build_wx_obs_for_area(ref_points: list[tuple[float,float]],
                           start_utc, end_utc,
                           radius_km: float = 50.0,
@@ -263,10 +282,13 @@ def build_wx_obs_for_area(ref_points: list[tuple[float,float]],
     df_all["valid_utc"] = df_all["valid_utc"].map(
         lambda value: pd.to_datetime(value, utc=True, errors="coerce")
     )
+    # Provider identifiers become grouping and deduplication keys below.
+    # Normalize scalars first so malformed list/dict values cannot crash the
+    # entire weather result after another provider already returned good data.
+    df_all["source_id"] = df_all["source_id"].map(_normalize_source_id)
     usable = (
         df_all["valid_utc"].notna()
         & df_all["source_id"].notna()
-        & df_all["source_id"].astype(str).str.strip().ne("")
     )
     rejected_rows = int((~usable).sum())
     if rejected_rows:
