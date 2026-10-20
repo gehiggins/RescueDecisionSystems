@@ -138,3 +138,37 @@ def test_satellite_overlay_uses_alert_detection_time(monkeypatch):
     )
 
     assert captured["alert_time_utc"] == pd.Timestamp("2025-03-02T13:32:17Z")
+
+
+def test_invalid_map_coordinates_and_radii_are_removed():
+    positions_df = pd.DataFrame(
+        [
+            {
+                "site_id": "TEST",
+                "role": "A",
+                "lat_dd": 37.0,
+                "lon_dd": -75.0,
+                "range_ring_meters": 0.0,
+            },
+            {
+                "site_id": "TEST",
+                "role": "B",
+                "lat_dd": 91.0,
+                "lon_dd": -75.0,
+                "range_ring_meters": 1000.0,
+            },
+        ]
+    )
+    wx_df = pd.DataFrame(
+        [{"station_id": "BAD", "lat_dd": float("inf"), "lon_dd": -75.0}]
+    )
+    stations_df = pd.DataFrame(
+        [{"station_id": "BAD2", "lat_dd": 37.0, "lon_dd": -181.0}]
+    )
+
+    result = build_gis_map_inputs_df(
+        positions_df, wx_df, stations_df, op_tz_env="UTC"
+    )
+
+    assert result["layer"].tolist() == ["alert_position"]
+    assert result.iloc[0]["geometry"]["coordinates"] == [-75.0, 37.0]
