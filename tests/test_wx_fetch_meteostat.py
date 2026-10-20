@@ -73,6 +73,54 @@ def test_meteostat_wind_conversion_rejects_nonfinite_values():
     assert np.isnan(wx_fetch_meteostat._kmh_to_ms(np.inf))
 
 
+@pytest.mark.parametrize(
+    ("radius_km", "max_stations", "expected"),
+    [
+        ("25", "3", (25.0, 3)),
+        ("bad", 2, (50.0, 2)),
+        (0, 2.5, (50.0, 5)),
+        (True, False, (50.0, 5)),
+        (float("inf"), float("nan"), (50.0, 5)),
+    ],
+)
+def test_meteostat_normalizes_direct_search_parameters(
+    radius_km, max_stations, expected
+):
+    assert wx_fetch_meteostat._normalize_search_parameters(
+        radius_km, max_stations
+    ) == expected
+
+
+def test_meteostat_does_not_pass_invalid_station_limit_to_client(monkeypatch):
+    captured = {}
+
+    class StationsQuery:
+        def nearby(self, lat, lon):
+            captured["point"] = (lat, lon)
+            return self
+
+        def fetch(self, limit):
+            captured["limit"] = limit
+            return pd.DataFrame()
+
+    monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
+    monkeypatch.setattr(
+        wx_fetch_meteostat, "Stations", StationsQuery, raising=False
+    )
+
+    result = wx_fetch_meteostat.fetch_meteostat_obs_near(
+        37.5,
+        -75.5,
+        "2026-10-20T12:00:00Z",
+        "2026-10-20T12:00:00Z",
+        radius_km="bad",
+        max_stations=2.5,
+    )
+
+    assert result.empty
+    assert captured == {"point": (37.5, -75.5), "limit": 15}
+
+
 def test_meteostat_rejects_invalid_time_window_without_station_lookup(monkeypatch):
     monkeypatch.setattr(wx_fetch_meteostat, "_HAS_METEOSTAT", True)
     monkeypatch.setattr(
