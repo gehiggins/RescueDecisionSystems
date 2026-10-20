@@ -139,13 +139,33 @@ def build_wx_obs_for_area(ref_points: list[tuple[float,float]],
         return _empty_wx_obs()
 
     df_all = pd.concat(frames, ignore_index=True)
-    # Dedupe on (source_id, valid_utc)
-    df_all = df_all.sort_values("valid_utc").drop_duplicates(subset=["source_id","valid_utc"], keep="last").reset_index(drop=True)
-
-    # Enforce schema columns and dtypes
+    # Enforce the shared schema before validating provider rows. A malformed
+    # frame must not make valid observations from another provider unusable.
     for c in _WX_OBS_COLS:
         if c not in df_all.columns:
             df_all[c] = np.nan
+
+    df_all["valid_utc"] = df_all["valid_utc"].map(
+        lambda value: pd.to_datetime(value, utc=True, errors="coerce")
+    )
+    usable = (
+        df_all["valid_utc"].notna()
+        & df_all["source_id"].notna()
+        & df_all["source_id"].astype(str).str.strip().ne("")
+    )
+    rejected_rows = int((~usable).sum())
+    if rejected_rows:
+        LOG.warning("Discarded %s malformed weather observation row(s)", rejected_rows)
+    df_all = df_all.loc[usable].copy()
+    if df_all.empty:
+        return _empty_wx_obs()
+
+    # Dedupe on the validated identity and observation timestamp.
+    df_all = (
+        df_all.sort_values("valid_utc")
+        .drop_duplicates(subset=["source_id", "valid_utc"], keep="last")
+        .reset_index(drop=True)
+    )
 
     # Decide the target time:
     # Use alert time if you pass it; otherwise default to "end_utc" (i.e., the alert window end),
