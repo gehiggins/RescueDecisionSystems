@@ -303,6 +303,62 @@ def test_tle_backoff_keeps_cached_satellites_available(monkeypatch):
     assert len(snapshot) == 1
     assert snapshot.iloc[0]["norad_id"] == 25338
     assert bool(snapshot.iloc[0]["cache_hit"]) is True
+    assert cached["cache_hit"] is False
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "error\nnot a TLE\nstill not a TLE\n",
+        (
+            "WRONG SATELLITE\n"
+            "1 43055U 17079A   26293.00000000  .00000000  00000-0  00000-0 0  9999\n"
+            "2 43055  56.0000 100.0000 0001000  10.0000 350.0000  2.00000000    00\n"
+        ),
+        (
+            "MISMATCHED LINES\n"
+            "1 25338U 98030A   26293.00000000  .00000000  00000-0  00000-0 0  9999\n"
+            "2 43055  56.0000 100.0000 0001000  10.0000 350.0000  2.00000000    00\n"
+        ),
+    ],
+)
+def test_tle_resolver_does_not_cache_malformed_or_wrong_catalog_payloads(
+    monkeypatch, caplog, payload
+):
+    cache = {}
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_CATNR", cache)
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_GROUP", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_PROVIDER_UNAVAILABLE_UNTIL", 0.0)
+
+    class Response:
+        status_code = 200
+        text = payload
+
+    monkeypatch.setattr(sat_fetch_tle.requests, "get", lambda *_a, **_k: Response())
+
+    snapshot = sat_fetch_tle.load_tle_snapshot(["25338"])
+
+    assert snapshot.empty
+    assert cache == {}
+    assert "Ignoring malformed TLE response" in caplog.text
+
+
+def test_tle_group_resolver_skips_malformed_records(monkeypatch, caplog):
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_CATNR", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_GROUP", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_PROVIDER_UNAVAILABLE_UNTIL", 0.0)
+
+    class Response:
+        status_code = 200
+        text = "BAD RECORD\ninvalid line one\ninvalid line two\n"
+
+    monkeypatch.setattr(sat_fetch_tle.requests, "get", lambda *_a, **_k: Response())
+
+    snapshot = sat_fetch_tle.load_tle_snapshot(["galileo"])
+
+    assert snapshot.empty
+    assert sat_fetch_tle._TLE_CACHE_GROUP["galileo"] == []
+    assert "Ignoring malformed TLE record" in caplog.text
 
 
 @pytest.mark.parametrize("group_name", ["galileo", "glonass", "beidou"])
