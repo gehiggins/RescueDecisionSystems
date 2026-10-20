@@ -82,6 +82,34 @@ def test_ndbc_parsers_replace_invalid_request_timeout(
     assert captured["timeout"] == utils.NDBC_REQUEST_TIMEOUT_SECONDS
 
 
+@pytest.mark.parametrize(
+    "invalid_station_id",
+    [
+        None,
+        "",
+        "   ",
+        True,
+        pytest.param(float("nan"), id="nan"),
+        "../44009",
+        "44009?x=1",
+        "44009/extra",
+    ],
+)
+@pytest.mark.parametrize(
+    "parser", [utils.parse_realtime2_data, utils.parse_5day2_data]
+)
+def test_ndbc_parsers_reject_invalid_station_identifier(
+    monkeypatch, parser, invalid_station_id
+):
+    monkeypatch.setattr(
+        utils.requests,
+        "get",
+        lambda *_args, **_kwargs: pytest.fail("provider called"),
+    )
+
+    assert parser(invalid_station_id) is None
+
+
 def _ndbc_row(observation_time, wind_speed):
     return [
         str(observation_time.year),
