@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `33fb325133cff4f10f5ecef3bdec98a2b309f80f`
+Baseline: `main` commit `7bc295b663c06d51840a194403f5aab917a2b65e`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -300,9 +300,13 @@ and footprint output. Missing, array-like, or malformed alert timestamps return
 an empty satellite overlay before reference or TLE-provider work begins.
 Satellite propagation boundaries normalize scalar times to UTC and reject
 malformed or array-like provider epochs and out-of-range alert coordinates
-before invoking Skyfield. Malformed or empty constellation responses are not
-cached as successful TLE lookups, allowing a later provider recovery to be
-retried.
+before invoking Skyfield. Primary subpoint exceptions and malformed propagated
+coordinates or altitudes degrade to an empty overlay instead of stopping alert
+processing. Visible, upcoming, and nearest candidate paths filter malformed or
+duplicate catalog identifiers before provider lookup and apply the same epoch
+and subpoint validation to returned rows. Malformed or empty constellation
+responses are not cached as successful TLE lookups, allowing a later provider
+recovery to be retried.
 
 Coordinate source spans identify the exact matched DMS or decimal-degree token
 pair and preserve offsets across irregular whitespace and LF, CRLF, and CR
@@ -335,7 +339,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 699 passed; 2 live tests deselected.
+- Default offline suite: 707 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
