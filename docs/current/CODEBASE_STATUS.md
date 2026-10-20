@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `d136fd6e122756735967a876d64b51ef4ee312e8`
+Baseline: `main` commit `029152452c49b4f32dd6e17510d08b416b2cc30d`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -199,10 +199,12 @@ The NDBC realtime2 and 5day2 parsers now read field names from the provider's
 header row rather than the units row, so valid temperature, wind, and wave
 measurements are retained. Their requests are bounded and identify the RDS
 weather client. Parser selection is limited to observations from the preceding
-60 minutes; stale multi-hour rows and future-dated rows are rejected. A
-read-only live check of station 44009 on 2026-10-20 returned a current
-observation and populated temperature, wind speed, and wind direction through
-the repaired parser.
+60 minutes; stale multi-hour rows and future-dated rows are rejected.
+Non-finite and malformed numeric provider tokens remain absent rather than
+becoming temperature, wind, direction, or wave measurements. A read-only live
+check of station 44009 on 2026-10-20 returned a current observation and
+populated temperature, wind speed, and wind direction through the repaired
+parser.
 
 The optional NOAA shore adapter no longer returns Seattle's KSEA station for
 every alert. It discovers NWS observation stations around the requested point,
@@ -228,6 +230,11 @@ reference coordinates are rejected independently, while valid targets
 continue through the weather pipeline. Empty, null, or unsupported weather
 target inputs return the canonical empty observation schema without contacting
 a provider.
+Boolean and NumPy-boolean values are rejected at weather coordinate and numeric
+configuration boundaries instead of being interpreted as zero or one. NOAA and
+NDBC station-count controls require finite positive whole numbers and retain
+their existing upper bounds; malformed NDBC limits use the ten-buoy default,
+while invalid NOAA limits skip the provider request.
 
 Weather policy is evaluated independently for every valid alert position.
 When A and B have identical coordinates, RDS performs one provider lookup but
@@ -289,7 +296,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 530 passed; 2 live tests deselected.
+- Default offline suite: 565 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
