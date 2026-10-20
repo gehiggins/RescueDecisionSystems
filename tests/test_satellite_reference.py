@@ -361,6 +361,79 @@ def test_tle_group_resolver_skips_malformed_records(monkeypatch, caplog):
     assert "Ignoring malformed TLE record" in caplog.text
 
 
+def test_tle_resolver_deduplicates_catalog_requests(monkeypatch):
+    calls = []
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_CATNR", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_GROUP", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_PROVIDER_UNAVAILABLE_UNTIL", 0.0)
+
+    class Response:
+        status_code = 200
+        text = (
+            "NOAA 15\n"
+            "1 25338U 98030A   26293.00000000  .00000000  00000-0  00000-0 0  9999\n"
+            "2 25338  98.7000 100.0000 0001000  10.0000 350.0000 14.00000000    00\n"
+        )
+
+    def fake_get(url, **_kwargs):
+        calls.append(url)
+        return Response()
+
+    monkeypatch.setattr(sat_fetch_tle.requests, "get", fake_get)
+
+    snapshot = sat_fetch_tle.load_tle_snapshot(["25338", 25338, "025338"])
+
+    assert len(snapshot) == 1
+    assert snapshot.iloc[0]["norad_id"] == 25338
+    assert len(calls) == 1
+
+
+def test_tle_resolver_ignores_invalid_request_values(monkeypatch):
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_CATNR", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_GROUP", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_PROVIDER_UNAVAILABLE_UNTIL", 0.0)
+    monkeypatch.setattr(
+        sat_fetch_tle.requests,
+        "get",
+        lambda *_a, **_k: pytest.fail("invalid request value triggered network I/O"),
+    )
+
+    snapshot = sat_fetch_tle.load_tle_snapshot(
+        [True, -1, 0, 25338.5, "BAD", "RANDOM", None, object()]
+    )
+
+    assert snapshot.empty
+
+
+@pytest.mark.parametrize(
+    ("designator", "group"),
+    [("E1", "GALILEO"), ("R12", "GLONASS"), ("B3", "BEIDOU"), ("C7", "BEIDOU")],
+)
+def test_tle_resolver_accepts_bounded_group_designators(
+    monkeypatch, designator, group
+):
+    calls = []
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_CATNR", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_GROUP", {})
+    monkeypatch.setattr(sat_fetch_tle, "_TLE_PROVIDER_UNAVAILABLE_UNTIL", 0.0)
+
+    class Response:
+        status_code = 404
+        text = ""
+
+    def fake_get(url, **_kwargs):
+        calls.append(url)
+        return Response()
+
+    monkeypatch.setattr(sat_fetch_tle.requests, "get", fake_get)
+
+    sat_fetch_tle.load_tle_snapshot([designator])
+
+    assert calls == [
+        f"https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=TLE"
+    ]
+
+
 @pytest.mark.parametrize("group_name", ["galileo", "glonass", "beidou"])
 def test_tle_resolver_accepts_explicit_group_names(monkeypatch, group_name):
     calls = []
