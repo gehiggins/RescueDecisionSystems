@@ -12,6 +12,7 @@ except ModuleNotFoundError:
 
 import pandas as pd
 import os
+import base64
 
 def test_golden_gis_map_inputs_df():
     df = pd.DataFrame([
@@ -129,3 +130,44 @@ def test_golden_gis_map_inputs_df():
         assert all(isinstance(x, str) for x in df[col])
 
 # This test does not require network or DB.
+
+
+def test_renderer_embeds_local_satellite_image_overlay(tmp_path):
+    image_path = tmp_path / "coverage.png"
+    image_path.write_bytes(
+        base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+            "/x8AAusB9Wl2nWQAAAAASUVORK5CYII="
+        )
+    )
+    output_path = tmp_path / "map.html"
+    inputs = pd.DataFrame(
+        [
+            {
+                "site_id": "TEST",
+                "layer": "satellite_overlay",
+                "geom_type": "ImageOverlay",
+                "geometry": {
+                    "type": "ImageOverlay",
+                    "image_path": str(image_path),
+                    "bounds": [[35.0, -78.0], [40.0, -72.0]],
+                    "opacity": 0.6,
+                    "name": "Coverage image",
+                },
+                "label": "Coverage image",
+            }
+        ]
+    )
+
+    result = generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row={"site_id": "TEST", "position_lat_dd_a": 37.5, "position_lon_dd_a": -75.0},
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["status"] == "ok"
+    assert "Satellite Overlays" in result["layers"]
+    assert "Satellite imagery" in html
+    assert "[[35.0, -78.0], [40.0, -72.0]]" in html
+    assert "data:image/png;base64" in html
