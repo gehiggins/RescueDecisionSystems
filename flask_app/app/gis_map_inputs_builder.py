@@ -45,7 +45,8 @@ def build_gis_map_inputs_df(
     stations_df: Optional[pd.DataFrame] = None,
     op_tz_env: Optional[str] = None,
     shore_nm: float = 5.0,
-    sat_overlays: Optional[list] = None
+    sat_overlays: Optional[list] = None,
+    alert_time_utc=None,
 ) -> pd.DataFrame:
     """
     Return a single DataFrame (gis_map_inputs_df) with rows for:
@@ -391,7 +392,9 @@ def build_gis_map_inputs_df(
         # Build minimal alert_df for SAT pipeline from available context
         _lat = positions_df.iloc[0]['lat_dd'] if positions_df is not None and not positions_df.empty else None
         _lon = positions_df.iloc[0]['lon_dd'] if positions_df is not None and not positions_df.empty else None
-        _alert_time = pd.Timestamp.now(tz="UTC")
+        _alert_time = pd.to_datetime(alert_time_utc, utc=True, errors="coerce")
+        if pd.isna(_alert_time):
+            _alert_time = pd.Timestamp.now(tz="UTC")
         _alert = pd.DataFrame([{
             'alert_id': site_id,
             'alert_time_utc': _alert_time,
