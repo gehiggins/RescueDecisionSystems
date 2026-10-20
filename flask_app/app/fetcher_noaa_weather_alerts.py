@@ -18,7 +18,10 @@ def fetch_weather_alert_features(
     """Return a forecast-zone URL, zone ID, and active alert features."""
     if isinstance(lat, (bool, np.bool_)) or isinstance(lon, (bool, np.bool_)):
         return None, None, []
-    lat, lon = float(lat), float(lon)
+    try:
+        lat, lon = float(lat), float(lon)
+    except (TypeError, ValueError, OverflowError):
+        return None, None, []
     if (
         not np.isfinite(lat)
         or not np.isfinite(lon)
@@ -65,6 +68,8 @@ def fetch_weather_alert_features(
         if isinstance(alerts_payload, dict)
         else []
     )
+    if not isinstance(raw_features, list):
+        raw_features = []
     features = [feature for feature in raw_features if isinstance(feature, dict)]
     return zone_url, zone_id, features
 

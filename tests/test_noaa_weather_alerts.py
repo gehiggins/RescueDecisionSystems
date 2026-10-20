@@ -1,6 +1,7 @@
 """Offline regression coverage for NOAA/NWS active-zone alerts."""
 
 import pytest
+import pandas as pd
 
 from flask_app.app import fetcher_noaa_weather_alerts
 from flask_app.app import noaa_weather_alerts_fetch
@@ -130,3 +131,77 @@ def test_invalid_alert_coordinates_skip_provider(monkeypatch, latitude, longitud
     )
 
     assert result.empty
+
+
+@pytest.mark.parametrize(
+    ("latitude", "longitude"),
+    [(None, 0), ([], 0), ({}, 0), (0, []), ("1e1000000", 0)],
+)
+def test_invalid_alert_coordinates_are_rejected_by_shared_fetcher(
+    monkeypatch, latitude, longitude
+):
+    monkeypatch.setattr(
+        fetcher_noaa_weather_alerts.requests,
+        "get",
+        lambda *_args, **_kwargs: pytest.fail("provider called"),
+    )
+
+    result = fetcher_noaa_weather_alerts.fetch_weather_alert_features(
+        latitude, longitude
+    )
+
+    assert result == (None, None, [])
+
+
+@pytest.mark.parametrize("features", [None, {}, "unexpected", 42])
+def test_shared_alert_fetcher_rejects_non_list_features(monkeypatch, features):
+    responses = iter(
+        [
+            _Response(
+                {
+                    "properties": {
+                        "forecastZone": "https://api.weather.gov/zones/forecast/VAZ099"
+                    }
+                }
+            ),
+            _Response({"features": features}),
+        ]
+    )
+    monkeypatch.setattr(
+        fetcher_noaa_weather_alerts.requests,
+        "get",
+        lambda *_args, **_kwargs: next(responses),
+    )
+
+    zone_url, zone_id, parsed_features = (
+        fetcher_noaa_weather_alerts.fetch_weather_alert_features(37.76, -75.5)
+    )
+
+    assert zone_url.endswith("/VAZ099")
+    assert zone_id == "VAZ099"
+    assert parsed_features == []
+
+
+def test_compatibility_alert_fetch_skips_nullable_or_non_text_headlines(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        noaa_weather_alerts_fetch,
+        "fetch_weather_alert_features",
+        lambda *_args, **_kwargs: (
+            "https://api.weather.gov/zones/forecast/VAZ099",
+            "VAZ099",
+            [
+                {"properties": pd.NA},
+                {"properties": {"headline": ["not", "text"]}},
+                {"properties": {"headline": "Coastal Flood Advisory"}},
+            ],
+        ),
+    )
+
+    zone_url, headlines = noaa_weather_alerts_fetch.fetch_weather_alerts_zone(
+        37.76, -75.5
+    )
+
+    assert zone_url.endswith("/VAZ099")
+    assert headlines == ["Coastal Flood Advisory"]

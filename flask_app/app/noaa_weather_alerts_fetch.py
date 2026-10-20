@@ -29,9 +29,12 @@ def fetch_weather_alerts_zone(
 
         alerts = []
         for feature in features:
-            properties = feature.get("properties") or {}
-            if isinstance(properties, dict) and properties.get("headline"):
-                alerts.append(properties["headline"])
+            properties = feature.get("properties")
+            if not isinstance(properties, dict):
+                continue
+            headline = properties.get("headline")
+            if isinstance(headline, str) and headline.strip():
+                alerts.append(headline)
 
         if alerts:
             logging.info(f"ðŸš¨ Active weather alerts for zone {zone_url}: {alerts}")
