@@ -42,8 +42,11 @@ import sys
 import os
 import logging
 import json
+import re
 from pathlib import Path
 LOG = logging.getLogger(__name__)
+
+_MAP_ID_MAX_CHARS = 80
 
 # Ensure the `flask_app` directory is added to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -60,6 +63,12 @@ from app.fetcher_noaa_weather_alerts import fetch_weather_alerts_zone
 from app.finalize_alert_df import finalize_alert_df
 from app.parser_sarsat_msg import parse_sarsat_message
 from app.wx_pipeline import run_wx_pipeline
+
+
+def _safe_map_site_id(value):
+    """Return a bounded filename component for generated-map directories."""
+    normalized = re.sub(r"[^A-Za-z0-9_-]+", "_", str(value)).strip("_-")
+    return normalized[:_MAP_ID_MAX_CHARS] or "unknown"
 
 
 def _get_existing_alerts_for_sequence():
@@ -88,7 +97,8 @@ def load_sat_overlays_for_site(site_id: str):
     Bounds JSON schema: [[south, west], [north, east]]
     Returns a list of dicts: {"image_path": str, "bounds": [[s,w],[n,e]], "opacity": float, "name": str}
     """
-    base = Path("data") / "sat_overlays" / str(site_id)
+    overlays_root = Path(__file__).resolve().parents[2] / "data" / "sat_overlays"
+    base = overlays_root / _safe_map_site_id(site_id)
     if not base.exists():
         return []
 
@@ -300,6 +310,7 @@ def process_sarsat_alert(raw_alert_message, maps_root=None):
             from datetime import datetime
             site_id_safe = f"SMOKE_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
             fallback_reason = "site_id missing; using UTC fallback"
+        site_id_safe = _safe_map_site_id(site_id_safe)
         if fallback_reason:
             logging.warning(f"[RDS] GIS map step fallback: {fallback_reason} (site_id_safe={site_id_safe})")
 
