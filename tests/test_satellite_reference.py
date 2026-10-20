@@ -394,3 +394,99 @@ def test_satellite_pipeline_uses_requested_nearest_fallback(monkeypatch):
     assert captured["lat"] == 37.5
     assert captured["lon"] == -75.0
     assert captured["kwargs"]["types"] == ("LEO",)
+
+
+def test_upcoming_enrichment_survives_visible_satellite_failure(monkeypatch):
+    reference = pd.DataFrame(
+        [
+            {
+                "type": "LEO",
+                "designator": "NOAA-15",
+                "common_name": "NOAA 15",
+                "norad_id": 25338,
+                "intl_designator": "1998-030A",
+            }
+        ]
+    )
+    upcoming = pd.DataFrame(
+        [
+            {
+                "sat_name": "NOAA 15",
+                "norad_id": 25338,
+                "at_time_utc": pd.Timestamp("2026-10-20T12:30:00Z"),
+                "lat_dd": 38.0,
+                "lon_dd": -74.0,
+                "alt_km": 850.0,
+                "footprint_radius_km": 3000.0,
+                "tle_epoch_utc": pd.Timestamp("2026-10-20T11:00:00Z"),
+                "role": "upcoming",
+                "sat_type": "LEO",
+            }
+        ]
+    )
+    captured = {}
+    monkeypatch.setattr(sat_pipeline, "load_sat_reference", lambda: reference)
+    monkeypatch.setattr(sat_pipeline, "resolve_reporting_sat", lambda _alert: None)
+    monkeypatch.setattr(
+        sat_pipeline, "load_tle_snapshot", lambda _ids: pd.DataFrame()
+    )
+    monkeypatch.setattr(
+        sat_pipeline,
+        "_visible_candidates",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("visible failed")),
+    )
+
+    def upcoming_passes(*_args, **kwargs):
+        captured.update(kwargs)
+        return upcoming.copy()
+
+    monkeypatch.setattr(sat_pipeline, "_upcoming_passes", upcoming_passes)
+    monkeypatch.setenv("RDS_SAT_TOPN_NEARBY", "invalid")
+    monkeypatch.setenv("RDS_SAT_MAX_CANDIDATES", "invalid")
+    monkeypatch.setenv("RDS_SAT_MAX_HOURS", "nan")
+    monkeypatch.setenv("RDS_SAT_TOPN_UPCOMING", "0")
+    alert = pd.DataFrame(
+        [
+            {
+                "alert_id": "98372",
+                "alert_time_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+                "alert_lat_dd": 37.5,
+                "alert_lon_dd": -75.0,
+            }
+        ]
+    )
+
+    overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=True)
+
+    assert len(overlay) == 1
+    assert overlay.iloc[0]["role"] == "upcoming"
+    assert captured["max_candidates"] == 256
+    assert captured["max_hours"] == 12.0
+    assert captured["top_n"] == 4
+
+
+def test_satellite_pipeline_does_not_fetch_context_when_tle_disabled(monkeypatch):
+    monkeypatch.setattr(
+        sat_pipeline,
+        "_visible_candidates",
+        lambda *_a, **_k: pytest.fail("visible satellites fetched with TLE disabled"),
+    )
+    monkeypatch.setattr(
+        sat_pipeline,
+        "_upcoming_passes",
+        lambda *_a, **_k: pytest.fail("upcoming passes fetched with TLE disabled"),
+    )
+    alert = pd.DataFrame(
+        [
+            {
+                "alert_id": "98372",
+                "alert_time_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+                "alert_lat_dd": 37.5,
+                "alert_lon_dd": -75.0,
+            }
+        ]
+    )
+
+    overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=False)
+
+    assert overlay.empty
