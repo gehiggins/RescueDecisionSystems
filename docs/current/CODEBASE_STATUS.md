@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `718a98d69fec6a231329e6309280138b52dbb70c`
+Baseline: `main` commit `80261a459f11b454a4e1209e909956c03e7ebc6d`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -162,6 +162,23 @@ relative outputs, declared project dependencies, bounded requests, and explicit
 command-line output options; its live multi-station refresh was not run during
 this maintenance batch, so the committed reference dataset was not replaced.
 
+The NDBC realtime2 and 5day2 parsers now read field names from the provider's
+header row rather than the units row, so valid temperature, wind, and wave
+measurements are retained. Their requests are bounded and identify the RDS
+weather client. A read-only live check of station 44009 on 2026-10-20 returned
+a current observation and populated temperature, wind speed, and wind
+direction through the repaired parser.
+
+The optional NOAA shore adapter no longer returns Seattle's KSEA station for
+every alert. It discovers NWS observation stations around the requested point,
+validates and ranks them by distance, and preserves the shared Celsius and
+metres-per-second schema. A live sample-position check on 2026-10-20 returned
+KWAL, KMFV, and KSBY in increasing distance order. NOAA active-alert clients
+now use the documented `/alerts/active/zone/{zone_id}` route through a shared,
+bounded lookup. A live check resolved the sample position to marine zone
+ANZ652 and returned one active alert. These repaired legacy adapters remain
+outside the active production path.
+
 The central empty DataFrame schemas now initialize successfully with current
 pandas. Timestamp columns are UTC-aware, while list and coordinate-container
 fields use pandas object columns. An isolation audit imported every active
@@ -232,7 +249,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 448 passed; 2 live tests deselected.
+- Default offline suite: 458 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
