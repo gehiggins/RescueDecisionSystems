@@ -459,11 +459,15 @@ def validate_and_extract_coordinate_token(field_name: str, raw_text: str, config
                 deg_val = int(deg)
                 min_val = float(min_)
                 sec_val = float(sec)
-                value = deg_val + min_val / 60.0 + sec_val / 3600.0
-                if hemi in ["S", "W"]:
-                    value = -value
-                parse_ok = True
-                checks_passed.append("parse")
+                if not (0.0 <= min_val < 60.0 and 0.0 <= sec_val < 60.0):
+                    checks_failed.append("components")
+                    notes.append("minutes/seconds: out of bounds")
+                else:
+                    value = deg_val + min_val / 60.0 + sec_val / 3600.0
+                    if hemi in ["S", "W"]:
+                        value = -value
+                    parse_ok = True
+                    checks_passed.append("parse")
             except Exception as e:
                 checks_failed.append("parse")
                 notes.append(f"parse_error: {e}")
@@ -560,25 +564,25 @@ def validate_and_extract_coordinate_pair(field_name: str, raw_text: str, config:
             (checks_passed if r_lat["valid"] else checks_failed).append("lat_valid")
             (checks_passed if r_lon["valid"] else checks_failed).append("lon_valid")
             notes.append("Matched pair decimal-minutes format")
-            # Return immediately on first valid DM pair
-            return {
-                "value": {"lat_dd": lat_dd, "lon_dd": lon_dd},
-                "lat_dd": lat_dd,
-                "lon_dd": lon_dd,
-                "lat_token": lat_token,
-                "lon_token": lon_token,
-                "is_valid": True,
-                "format_type": format_type,
-                "confidence": 0.92,
-                "raw_span": span,
-                "valid": True,
-                "start_pos": start_pos,
-                "end_pos": end_pos,
-                "checks_passed": checks_passed,
-                "checks_failed": checks_failed,
-                "fallback_used": False,
-                "notes": notes,
-            }
+            if r_lat["valid"] and r_lon["valid"]:
+                return {
+                    "value": {"lat_dd": lat_dd, "lon_dd": lon_dd},
+                    "lat_dd": lat_dd,
+                    "lon_dd": lon_dd,
+                    "lat_token": lat_token,
+                    "lon_token": lon_token,
+                    "is_valid": True,
+                    "format_type": format_type,
+                    "confidence": 0.92,
+                    "raw_span": span,
+                    "valid": True,
+                    "start_pos": start_pos,
+                    "end_pos": end_pos,
+                    "checks_passed": checks_passed,
+                    "checks_failed": checks_failed,
+                    "fallback_used": False,
+                    "notes": notes,
+                }
 
     # Proximity fallback: find individual DM lat & lon tokens within 120 chars
     dm_lat_pat = r"\d{1,2}\s+[0-5]?\d(?:\.\d+)?\s*[NS]"
@@ -606,25 +610,25 @@ def validate_and_extract_coordinate_pair(field_name: str, raw_text: str, config:
                 (checks_passed if r_lat["valid"] else checks_failed).append("lat_valid")
                 (checks_passed if r_lon["valid"] else checks_failed).append("lon_valid")
                 notes.append("Matched DM lat/lon pair by proximity")
-                # Return immediately on first valid proximity DM pair
-                return {
-                    "value": {"lat_dd": lat_dd, "lon_dd": lon_dd},
-                    "lat_dd": lat_dd,
-                    "lon_dd": lon_dd,
-                    "lat_token": lat_token,
-                    "lon_token": lon_token,
-                    "is_valid": True,
-                    "format_type": format_type,
-                    "confidence": 0.91,
-                    "raw_span": span,
-                    "valid": True,
-                    "start_pos": start_pos,
-                    "end_pos": end_pos,
-                    "checks_passed": checks_passed,
-                    "checks_failed": checks_failed,
-                    "fallback_used": False,
-                    "notes": notes,
-                }
+                if r_lat["valid"] and r_lon["valid"]:
+                    return {
+                        "value": {"lat_dd": lat_dd, "lon_dd": lon_dd},
+                        "lat_dd": lat_dd,
+                        "lon_dd": lon_dd,
+                        "lat_token": lat_token,
+                        "lon_token": lon_token,
+                        "is_valid": True,
+                        "format_type": format_type,
+                        "confidence": 0.91,
+                        "raw_span": span,
+                        "valid": True,
+                        "start_pos": start_pos,
+                        "end_pos": end_pos,
+                        "checks_passed": checks_passed,
+                        "checks_failed": checks_failed,
+                        "fallback_used": False,
+                        "notes": notes,
+                    }
 
     # Fallback: try to find two tokens (DMS or DD)
     token_pat = r"\d{1,3}[°\s]+\d{1,2}(?:\.\d+)?[\'\s]*(?:\d{1,2}(?:\.\d+)?)?[\"\s]*[NSEW]|[+-]?\d{1,3}\.\d+[NSEW]"
