@@ -66,6 +66,30 @@ def test_invalid_station_reference_skips_provider_request(
     ).empty
 
 
+def test_station_discovery_skips_invalid_provider_identifier(monkeypatch):
+    payload = {
+        "features": [
+            {
+                "properties": {"stationIdentifier": "../BAD"},
+                "geometry": {"coordinates": [-74.5, 37.5]},
+            },
+            {
+                "properties": {"stationIdentifier": " KVALID "},
+                "geometry": {"coordinates": [-74.6, 37.6]},
+            },
+        ]
+    }
+    monkeypatch.setattr(
+        fetcher_noaa_shore.requests,
+        "get",
+        lambda *_args, **_kwargs: _Response(payload),
+    )
+
+    result = fetcher_noaa_shore.query_nearest_noaa_stations(37.5, -74.5)
+
+    assert result["station_id"].tolist() == ["KVALID"]
+
+
 @pytest.mark.parametrize(
     "invalid_limit",
     [True, pd.Series([True]).iloc[0], 2.5, 0, "bad", float("inf")],
@@ -154,6 +178,24 @@ def test_latest_observation_replaces_invalid_request_timeout(
     )
 
     assert captured["timeout"] == fetcher_noaa_shore.NOAA_REQUEST_TIMEOUT_SECONDS
+
+
+@pytest.mark.parametrize(
+    "invalid_station_id",
+    [None, "", "   ", True, pd.NA, "../KSEA", "KSEA?x=1", "KSEA/extra"],
+)
+def test_latest_observation_rejects_invalid_station_identifier(
+    monkeypatch, invalid_station_id
+):
+    monkeypatch.setattr(
+        fetcher_noaa_shore.requests,
+        "get",
+        lambda *_args, **_kwargs: pytest.fail("provider called"),
+    )
+
+    assert fetcher_noaa_shore.fetch_single_noaa_station(
+        invalid_station_id
+    ).empty
 
 
 @pytest.mark.parametrize(
