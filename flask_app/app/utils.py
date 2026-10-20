@@ -10,6 +10,18 @@ import math
 
 NDBC_REQUEST_TIMEOUT_SECONDS = 15
 
+
+def normalize_request_timeout(value, default):
+    """Return a finite positive provider timeout or the known-safe default."""
+    if isinstance(value, (bool, np.bool_)):
+        return default
+    try:
+        timeout = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return timeout if math.isfinite(timeout) and timeout > 0 else default
+
+
 def log_error_and_continue(context: str, exc: Exception | None = None):
     """
     Logs an error with optional exception details, keeping callsites consistent.
@@ -37,6 +49,9 @@ def parse_realtime2_data(
     """
     Parses the latest row of Realtime2 data for the given station.
     """
+    request_timeout = normalize_request_timeout(
+        request_timeout, NDBC_REQUEST_TIMEOUT_SECONDS
+    )
     try:
         url = f"https://www.ndbc.noaa.gov/data/realtime2/{station_id}.txt"
         response = requests.get(
@@ -68,6 +83,9 @@ def parse_5day2_data(station_id, request_timeout=NDBC_REQUEST_TIMEOUT_SECONDS):
     """
     Parses the latest row of 5day2 data for the given station.
     """
+    request_timeout = normalize_request_timeout(
+        request_timeout, NDBC_REQUEST_TIMEOUT_SECONDS
+    )
     try:
         url = f"https://www.ndbc.noaa.gov/data/5day2/{station_id}_5day.txt"
         response = requests.get(
