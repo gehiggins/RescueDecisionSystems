@@ -67,6 +67,39 @@ def test_satellite_pipeline_handles_alert_without_reporting_satellite(monkeypatc
     assert overlay.empty
 
 
+@pytest.mark.parametrize("alert_time", [None, "invalid", ["2026-10-20T12:00:00Z"]])
+def test_satellite_pipeline_rejects_invalid_alert_time_without_provider_lookup(
+    monkeypatch, alert_time
+):
+    monkeypatch.setattr(
+        sat_pipeline,
+        "load_sat_reference",
+        lambda: pytest.fail("satellite reference loaded for invalid alert time"),
+    )
+    alert = pd.DataFrame(
+        [
+            {
+                "alert_id": "98372",
+                "alert_time_utc": alert_time,
+                "alert_lat_dd": 37.76,
+                "alert_lon_dd": -75.50,
+            }
+        ]
+    )
+
+    overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=True)
+
+    assert overlay.empty
+    assert "norad_id" in overlay.columns
+
+
+def test_satellite_pipeline_rejects_non_dataframe_alert_input():
+    overlay = sat_pipeline.build_sat_overlay_df(None, use_tle=True)
+
+    assert overlay.empty
+    assert "at_time_utc" in overlay.columns
+
+
 def test_stale_tle_is_not_used_for_historical_alert(monkeypatch):
     monkeypatch.setenv("RDS_SAT_MAX_TLE_AGE_HOURS", "72")
     stale_tle = pd.DataFrame(
