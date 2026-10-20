@@ -4,7 +4,9 @@ Status: verified current
 
 Reviewed against code and runtime: 2026-10-19
 
-Last verified maintenance update: 2026-10-20\n\nBaseline: `main` commit `b4c626a6b87914c8e7532fae6582a0a8f046f818`
+Last verified maintenance update: 2026-10-20
+
+Baseline: `main` commit `b4c626a6b87914c8e7532fae6582a0a8f046f818`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -61,7 +63,15 @@ pipeline work starts, and the direct map endpoint rejects non-finite or
 out-of-range coordinates. Generated map serving is confined to the configured
 map directory, including when a requested file is a symbolic link.
 Pipeline-generated map and satellite-overlay directories also use normalized,
-bounded path components when a numeric site ID is unavailable.
+bounded path components when a numeric site ID is unavailable. The normalized
+identifier is retained through the final map write, so raw alert text cannot
+escape the configured map directory.
+
+Validated local satellite PNG overlays are loaded only with finite geographic
+bounds and non-symlinked image/sidecar files. They are embedded into the
+generated HTML map as georeferenced satellite imagery. Equator and
+prime-meridian coordinates remain valid map centers, and untrusted site IDs
+are HTML-escaped in the map title.
 
 Detailed pipeline failures are logged on the server but are not returned to
 the browser. Raised exceptions, malformed integration results, malformed JSON
@@ -83,7 +93,8 @@ Active data and projection defaults no longer depend on one developer's file
 system. Repository-relative paths are used by default, with environment
 variables available for deliberate overrides. Legacy TLE and sample-message
 utilities are quiet on import and perform file or network work only when
-called explicitly.
+called explicitly. The NOAA diagnostic and weather health utility likewise do
+not contact a provider or change application-wide logging merely when imported.
 
 Open-Meteo and Meteostat retrieval are isolated so an unexpected failure in
 one provider does not discard valid observations from the other. Weather-row
@@ -99,14 +110,15 @@ be rotated if it was ever used. History was not rewritten during this work.
 ## Automated verification
 
 - Default offline suite: 125 passed; 2 live tests deselected.
-- Explicit external-service suite: 2 passed during the 2026-10-19 review; it\n  remains outside per-commit CI.
+- Explicit external-service suite: 2 passed during the 2026-10-19 review; it
+  remains outside per-commit CI.
 - Editable development installation succeeded.
 - The deployment requirements wrapper installed successfully.
 - `pip check` reported no broken requirements.
 - Gunicorn application configuration validation passed.
-- GitHub Actions repeats the installation, dependency, offline-test, and
-  Gunicorn checks on Python 3.9 and Python 3.11 for each pull request and push
-  to `main`.
+- GitHub Actions repeats the installation, dependency, active-module
+  compilation, offline-test, and Gunicorn checks on Python 3.9 and Python 3.11
+  for each pull request and push to `main`.
 
 The default and live test commands are documented in `pytest.ini` and
 `INSTALLATION_REQUIREMENTS.md`.
