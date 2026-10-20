@@ -169,6 +169,53 @@ def test_process_alert_falls_back_from_invalid_character_limit(
     assert "Invalid RDS_MAX_ALERT_CHARS" in caplog.text
 
 
+@pytest.mark.parametrize("invalid_maps_dir", [None, False, 123, [], "", "."])
+def test_process_alert_falls_back_from_invalid_maps_directory(
+    monkeypatch, caplog, invalid_maps_dir
+):
+    application = create_app(
+        {"TESTING": True, "RDS_MAPS_DIR": invalid_maps_dir}
+    )
+    captured = {}
+
+    def run_pipeline(_message, maps_root):
+        captured["maps_root"] = maps_root
+        return {"status": "ok", "parsed_data": {"site_id": "123"}}
+
+    monkeypatch.setattr("flask_app.app.routes.run_alert_pipeline", run_pipeline)
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    expected = Path(__file__).resolve().parents[1] / "data" / "maps"
+    assert response.status_code == 200
+    assert captured["maps_root"] == expected.resolve()
+    assert "Invalid or overly broad RDS_MAPS_DIR" in caplog.text
+
+
+def test_relative_maps_directory_resolves_from_repository(monkeypatch, tmp_path):
+    application = create_app(
+        {"TESTING": True, "RDS_MAPS_DIR": "runtime/maps"}
+    )
+    captured = {}
+    monkeypatch.chdir(tmp_path)
+
+    def run_pipeline(_message, maps_root):
+        captured["maps_root"] = maps_root
+        return {"status": "ok", "parsed_data": {"site_id": "123"}}
+
+    monkeypatch.setattr("flask_app.app.routes.run_alert_pipeline", run_pipeline)
+
+    response = application.test_client().post(
+        "/process_alert", json={"message": "sample alert"}
+    )
+
+    repository_root = Path(__file__).resolve().parents[1]
+    assert response.status_code == 200
+    assert captured["maps_root"] == (repository_root / "runtime/maps").resolve()
+
+
 def test_process_alert_returns_json_when_request_body_is_too_large():
     application = create_app({"TESTING": True, "MAX_CONTENT_LENGTH": 32})
 
