@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-20
 
 Last verified maintenance update: 2026-10-20
 
-Baseline: `main` commit `35c78d12b899ec9347137de976c63d9d6339632e`
+Baseline: `main` commit `c4278eb0990d0dabd70bcd4773f37cb35594a187`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -85,7 +85,11 @@ potentially misleading position. The limit is configurable through
 fall back to the 168-hour safeguard. Stale elements are rejected before RDS
 calculates a subpoint, ground track, or next-pass marker. When a resolved
 satellite reference and an explicit alert NORAD ID are both present, the alert
-override is applied without truth-testing the pandas reference record.
+override is applied without truth-testing the pandas reference record. Alert,
+reference, and provider catalog IDs must be positive whole numbers; malformed,
+fractional, boolean, or non-scalar values do not trigger TLE lookup. Nullable
+or non-scalar display names fall back to usable designator data without
+stopping enrichment.
 
 Coordinate validation rejects latitude/longitude pairs unless both tokens are
 valid. Minutes and seconds must remain below 60, hemisphere letters must match
@@ -142,8 +146,9 @@ are HTML-escaped in the map title.
 
 Detailed pipeline failures are logged on the server but are not returned to
 the browser. Raised exceptions, malformed integration results, malformed JSON
-requests, missing reported map files, and direct map-rendering failures retain
-stable JSON error responses. Pandas missing values serialize as JSON `null`.
+requests, missing reported map files, invalid reported map-path types, and
+direct map-rendering failures retain stable JSON error responses. Pandas
+missing values serialize as JSON `null`.
 Non-finite parsed numeric values serialize as JSON `null`, so strict clients
 do not receive non-standard `NaN` or `Infinity` tokens. The browser also
 handles non-JSON proxy or server failures without displaying a JSON parsing
@@ -328,7 +333,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 678 passed; 2 live tests deselected.
+- Default offline suite: 692 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
