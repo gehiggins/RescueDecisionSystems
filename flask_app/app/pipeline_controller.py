@@ -146,11 +146,18 @@ def load_sat_overlays_for_site(site_id: str):
     """
     overlays_root = Path(__file__).resolve().parents[2] / "data" / "sat_overlays"
     base = overlays_root / _safe_map_site_id(site_id)
-    if not base.exists():
+    try:
+        resolved_root = overlays_root.resolve()
+        resolved_base = base.resolve()
+        resolved_base.relative_to(resolved_root)
+    except (OSError, ValueError):
+        LOG.warning("Skipping satellite overlays outside the configured root: %s", base)
+        return []
+    if base.is_symlink() or not resolved_base.is_dir():
         return []
 
     overlays = []
-    for png in base.glob("*.png"):
+    for png in resolved_base.glob("*.png"):
         j = png.with_suffix(".bounds.json")
         if not j.exists() or png.is_symlink() or j.is_symlink():
             continue
