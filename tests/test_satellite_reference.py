@@ -380,21 +380,42 @@ def test_tle_resolver_does_not_cache_malformed_or_wrong_catalog_payloads(
     assert "Ignoring malformed TLE response" in caplog.text
 
 
-def test_tle_group_resolver_skips_malformed_records(monkeypatch, caplog):
+def test_tle_group_resolver_retries_after_malformed_response(monkeypatch, caplog):
     monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_CATNR", {})
     monkeypatch.setattr(sat_fetch_tle, "_TLE_CACHE_GROUP", {})
     monkeypatch.setattr(sat_fetch_tle, "_TLE_PROVIDER_UNAVAILABLE_UNTIL", 0.0)
 
+    responses = iter(
+        [
+            "BAD RECORD\ninvalid line one\ninvalid line two\n",
+            (
+                "TEST SATELLITE\n"
+                "1 43055U 17079A   26293.00000000  .00000000  00000-0  00000-0 0  9999\n"
+                "2 43055  56.0000 100.0000 0001000  10.0000 350.0000  2.00000000    00\n"
+            ),
+        ]
+    )
+
     class Response:
         status_code = 200
-        text = "BAD RECORD\ninvalid line one\ninvalid line two\n"
 
-    monkeypatch.setattr(sat_fetch_tle.requests, "get", lambda *_a, **_k: Response())
+        def __init__(self, text):
+            self.text = text
 
-    snapshot = sat_fetch_tle.load_tle_snapshot(["galileo"])
+    monkeypatch.setattr(
+        sat_fetch_tle.requests,
+        "get",
+        lambda *_a, **_k: Response(next(responses)),
+    )
 
-    assert snapshot.empty
-    assert sat_fetch_tle._TLE_CACHE_GROUP["galileo"] == []
+    malformed = sat_fetch_tle.load_tle_snapshot(["galileo"])
+    recovered = sat_fetch_tle.load_tle_snapshot(["galileo"])
+
+    assert malformed.empty
+    assert len(recovered) == 1
+    assert recovered.iloc[0]["norad_id"] == 43055
+    assert recovered.iloc[0]["cache_hit"] == False
+    assert len(sat_fetch_tle._TLE_CACHE_GROUP["galileo"]) == 1
     assert "Ignoring malformed TLE record" in caplog.text
 
 
