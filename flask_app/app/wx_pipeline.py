@@ -21,7 +21,9 @@ _DEFAULT_HOURS_BACK = 6.0
 def _normalize_hours_back(hours_back):
     try:
         normalized = (
-            float("nan") if isinstance(hours_back, bool) else float(hours_back)
+            float("nan")
+            if isinstance(hours_back, (bool, np.bool_))
+            else float(hours_back)
         )
     except (TypeError, ValueError, OverflowError):
         normalized = float("nan")
