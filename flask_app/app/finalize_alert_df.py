@@ -32,6 +32,46 @@
 
 from app.setup_imports import *
 
+
+def _site_key(value):
+    """Normalize database and parser site identifiers for sequence matching."""
+    try:
+        if value is None or pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        return None
+    return str(value).strip()
+
+
+def _existing_sequence_maxima(existing_alerts_db):
+    maxima = {}
+    if not isinstance(existing_alerts_db, pd.DataFrame) or existing_alerts_db.empty:
+        return maxima
+    if not {"site_id", "alert_sequence_number"}.issubset(existing_alerts_db.columns):
+        logging.warning(
+            "Existing alert history lacks site_id or alert_sequence_number; "
+            "starting new sequences."
+        )
+        return maxima
+
+    rejected = 0
+    for _, row in existing_alerts_db.iterrows():
+        key = _site_key(row.get("site_id"))
+        try:
+            sequence = float(row.get("alert_sequence_number"))
+        except (TypeError, ValueError):
+            rejected += 1
+            continue
+        if not np.isfinite(sequence) or sequence < 1 or not sequence.is_integer():
+            rejected += 1
+            continue
+        maxima[key] = max(maxima.get(key, 0), int(sequence))
+    if rejected:
+        logging.warning(
+            "Ignored %s invalid historical alert sequence value(s).", rejected
+        )
+    return maxima
+
 def finalize_alert_df(alert_df, existing_alerts_db):
     """
     Finalizes SARSAT alert DataFrame before committing to the database.
@@ -49,14 +89,28 @@ def finalize_alert_df(alert_df, existing_alerts_db):
         pd.DataFrame: Updated alert_df ready for final storage.
     """
     
+    if not isinstance(alert_df, pd.DataFrame):
+        raise TypeError("alert_df must be a pandas DataFrame")
+
+    alert_df = alert_df.copy()
+    if "site_id" not in alert_df.columns:
+        alert_df["site_id"] = pd.Series(pd.NA, index=alert_df.index, dtype="object")
+
+    sequence_maxima = _existing_sequence_maxima(existing_alerts_db)
+    alert_df["alert_sequence_number"] = pd.Series(
+        pd.NA, index=alert_df.index, dtype="Int64"
+    )
+    # Update the in-memory maximum after every row so repeated sites in one
+    # incoming batch receive distinct, increasing sequence numbers.
     for idx, row in alert_df.iterrows():
-        existing_alerts = existing_alerts_db[existing_alerts_db['site_id'] == row['site_id']]
-        if existing_alerts.empty:
-            alert_df.at[idx, 'alert_sequence_number'] = 1
-        else:
-            alert_df.at[idx, 'alert_sequence_number'] = existing_alerts['alert_sequence_number'].max() + 1
+        key = _site_key(row.get("site_id"))
+        next_sequence = sequence_maxima.get(key, 0) + 1
+        alert_df.at[idx, "alert_sequence_number"] = next_sequence
+        sequence_maxima[key] = next_sequence
     
     # Ensure detect_time is present; log a warning if missing
+    if "detect_time" not in alert_df.columns:
+        alert_df["detect_time"] = pd.NaT
     missing_detect_time = alert_df['detect_time'].isna()
     if missing_detect_time.any():
         logging.warning(f"âš ï¸ {missing_detect_time.sum()} alert(s) are missing detect_time. Ensure extraction occurs in parser_sarsat_msg.py.")
