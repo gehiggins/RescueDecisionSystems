@@ -63,9 +63,12 @@ def test_latest_observation_preserves_shared_metric_units(monkeypatch):
     payload = {
         "properties": {
             "timestamp": "2026-10-20T18:00:00Z",
-            "temperature": {"value": 16.9},
-            "windSpeed": {"value": 12.0},
-            "windDirection": {"value": 20.0},
+            "temperature": {"value": 16.9, "unitCode": "wmoUnit:degC"},
+            "windSpeed": {"value": 43.2, "unitCode": "wmoUnit:km_h-1"},
+            "windDirection": {
+                "value": 20.0,
+                "unitCode": "wmoUnit:degree_(angle)",
+            },
         }
     }
     captured = {}
@@ -86,3 +89,36 @@ def test_latest_observation_preserves_shared_metric_units(monkeypatch):
     assert result.iloc[0]["wind_speed"] == pytest.approx(12.0)
     assert result.iloc[0]["wind_direction"] == pytest.approx(20.0)
     assert pd.api.types.is_datetime64_any_dtype(result["observation_time"])
+
+
+@pytest.mark.parametrize(
+    ("measurement", "expected"),
+    [
+        ({"value": 20, "unitCode": "wmoUnit:degC"}, 20.0),
+        ({"value": 68, "unitCode": "wmoUnit:degF"}, 20.0),
+        ({"value": 293.15, "unitCode": "wmoUnit:K"}, 20.0),
+    ],
+)
+def test_temperature_units_are_normalized_to_celsius(measurement, expected):
+    assert fetcher_noaa_shore._temperature_c(measurement) == pytest.approx(expected)
+
+
+@pytest.mark.parametrize(
+    ("measurement", "expected"),
+    [
+        ({"value": 12, "unitCode": "wmoUnit:m_s-1"}, 12.0),
+        ({"value": 43.2, "unitCode": "wmoUnit:km_h-1"}, 12.0),
+        ({"value": 10, "unitCode": "wmoUnit:kn"}, 5.14444),
+    ],
+)
+def test_wind_units_are_normalized_to_metres_per_second(measurement, expected):
+    assert fetcher_noaa_shore._wind_speed_ms(measurement) == pytest.approx(expected)
+
+
+def test_unknown_or_missing_units_are_not_mislabeled():
+    assert pd.isna(fetcher_noaa_shore._temperature_c({"value": 20}))
+    assert pd.isna(
+        fetcher_noaa_shore._wind_speed_ms(
+            {"value": 12, "unitCode": "wmoUnit:unsupported"}
+        )
+    )
