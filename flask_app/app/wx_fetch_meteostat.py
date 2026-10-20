@@ -34,7 +34,7 @@ def _normalize_search_parameters(radius_km, max_stations):
         radius = float(radius_km)
     except (TypeError, ValueError):
         radius = float("nan")
-    if isinstance(radius_km, bool) or not np.isfinite(radius) or radius <= 0:
+    if isinstance(radius_km, (bool, np.bool_)) or not np.isfinite(radius) or radius <= 0:
         LOG.warning(
             "Invalid Meteostat radius_km=%r; using default %.1f",
             radius_km,
@@ -47,7 +47,7 @@ def _normalize_search_parameters(radius_km, max_stations):
     except (TypeError, ValueError):
         station_count = float("nan")
     if (
-        isinstance(max_stations, bool)
+        isinstance(max_stations, (bool, np.bool_))
         or not np.isfinite(station_count)
         or station_count < 1
         or not station_count.is_integer()
