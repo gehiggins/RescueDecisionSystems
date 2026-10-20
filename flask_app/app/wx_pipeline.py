@@ -31,6 +31,17 @@ def _normalize_hours_back(hours_back):
         return _DEFAULT_HOURS_BACK
     return normalized
 
+def _optional_distance_km(value):
+    """Return finite non-negative point metadata, or ``None`` when unusable."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        normalized = float(value)
+    except (TypeError, ValueError):
+        return None
+    return normalized if math.isfinite(normalized) and normalized >= 0 else None
+
+
 def run_wx_pipeline(alert_targets_df: pd.DataFrame,
                     hours_back: int = 6,
                     radius_km: float = 50.0,
@@ -45,7 +56,7 @@ def run_wx_pipeline(alert_targets_df: pd.DataFrame,
 
     # Unique A/B coordinates for the case
     pts = []
-    seen_coordinates = set()
+    points_by_coordinates = {}
     rejected_points = 0
     for _, r in alert_targets_df.iterrows():
         try:
@@ -63,14 +74,23 @@ def run_wx_pipeline(alert_targets_df: pd.DataFrame,
             rejected_points += 1
             continue
         coordinates = (lat, lon)
-        if coordinates in seen_coordinates:
-            continue
-        seen_coordinates.add(coordinates)
-        point = {"lat": lat, "lon": lon}
+        point = points_by_coordinates.get(coordinates)
+        if point is None:
+            point = {"lat": lat, "lon": lon}
+            points_by_coordinates[coordinates] = point
+            pts.append(point)
         for field in ("error_radius_km", "coast_distance_km"):
             if field in r:
-                point[field] = r.get(field)
-        pts.append(point)
+                distance = _optional_distance_km(r.get(field))
+                if distance is None:
+                    continue
+                previous = _optional_distance_km(point.get(field))
+                if previous is None:
+                    point[field] = distance
+                elif field == "error_radius_km":
+                    point[field] = max(previous, distance)
+                else:
+                    point[field] = min(previous, distance)
     if rejected_points:
         LOG.warning("Discarded %s invalid weather target coordinate(s)", rejected_points)
     if not pts:
