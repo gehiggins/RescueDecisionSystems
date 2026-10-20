@@ -415,6 +415,39 @@ def test_malformed_next_pass_coordinates_preserve_valid_satellite_overlay(
     assert overlay.iloc[0]["next_pass_marker"] is None
 
 
+@pytest.mark.parametrize("malformed_epoch", [[], {}, ["2026-10-20T12:00:00Z"]])
+def test_malformed_tle_epoch_skips_propagation(monkeypatch, malformed_epoch):
+    tle = pd.DataFrame(
+        [
+            {
+                "name": "NOAA 15",
+                "norad_id": 25338,
+                "tle_line1": "line 1",
+                "tle_line2": "line 2",
+                "epoch_utc": malformed_epoch,
+            }
+        ]
+    )
+    monkeypatch.setattr(sat_pipeline, "load_tle_snapshot", lambda _ids: tle)
+    monkeypatch.setattr(
+        sat_pipeline,
+        "compute_subpoint_at",
+        lambda *_args: pytest.fail("malformed TLE epoch reached propagation"),
+    )
+    alert = pd.DataFrame(
+        [
+            {
+                "alert_time_utc": pd.Timestamp("2026-10-20T12:00:00Z"),
+                "norad_id": 25338,
+            }
+        ]
+    )
+
+    overlay = sat_pipeline.build_sat_overlay_df(alert, use_tle=True)
+
+    assert overlay.empty
+
+
 @pytest.mark.parametrize("configured", ["not-a-number", "nan", "inf", "-1", "0"])
 def test_invalid_tle_age_configuration_uses_safe_default(
     monkeypatch, configured
