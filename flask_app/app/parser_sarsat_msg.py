@@ -8,6 +8,19 @@ import math
 import re
 
 
+def _coerce_detect_time(value):
+    """Normalize one scalar detection time to UTC, or return ``None``."""
+    if value is None or not pd.api.types.is_scalar(value):
+        return None
+    if isinstance(value, (bool, int, float, np.number)):
+        return None
+    try:
+        detected = pd.to_datetime(value, utc=True, errors="coerce")
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return None if pd.isna(detected) else detected
+
+
 def _parse_detect_time(message_text):
     """Parse the explicit DATE/TIME DETECTED fields as a UTC timestamp."""
     date_match = re.search(
@@ -23,12 +36,9 @@ def _parse_detect_time(message_text):
     if not date_match or not time_match:
         return None
 
-    detected = pd.to_datetime(
-        f"{date_match.group(1)} {time_match.group(1)}",
-        utc=True,
-        errors="coerce",
+    return _coerce_detect_time(
+        f"{date_match.group(1)} {time_match.group(1)}"
     )
-    return None if pd.isna(detected) else detected
 
 
 def _has_scalar_value(value):
@@ -169,9 +179,26 @@ def parse_sarsat_message(message_text, pre_scan_results=None):
             if _has_scalar_value(value) and str(value).strip():
                 parsed_data['site_id'] = value
         if 'detect_time' in pre_scan_results.columns:
-            pre_scanned_detect_time = pre_scan_results['detect_time'].iloc[0]
-            if pd.notna(pre_scanned_detect_time):
+            raw_detect_time = pre_scan_results['detect_time'].iloc[0]
+            pre_scanned_detect_time = _coerce_detect_time(raw_detect_time)
+            if pre_scanned_detect_time is not None:
                 parsed_data['detect_time'] = pre_scanned_detect_time
+            else:
+                try:
+                    missing_detect_time = (
+                        raw_detect_time is None
+                        or (
+                            pd.api.types.is_scalar(raw_detect_time)
+                            and pd.isna(raw_detect_time)
+                        )
+                    )
+                except (TypeError, ValueError):
+                    missing_detect_time = False
+                if not missing_detect_time:
+                    logging.warning(
+                        "Ignoring invalid pre-scan detection time: %r",
+                        raw_detect_time,
+                    )
         if parsed_data['detect_time'] is None:
             parsed_data['detect_time'] = _parse_detect_time(message_text)
         if 'position_method' in pre_scan_results.columns:
