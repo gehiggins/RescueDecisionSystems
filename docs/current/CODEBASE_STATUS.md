@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-21
 
 Last verified maintenance update: 2026-10-21
 
-Baseline: `main` commit `04de54c643e258a8cc35c308614e13c22f417811`
+Baseline: `main` commit `4e3c1aa81fc3d3969c23ce67d37d7a89511bd348`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -236,6 +236,9 @@ provider entries independently. Station discovery also validates that provider
 feature collections, metadata objects, and GeoJSON coordinate containers have
 the expected shapes. Boolean, non-finite, and out-of-range station coordinates
 are discarded entry by entry without interrupting other station results.
+Latest-observation parsing also rejects Boolean temperature, wind-speed, and
+direction readings, and does not interpret numeric provider timestamps as
+nanosecond-based dates near 1970.
 
 NOAA active-alert coordinates are checked for malformed, non-finite, and
 out-of-range values before any provider request. Point and alert response
@@ -360,7 +363,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 752 passed; 2 live tests deselected.
+- Default offline suite: 758 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
