@@ -24,7 +24,7 @@ Next step: Add generate_gis_map_html_from_dfs(positions_df, ...) (DF inputs, lay
 #gis_mapping.py
 
 
-import os, math, logging, base64
+import os, math, logging, base64, tempfile
 from html import escape
 from pathlib import Path
 
@@ -53,6 +53,37 @@ from shapely.geometry import Point
 
 DEBUG_MARKERS = os.getenv("RDS_DEBUG_MARKERS", "0") == "1"
 ICON_MODE = os.getenv("RDS_ICON_MODE", "base64").lower()
+
+
+def _save_folium_map_atomic(map_object, output_path):
+    """Save a Folium map without exposing a partial final HTML file."""
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink():
+        raise ValueError("Map output file cannot be a symbolic link")
+
+    temporary_path = None
+    try:
+        # Keep the temporary file beside the destination so os.replace remains
+        # atomic even when the configured map directory is on another volume.
+        with tempfile.NamedTemporaryFile(
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+        map_object.save(str(temporary_path))
+        os.replace(temporary_path, destination)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except FileNotFoundError:
+                pass
+
+    return str(destination)
 
 # --- ICON RESOLVER ---
 ICON_FILES = {
@@ -430,7 +461,7 @@ def generate_gis_map(alert_row, save_path):
                 coords = [[pt[1], pt[0]] for pt in list(row.geometry.coords)]
                 folium.PolyLine(coords, color='black', weight=1).add_to(m)
 
-    m.save(save_path)
+    _save_folium_map_atomic(m, save_path)
     logging.info(f"âœ… Saved GIS map: {save_path}")
 
     return save_path
@@ -604,7 +635,7 @@ def generate_gis_map_html(alert_row, out_dir, tiles_mode="online"):
         if rr_b and rr_b > 0:
             folium.Circle([lat_b, lon_b], radius=rr_b, color="red", fill=True, fill_opacity=0.2, weight=1, popup="B ring").add_to(m)
 
-    m.save(html_path)
+    _save_folium_map_atomic(m, html_path)
     if logging.getLogger().hasHandlers():
         logging.info(f"âœ… Interactive map saved: {html_path}")
     else:
@@ -1021,8 +1052,7 @@ def generate_gis_map_html_from_dfs(
         "</b></h3>"
     )
     m.get_root().html.add_child(folium.Element(title_html))
-    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-    m.save(out_path)
+    _save_folium_map_atomic(m, out_path)
     logging.info(f"✅ DF-based HTML map saved: {out_path}")
     layer_names = {
         "alert_position": "Alert Positions",
