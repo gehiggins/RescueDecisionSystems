@@ -670,6 +670,38 @@ def test_renderer_skips_malformed_and_out_of_range_geometry(tmp_path):
     assert "Boolean ring" not in html
 
 
+def test_renderer_skips_malformed_satellite_track_coordinate_collections(tmp_path):
+    output_path = tmp_path / "malformed-tracks.html"
+    inputs = pd.DataFrame(
+        [
+            {
+                "layer": "satellite_overlay",
+                "geometry": {"type": "LineString", "coordinates": pd.NA},
+                "label": "Missing-coordinate track",
+            },
+            {
+                "layer": "satellite_overlay",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": pd.Series([[-75.0, 37.5], [-74.5, 38.0]]),
+                },
+                "label": "Series-coordinate track",
+            },
+        ]
+    )
+
+    result = generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row={"site_id": "TRACKS"},
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["status"] == "ok"
+    assert "Missing-coordinate track" not in html
+    assert "Series-coordinate track" not in html
+
+
 def test_renderer_accepts_series_metadata_and_escapes_position_label(tmp_path):
     output_path = tmp_path / "series-row.html"
     unsafe_label = '<img src=x onerror="alert(1)">'
