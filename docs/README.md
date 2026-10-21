@@ -21,6 +21,16 @@ that every described feature is complete or operational.
 | [`current/INSTALLATION_REQUIREMENTS.md`](current/INSTALLATION_REQUIREMENTS.md) | Verified current inventory, reviewed 2026-10-19 | Dependency declarations and unresolved packaging gaps |
 | [`../README.md`](../README.md) | Verified current pointer, reviewed 2026-10-19 | Repository introduction and documentation entry point |
 
+## Current project governance
+
+These documents define how RDS work is organized and evaluated. They are
+current project frameworks, not claims that every described capability is
+already implemented.
+
+| Document | Status | Scope |
+|---|---|---|
+| [`current/PRODUCT_ASSURANCE_FRAMEWORK.md`](current/PRODUCT_ASSURANCE_FRAMEWORK.md) | Adopted 2026-10-21 | Mission-to-evidence structure for capabilities, requirements, development, and verification |
+
 ## Future capabilities
 
 Documents under [`future/`](future/) describe planned capabilities, not current
@@ -60,6 +70,10 @@ publisher should be checked before operational use.
 - Every current document must state its status, review date, and baseline
   commit. Preserve any earlier creation/revision dates; the review date is an
   additional field, not a replacement.
+- Product assurance work proceeds from mission and operational outcomes to
+  lifecycle, capabilities, situations, requirements, acceptance criteria, and
+  evidence. Detailed tests support that structure; they do not define its
+  boundaries.
 
 Moving a tracked file into the archive should use a Git rename so its history
 remains traceable. Archived binary documents should remain byte-for-byte
