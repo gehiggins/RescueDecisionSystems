@@ -70,8 +70,11 @@ def _numeric_at(mapping, key, index, minimum=None, maximum=None):
     if not isinstance(values, (list, tuple, np.ndarray, pd.Series)):
         return np.nan
     try:
-        value = float(values[index])
-    except (IndexError, KeyError, TypeError, ValueError):
+        raw_value = values[index]
+        if isinstance(raw_value, (bool, np.bool_)):
+            return np.nan
+        value = float(raw_value)
+    except (IndexError, KeyError, TypeError, ValueError, OverflowError):
         return np.nan
     if not np.isfinite(value):
         return np.nan
@@ -108,7 +111,7 @@ def fetch_open_meteo_obs(lat: float, lon: float, start_utc, end_utc, include_mar
         return out
     try:
         lat, lon = float(lat), float(lon)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         LOG.warning("Open-Meteo fetch skipped because coordinates are invalid")
         return out
     if (
