@@ -947,7 +947,9 @@ def generate_gis_map_html_from_dfs(
 
             # LineString (track)
             elif gtype == "LineString":
-                coords = geom.get("coordinates") or []
+                coords = geom.get("coordinates")
+                if not isinstance(coords, (list, tuple)):
+                    coords = []
                 clean = []
                 for pt in coords:
                     point = _coerce_lon_lat(pt)
