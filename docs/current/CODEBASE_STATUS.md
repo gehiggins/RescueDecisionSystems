@@ -2,11 +2,11 @@
 
 Status: verified current
 
-Reviewed against code and runtime: 2026-10-20
+Reviewed against code and runtime: 2026-10-21
 
-Last verified maintenance update: 2026-10-20
+Last verified maintenance update: 2026-10-21
 
-Baseline: `main` commit `693febd3d97578441b71e3b57cbe1a60b00b6bb8`
+Baseline: `main` commit `04de54c643e258a8cc35c308614e13c22f417811`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -288,7 +288,9 @@ health summaries normalize mixed-offset observation times to UTC and report an
 unknown span when no valid timestamp remains.
 
 Open-Meteo keeps usable timestamp rows when individual provider arrays are
-short or malformed. Meteostat's documented km/h wind and gust values are
+short or malformed. Its shared atmosphere and marine value extractor rejects
+Python and NumPy Boolean measurements instead of interpreting them as numeric
+0/1 readings. Meteostat's documented km/h wind and gust values are
 converted to the shared m/s schema, invalid station metadata is filtered per
 row, and valid stations remain available. Boolean measurements, station
 coordinates, and raw station identifiers are rejected before numeric or text
@@ -358,7 +360,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 749 passed; 2 live tests deselected.
+- Default offline suite: 752 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
