@@ -697,6 +697,38 @@ def test_renderer_accepts_series_metadata_and_escapes_position_label(tmp_path):
     assert "&lt;img src=x onerror=&quot;alert(1)&quot;&gt;" in html
 
 
+def test_renderer_falls_back_from_missing_explicit_site_id(tmp_path):
+    output_path = tmp_path / "missing-explicit-site-id.html"
+
+    result = generate_gis_map_html_from_dfs(
+        pd.DataFrame(columns=["layer"]),
+        alert_row=pd.Series({"site_id": "FALLBACK"}),
+        site_id=pd.NA,
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["status"] == "ok"
+    assert result["site_id"] == "FALLBACK"
+    assert "RDS Alert Map: FALLBACK" in html
+
+
+def test_renderer_handles_missing_site_id_and_non_mapping_metadata(tmp_path):
+    output_path = tmp_path / "unknown-site-id.html"
+
+    result = generate_gis_map_html_from_dfs(
+        pd.DataFrame(columns=["layer"]),
+        alert_row=["not", "metadata"],
+        site_id=float("nan"),
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["status"] == "ok"
+    assert result["site_id"] == "unknown"
+    assert "RDS Alert Map: unknown" in html
+
+
 def test_renderer_handles_missing_layer_column(tmp_path):
     output_path = tmp_path / "missing-layer.html"
 
