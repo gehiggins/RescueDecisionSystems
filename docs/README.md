@@ -6,7 +6,7 @@ Reviewed against code: 2026-10-21
 
 Last verified maintenance update: 2026-10-21
 
-Baseline: `main` commit `a45c678f031416025ace4ae290eaa5ac646f3cd2`
+Baseline: `main` commit `fa117887365918c93a31859223039365f8bd55b4`
 
 This index separates documentation that was checked against the repository from
 historical drafts and external reference material. A review date means the
@@ -28,6 +28,7 @@ RDS behavior.
 
 | Document | Status | Scope |
 |---|---|---|
+| [`future/INTER_RCC_MESSAGING_AND_COORDINATION.md`](future/INTER_RCC_MESSAGING_AND_COORDINATION.md) | Proposed; architecture reviewed 2026-10-21 | Integrated RCC messaging, alert/case linkage, and deterministic SRR coordination recommendations |
 | [`future/OPERATIONAL_VISUALIZATION_AND_SRR_COORDINATION.md`](future/OPERATIONAL_VISUALIZATION_AND_SRR_COORDINATION.md) | Proposed; implementation deferred until the core system is stable | Map-to-globe visualization, satellite intelligence, timeline, SRR-boundary detection, and inter-command-center chat/sharing |
 
 ## Archived project documentation

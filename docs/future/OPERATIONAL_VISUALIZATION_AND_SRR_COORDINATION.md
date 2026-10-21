@@ -102,6 +102,11 @@ be visually and semantically distinct.
 
 ## SRR boundary and split-position coordination
 
+The focused requirements, verified current-architecture review, implementation
+gates, and minimal delivery plan for this capability are maintained in
+[`INTER_RCC_MESSAGING_AND_COORDINATION.md`](INTER_RCC_MESSAGING_AND_COORDINATION.md).
+The summary below remains part of the broader visualization concept.
+
 RDS should include chat and sharing between SRR command centers. The chat may
 be useful for any alert, and RDS should specifically prompt coordination when:
 
