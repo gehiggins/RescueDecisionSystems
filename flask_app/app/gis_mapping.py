@@ -218,6 +218,22 @@ def _safe_display_text(value, default=""):
     return escape(str(value), quote=True)
 
 
+def _site_id_text(*candidates):
+    """Return the first usable scalar site identifier without truth-testing it."""
+    for value in candidates:
+        if isinstance(value, (bool, np.bool_)) or not pd.api.types.is_scalar(value):
+            continue
+        try:
+            if value is None or bool(pd.isna(value)):
+                continue
+        except (TypeError, ValueError):
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return "unknown"
+
+
 def _satellite_orbit_class(sat_type, label=None):
     """Return the renderer layer for satellite metadata, defaulting to LEO."""
     value = sat_type
@@ -673,14 +689,14 @@ def generate_gis_map_html_from_dfs(
 
     # Accept the original out_dir/site_id calling convention while keeping the
     # newer explicit alert_row/out_path form used by the active pipeline.
-    if alert_row is None:
+    if alert_row is None or not callable(getattr(alert_row, "get", None)):
         alert_row = {}
     if not isinstance(gis_map_inputs_df, pd.DataFrame):
         gis_map_inputs_df = pd.DataFrame(columns=["layer"])
     elif "layer" not in gis_map_inputs_df.columns:
         gis_map_inputs_df = gis_map_inputs_df.copy()
         gis_map_inputs_df["layer"] = pd.Series(dtype="object")
-    site_id = str(site_id or alert_row.get("site_id", "unknown"))
+    site_id = _site_id_text(site_id, alert_row.get("site_id"))
     if out_path is None:
         if out_dir is None:
             raise ValueError("out_path or out_dir is required")
