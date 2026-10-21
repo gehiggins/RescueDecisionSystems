@@ -636,6 +636,20 @@ def test_renderer_skips_malformed_and_out_of_range_geometry(tmp_path):
                 "geometry": {"type": "Point", "coordinates": ["bad", 37.5]},
                 "label": "Bad next pass",
             },
+            {
+                "layer": "alert_position",
+                "geometry": {"type": "Point", "coordinates": [True, 37.5]},
+                "label": "Boolean alert",
+            },
+            {
+                "layer": "range_ring",
+                "geometry": {
+                    "type": "Circle",
+                    "center": [-75.0, 37.5],
+                    "radius_m": True,
+                },
+                "label": "Boolean ring",
+            },
         ]
     )
 
@@ -652,6 +666,8 @@ def test_renderer_skips_malformed_and_out_of_range_geometry(tmp_path):
     assert "Bad weather" not in html
     assert "Bad station" not in html
     assert "Bad next pass" not in html
+    assert "Boolean alert" not in html
+    assert "Boolean ring" not in html
 
 
 def test_renderer_accepts_series_metadata_and_escapes_position_label(tmp_path):
