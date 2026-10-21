@@ -142,9 +142,13 @@ def _coerce_lon_lat(coords):
     """Return a finite in-range ``(lon, lat)`` pair, or ``None``."""
     if not isinstance(coords, (list, tuple)) or len(coords) != 2:
         return None
+    if isinstance(coords[0], (bool, np.bool_)) or isinstance(
+        coords[1], (bool, np.bool_)
+    ):
+        return None
     try:
         lon, lat = float(coords[0]), float(coords[1])
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     if (
         not math.isfinite(lon)
@@ -158,9 +162,11 @@ def _coerce_lon_lat(coords):
 
 def _positive_finite(value):
     """Return a positive finite float, or ``None`` for an unusable value."""
+    if isinstance(value, (bool, np.bool_)):
+        return None
     try:
         normalized = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return normalized if math.isfinite(normalized) and normalized > 0 else None
 
