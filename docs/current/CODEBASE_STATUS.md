@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-21
 
 Last verified maintenance update: 2026-10-21
 
-Baseline: `main` commit `a45c678f031416025ace4ae290eaa5ac646f3cd2`
+Baseline: `main` commit `fa117887365918c93a31859223039365f8bd55b4`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -365,7 +365,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 761 passed; 2 live tests deselected.
+- Default offline suite: 765 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
@@ -406,6 +406,8 @@ The default and live test commands are documented in `pytest.ini` and
 
 The proposed operational visualization, globe, and SRR coordination/chat
 capabilities are recorded in
-`docs/future/OPERATIONAL_VISUALIZATION_AND_SRR_COORDINATION.md`. They remain
-deferred until the existing processing product is sufficiently complete and
-stable.
+`docs/future/OPERATIONAL_VISUALIZATION_AND_SRR_COORDINATION.md`. The focused
+inter-RCC messaging requirements and architecture review are recorded in
+`docs/future/INTER_RCC_MESSAGING_AND_COORDINATION.md`. They remain proposed
+capabilities; messaging, user authentication, RCC identity, and SRR-boundary
+analysis are not implemented.
