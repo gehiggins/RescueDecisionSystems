@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-21
 
 Last verified maintenance update: 2026-10-21
 
-Baseline: `main` commit `4e3c1aa81fc3d3969c23ce67d37d7a89511bd348`
+Baseline: `main` commit `a45c678f031416025ace4ae290eaa5ac646f3cd2`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -32,7 +32,9 @@ The map URL returned by the API is served by the Flask application. Database
 configuration is not required for parsing, enrichment, or map generation.
 The final pipeline boundary rejects Boolean alert coordinates rather than
 interpreting them as 0° or 1°, and rejects Boolean uncertainty values rather
-than drawing a one-metre range ring.
+than drawing a one-metre range ring. The GIS input builder and HTML renderer
+enforce the same rule independently for alert, weather, station, and satellite
+coordinates and for circle radii.
 
 An installed development checkout provides the `run_rds` command. It binds to
 the loopback interface and disables Flask debug mode by default; a developer
@@ -363,7 +365,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 758 passed; 2 live tests deselected.
+- Default offline suite: 761 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
