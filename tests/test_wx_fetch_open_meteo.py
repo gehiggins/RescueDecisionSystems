@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -367,6 +368,13 @@ def test_open_meteo_numeric_range_preserves_boundaries(
     assert wx_fetch_open_meteo._numeric_at(
         {"value": [value]}, "value", 0, minimum=minimum, maximum=maximum
     ) == float(value)
+
+
+@pytest.mark.parametrize("value", [True, False, np.bool_(True)])
+def test_open_meteo_numeric_values_reject_booleans(value):
+    assert pd.isna(
+        wx_fetch_open_meteo._numeric_at({"value": [value]}, "value", 0)
+    )
 
 
 def test_open_meteo_merges_additional_marine_timestamp(monkeypatch):
