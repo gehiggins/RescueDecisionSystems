@@ -2,11 +2,11 @@
 
 Status: current
 
-Reviewed against code: 2026-10-20
+Reviewed against code: 2026-10-21
 
-Last verified maintenance update: 2026-10-20
+Last verified maintenance update: 2026-10-21
 
-Baseline: `main` commit `693febd3d97578441b71e3b57cbe1a60b00b6bb8`
+Baseline: `main` commit `04de54c643e258a8cc35c308614e13c22f417811`
 
 This index separates documentation that was checked against the repository from
 historical drafts and external reference material. A review date means the
@@ -17,7 +17,7 @@ that every described feature is complete or operational.
 
 | Document | Status | Scope |
 |---|---|---|
-| [`current/CODEBASE_STATUS.md`](current/CODEBASE_STATUS.md) | Verified current, reviewed 2026-10-20 | Implemented pipeline, entry points, and known gaps |
+| [`current/CODEBASE_STATUS.md`](current/CODEBASE_STATUS.md) | Verified current, reviewed 2026-10-21 | Implemented pipeline, entry points, and known gaps |
 | [`current/INSTALLATION_REQUIREMENTS.md`](current/INSTALLATION_REQUIREMENTS.md) | Verified current inventory, reviewed 2026-10-19 | Dependency declarations and unresolved packaging gaps |
 | [`../README.md`](../README.md) | Verified current pointer, reviewed 2026-10-19 | Repository introduction and documentation entry point |
 
