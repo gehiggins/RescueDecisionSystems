@@ -23,6 +23,9 @@ except ModuleNotFoundError:
 import pandas as pd
 import os
 import base64
+from pathlib import Path
+
+import folium
 import pytest
 
 
@@ -519,6 +522,46 @@ def test_renderer_includes_layer_control_without_satellite_rows(tmp_path):
     assert result["layers"] == ["Weather"]
     assert '"Weather"' in html
     assert "L.control.layers" in html
+
+
+def test_renderer_preserves_existing_map_when_save_fails(monkeypatch, tmp_path):
+    output_path = tmp_path / "existing-map.html"
+    output_path.write_text("previous complete map", encoding="utf-8")
+
+    def fail_after_partial_write(_map, temporary_output):
+        Path(temporary_output).write_text("partial replacement", encoding="utf-8")
+        raise RuntimeError("simulated interrupted map save")
+
+    monkeypatch.setattr(folium.Map, "save", fail_after_partial_write)
+
+    with pytest.raises(RuntimeError, match="simulated interrupted map save"):
+        generate_gis_map_html_from_dfs(
+            pd.DataFrame(columns=["layer"]),
+            alert_row={"site_id": "ATOMIC"},
+            out_path=str(output_path),
+        )
+
+    assert output_path.read_text(encoding="utf-8") == "previous complete map"
+    assert [path.name for path in tmp_path.iterdir()] == [output_path.name]
+
+
+def test_renderer_rejects_symbolic_link_output(tmp_path):
+    outside_path = tmp_path / "outside-map.html"
+    outside_path.write_text("outside map", encoding="utf-8")
+    output_path = tmp_path / "linked-map.html"
+    try:
+        output_path.symlink_to(outside_path)
+    except (NotImplementedError, OSError):
+        pytest.skip("file symlinks are unavailable on this platform")
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        generate_gis_map_html_from_dfs(
+            pd.DataFrame(columns=["layer"]),
+            alert_row={"site_id": "LINK"},
+            out_path=str(output_path),
+        )
+
+    assert outside_path.read_text(encoding="utf-8") == "outside map"
 
 
 def test_renderer_preserves_zero_coordinates_for_map_center(tmp_path):
