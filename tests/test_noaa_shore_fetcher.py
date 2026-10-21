@@ -201,6 +201,21 @@ def test_latest_observation_preserves_shared_metric_units(monkeypatch):
     assert pd.api.types.is_datetime64_any_dtype(result["observation_time"])
 
 
+@pytest.mark.parametrize("timestamp", [True, 1, 1.5])
+def test_latest_observation_rejects_numeric_timestamps(monkeypatch, timestamp):
+    monkeypatch.setattr(
+        fetcher_noaa_shore.requests,
+        "get",
+        lambda *_args, **_kwargs: _Response(
+            {"properties": {"timestamp": timestamp}}
+        ),
+    )
+
+    result = fetcher_noaa_shore.fetch_single_noaa_station("KTEST")
+
+    assert pd.isna(result.iloc[0]["observation_time"])
+
+
 @pytest.mark.parametrize(
     "invalid_timeout", [True, float("nan"), float("inf"), 0, -1, "bad"]
 )
@@ -269,5 +284,24 @@ def test_unknown_or_missing_units_are_not_mislabeled():
     assert pd.isna(
         fetcher_noaa_shore._wind_speed_ms(
             {"value": 12, "unitCode": "wmoUnit:unsupported"}
+        )
+    )
+
+
+@pytest.mark.parametrize("value", [True, False, pd.Series([True]).iloc[0]])
+def test_noaa_measurements_reject_booleans(value):
+    assert pd.isna(
+        fetcher_noaa_shore._temperature_c(
+            {"value": value, "unitCode": "wmoUnit:degC"}
+        )
+    )
+    assert pd.isna(
+        fetcher_noaa_shore._wind_speed_ms(
+            {"value": value, "unitCode": "wmoUnit:m_s-1"}
+        )
+    )
+    assert pd.isna(
+        fetcher_noaa_shore._direction_degrees(
+            {"value": value, "unitCode": "wmoUnit:degree_(angle)"}
         )
     )

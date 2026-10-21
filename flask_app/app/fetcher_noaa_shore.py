@@ -53,8 +53,11 @@ def _measurement(measurement):
     """Return one finite NWS value and its short unit code."""
     if not isinstance(measurement, dict):
         return None, None
+    raw_value = measurement.get("value")
+    if isinstance(raw_value, (bool, np.bool_)):
+        return None, None
     try:
-        value = float(measurement.get("value"))
+        value = float(raw_value)
     except (TypeError, ValueError, OverflowError):
         return None, None
     if not math.isfinite(value):
@@ -96,6 +99,15 @@ def _direction_degrees(measurement):
     if value is None or unit not in {"degree_(angle)", "degree"}:
         return np.nan
     return value if 0 <= value <= 360 else np.nan
+
+
+def _observation_time(value):
+    """Return one provider timestamp without accepting numeric epoch guesses."""
+    if not pd.api.types.is_scalar(value) or isinstance(
+        value, (bool, int, float, np.number)
+    ):
+        return pd.NaT
+    return pd.to_datetime(value, utc=True, errors="coerce")
 
 
 def _station_coordinates(geometry):
@@ -264,7 +276,7 @@ def fetch_single_noaa_station(
         data = response.json()
         properties = data.get("properties", {}) if isinstance(data, dict) else {}
 
-        obs_time = pd.to_datetime(properties.get('timestamp'), utc=True, errors='coerce')
+        obs_time = _observation_time(properties.get('timestamp'))
         temp_c = _temperature_c(properties.get('temperature'))
         wind_speed_mps = _wind_speed_ms(properties.get('windSpeed'))
         wind_dir = _direction_degrees(properties.get('windDirection'))
