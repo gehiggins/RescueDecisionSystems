@@ -6,7 +6,7 @@ Reviewed against code and runtime: 2026-10-21
 
 Last verified maintenance update: 2026-10-21
 
-Baseline: `main` commit `fa117887365918c93a31859223039365f8bd55b4`
+Baseline: `main` commit `7b57359555d75ec75de59f945f1512a3a503c84a`
 
 Historical document dates are preserved in: `docs/archive/2025/README.md`
 
@@ -121,6 +121,11 @@ Pipeline-generated map and satellite-overlay directories also use normalized,
 bounded path components when a numeric site ID is unavailable. The normalized
 identifier is retained through the final map write, so raw alert text cannot
 escape the configured map directory.
+All Folium HTML map writers render to a temporary file in the destination
+directory and atomically replace the final map only after a complete save.
+An interrupted save therefore preserves any preceding complete map and removes
+its temporary fragment. The shared writer also rejects symbolic-link output
+files.
 
 Validated local satellite PNG overlays are loaded only with ordered, finite,
 in-range geographic bounds and non-symlinked image/sidecar files. The loader,
@@ -365,7 +370,7 @@ be rotated if it was ever used. History was not rewritten during this work.
 
 ## Automated verification
 
-- Default offline suite: 765 passed; 2 live tests deselected.
+- Default offline suite: 767 passed; 2 live tests deselected.
 - Explicit live weather suite: 2 passed on 2026-10-20. Live checks remain
   outside per-commit CI. A direct CelesTrak check timed out that day, so no
   current TLE-provider success is claimed for this baseline.
