@@ -191,6 +191,11 @@ def _style_color(value, default="#0b84f3"):
     return value if isinstance(value, str) and value.strip() else default
 
 
+def _style_dash_array(value, default=None):
+    """Return a usable SVG dash pattern without leaking missing values to JSON."""
+    return value.strip() if isinstance(value, str) and value.strip() else default
+
+
 def _style_bool(value, default=True):
     """Normalize common configuration booleans without truth-testing strings."""
     if isinstance(value, bool):
@@ -941,7 +946,7 @@ def generate_gis_map_html_from_dfs(
                           fill_opacity=_style_number(
                               sty.get("fillOpacity"), 0.15, minimum=0.0, maximum=1.0
                           ),
-                          dash_array=sty.get("dashArray"),
+                          dash_array=_style_dash_array(sty.get("dashArray")),
                           tooltip=_safe_display_text(sat.get("label")),
                           popup=sat.get("popup_html")).add_to(_sat_fg_for(sat))
 
@@ -966,7 +971,9 @@ def generate_gis_map_html_from_dfs(
                          sty.get("opacity"), 0.6, minimum=0.0, maximum=1.0
                      ),
                      color=_style_color(sty.get("color")),
-                     dash_array=sty.get("dashArray", "4,6"),
+                     dash_array=_style_dash_array(
+                         sty.get("dashArray"), default="4,6"
+                     ),
                      tooltip=_safe_display_text(sat.get("label")),
                      popup=sat.get("popup_html")).add_to(_sat_fg_for(sat))
 

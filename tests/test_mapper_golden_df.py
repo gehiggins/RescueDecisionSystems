@@ -851,3 +851,42 @@ def test_renderer_defaults_malformed_satellite_styles(tmp_path):
     assert "Satellite Overlays" in result["layers"]
     assert "Bad style circle" in html
     assert "Bad style track" in html
+
+
+def test_renderer_defaults_missing_satellite_dash_patterns(tmp_path):
+    output_path = tmp_path / "missing-dash-patterns.html"
+    inputs = pd.DataFrame(
+        [
+            {
+                "layer": "satellite_overlay",
+                "geometry": {
+                    "type": "Circle",
+                    "center": [-75.0, 37.5],
+                    "radius_m": 1000.0,
+                    "style": {"dashArray": pd.NA},
+                },
+                "label": "Missing dash circle",
+            },
+            {
+                "layer": "satellite_overlay",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[-75.0, 37.5], [-74.0, 38.0]],
+                    "style": {"dashArray": pd.NA},
+                },
+                "label": "Missing dash track",
+            },
+        ]
+    )
+
+    result = generate_gis_map_html_from_dfs(
+        inputs,
+        alert_row={"site_id": "DASH"},
+        out_path=str(output_path),
+    )
+
+    html = output_path.read_text(encoding="utf-8")
+    assert result["status"] == "ok"
+    assert "Missing dash circle" in html
+    assert "Missing dash track" in html
+    assert '"dashArray": "4,6"' in html
