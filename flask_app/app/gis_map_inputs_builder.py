@@ -72,10 +72,12 @@ def _html_text(value, default=""):
 
 def _valid_coordinate_pair(lon, lat):
     """Return whether values form a finite coordinate within Earth bounds."""
+    if isinstance(lon, (bool, np.bool_)) or isinstance(lat, (bool, np.bool_)):
+        return False
     try:
         lon_value = float(lon)
         lat_value = float(lat)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return False
     return (
         math.isfinite(lon_value)
@@ -87,9 +89,11 @@ def _valid_coordinate_pair(lon, lat):
 
 def _positive_finite(value):
     """Return a positive finite geometry value, or ``None`` when unusable."""
+    if isinstance(value, (bool, np.bool_)):
+        return None
     try:
         normalized = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     return normalized if math.isfinite(normalized) and normalized > 0 else None
 
@@ -178,11 +182,8 @@ def build_gis_map_inputs_df(
             ring_m = r.get("range_ring_meters")
             lat = r.get("lat_dd")
             lon = r.get("lon_dd")
-            try:
-                ring_m = float(ring_m)
-            except (TypeError, ValueError):
-                continue
-            if not math.isfinite(ring_m) or ring_m <= 0:
+            ring_m = _positive_finite(ring_m)
+            if ring_m is None:
                 continue
             label = f"Range Ring {_fmt_num(ring_m, 0)} m"
             radius_line = f"Radius: {int(ring_m)} m" if ring_m is not None else "Radius: —"

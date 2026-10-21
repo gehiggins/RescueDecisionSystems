@@ -121,6 +121,34 @@ def test_gis_map_inputs_empty_inputs():
     assert df.empty
 
 
+@pytest.mark.parametrize(
+    ("latitude", "longitude", "radius"),
+    [
+        (True, -75.0, 1000),
+        (37.5, False, 1000),
+        (37.5, -75.0, True),
+    ],
+)
+def test_gis_builder_rejects_boolean_geometry(latitude, longitude, radius):
+    positions = pd.DataFrame(
+        [
+            {
+                "site_id": "BOOLEAN",
+                "role": "A",
+                "lat_dd": latitude,
+                "lon_dd": longitude,
+                "range_ring_meters": radius,
+            }
+        ]
+    )
+
+    result = build_gis_map_inputs_df(positions, op_tz_env="UTC")
+
+    if isinstance(latitude, bool) or isinstance(longitude, bool):
+        assert result[result["layer"] == "alert_position"].empty
+    assert result[result["layer"] == "range_ring"].empty
+
+
 def test_satellite_overlay_uses_alert_detection_time(monkeypatch):
     captured = {}
     sat_pipeline = importlib.import_module("app.sat_pipeline")
