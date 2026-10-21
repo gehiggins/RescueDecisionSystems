@@ -7,7 +7,7 @@ Reviewed and installation-tested: 2026-10-19
 Last verified maintenance update: 2026-10-21
 
 Continuous verification baseline: `main` commit
-`04de54c643e258a8cc35c308614e13c22f417811` (2026-10-21)
+`4e3c1aa81fc3d3969c23ce67d37d7a89511bd348` (2026-10-21)
 
 Supersedes: `docs/archive/2025/RDS_Installation_Requirements_2025-02-28.md`
 
@@ -57,7 +57,7 @@ database; alert sequence numbering then starts from an empty local history.
   that the Gunicorn server dependency was included.
 - Imported and exercised the Flask application, GIS renderer, live weather
   path, and Skyfield satellite propagation path.
-- Ran the default offline suite after installation: 752 passed, with the two
+- Ran the default offline suite after installation: 758 passed, with the two
   explicitly marked live-provider tests deselected.
 - Ran the explicit live-provider suite: 2 passed on 2026-10-20.
 - Ran the committed sample alert through the full controller and map writer;
